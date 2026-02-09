@@ -26,13 +26,19 @@
     border-bottom: 1px solid rgba(255,255,255,0.05);
   }
   .status-bar h1 { font-size: 1rem; font-weight: 600; }
-  .conn-dot {
-    width: 10px; height: 10px; border-radius: 50%;
-    background: var(--red); display: inline-block; margin-right: 0.4rem;
-    transition: background 0.3s;
+  .status-pills { display: flex; gap: 0.4rem; flex-wrap: wrap; justify-content: flex-end; }
+  .status-pill {
+    display: flex; align-items: center; gap: 0.25rem;
+    font-size: 0.7rem; color: var(--muted); padding: 0.15rem 0.4rem;
+    background: rgba(255,255,255,0.05); border-radius: 6px;
   }
-  .conn-dot.connected { background: var(--green); }
-  .conn-label { font-size: 0.8rem; color: var(--muted); }
+  .status-dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    display: inline-block; transition: background 0.3s;
+  }
+  .status-dot.green { background: var(--green); }
+  .status-dot.red { background: var(--red); }
+  .status-dot.yellow { background: var(--yellow); }
   .section {
     margin: 0.75rem; padding: 1rem;
     background: var(--surface); border-radius: var(--radius);
@@ -119,9 +125,10 @@
 
 <div class="status-bar">
   <h1>Nintendo Pi</h1>
-  <div style="display:flex;align-items:center">
-    <span class="conn-dot" id="connDot"></span>
-    <span class="conn-label" id="connLabel">Connecting...</span>
+  <div class="status-pills">
+    <div class="status-pill"><span class="status-dot red" id="piDot"></span><span id="piLabel">Pi</span></div>
+    <div class="status-pill"><span class="status-dot red" id="ctrlDot"></span><span id="ctrlLabel">Controller</span></div>
+    <div class="status-pill"><span class="status-dot red" id="switchDot"></span><span id="switchLabel">Switch</span></div>
   </div>
 </div>
 
@@ -190,14 +197,14 @@
     ws = new WebSocket(proto + '//' + location.host + '/ws');
 
     ws.onopen = function() {
-      document.getElementById('connDot').classList.add('connected');
-      document.getElementById('connLabel').textContent = 'Connected';
+      setStatusDot('piDot', 'green');
       if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
     };
 
     ws.onclose = function() {
-      document.getElementById('connDot').classList.remove('connected');
-      document.getElementById('connLabel').textContent = 'Disconnected';
+      setStatusDot('piDot', 'red');
+      setStatusDot('ctrlDot', 'red');
+      setStatusDot('switchDot', 'red');
       reconnectTimer = setTimeout(connect, 2000);
     };
 
@@ -227,7 +234,15 @@
 
   connect();
 
+  function setStatusDot(id, color) {
+    var dot = document.getElementById(id);
+    dot.className = 'status-dot ' + color;
+  }
+
   function updateUI() {
+    // Update hardware status dots
+    setStatusDot('ctrlDot', state.usb_connected ? 'green' : 'yellow');
+    setStatusDot('switchDot', state.bt_connected ? 'green' : 'red');
     var modeEl = document.getElementById('macroModeStatus');
     if (state.macro_mode) {
       modeEl.textContent = 'ON';

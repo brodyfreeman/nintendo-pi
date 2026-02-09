@@ -92,3 +92,4 @@ The web server (Axum with WebSocket) starts before hardware init, so it's availa
 - On first BT connection, the Switch must be on the "Change Grip/Order" screen to pair with the Pi's virtual Pro Controller.
 - Stick centers are auto-calibrated on startup (don't touch the sticks during the first ~1s).
 - Macros are stored in the `--macros-dir` directory (`/root/macros/` by default, root because the service runs as root).
+- Bluetooth must be set to auto-power-on: `AutoEnable=true` in `/etc/bluetooth/main.conf` (uncommented). Without this, BT stays off after reboot and the service will crash at BT init.

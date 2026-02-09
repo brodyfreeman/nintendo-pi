@@ -27,7 +27,8 @@ pub struct StateSnapshot {
     pub current_slot: usize,
     pub slot_count: usize,
     pub current_macro_name: Option<String>,
-    pub connected: bool,
+    pub usb_connected: bool,
+    pub bt_connected: bool,
 }
 
 pub struct MitmState {
@@ -45,7 +46,8 @@ impl MitmState {
                 current_slot: 0,
                 slot_count: 0,
                 current_macro_name: None,
-                connected: false,
+                usb_connected: false,
+                bt_connected: false,
             }),
             changed: Mutex::new(false),
         }
@@ -60,7 +62,8 @@ impl MitmState {
             || inner.current_slot != snapshot.current_slot
             || inner.slot_count != snapshot.slot_count
             || inner.current_macro_name != snapshot.current_macro_name
-            || inner.connected != snapshot.connected;
+            || inner.usb_connected != snapshot.usb_connected
+            || inner.bt_connected != snapshot.bt_connected;
 
         if changed {
             *inner = snapshot;

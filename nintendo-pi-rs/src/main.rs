@@ -84,6 +84,12 @@ async fn main() -> anyhow::Result<()> {
     tokio::time::sleep(Duration::from_millis(100)).await;
 
     // --- Phase 0: USB Init (retry until controller is plugged in) ---
+    // Push initial state so web UI shows controller disconnected
+    mitm_state.update(StateSnapshot {
+        macro_mode: false, recording: false, playing: false,
+        current_slot: 0, slot_count: 0, current_macro_name: None,
+        usb_connected: false, bt_connected: false,
+    });
     loop {
         match usb::init::initialize_controller().await {
             Ok(()) => break,
@@ -93,6 +99,12 @@ async fn main() -> anyhow::Result<()> {
             }
         }
     }
+    // USB controller found — update state
+    mitm_state.update(StateSnapshot {
+        macro_mode: false, recording: false, playing: false,
+        current_slot: 0, slot_count: 0, current_macro_name: None,
+        usb_connected: true, bt_connected: false,
+    });
 
     // Wait for HID device to appear after init
     info!("[USB] Waiting for HID device to appear...");
@@ -144,6 +156,12 @@ async fn main() -> anyhow::Result<()> {
     // Outer loop handles BT reconnection on Switch power cycle
     loop {
         info!("[BT] Waiting for Switch to connect...");
+        // Push state: USB up, BT waiting
+        mitm_state.update(StateSnapshot {
+            macro_mode: false, recording: false, playing: false,
+            current_slot: 0, slot_count: 0, current_macro_name: None,
+            usb_connected: true, bt_connected: false,
+        });
 
         let mut bt_session = match bt::emulator::accept_connection().await {
             Ok(session) => session,
@@ -545,6 +563,7 @@ fn update_state(
         current_slot,
         slot_count,
         current_macro_name: macro_name.clone(),
-        connected: true,
+        usb_connected: true,
+        bt_connected: true,
     });
 }
