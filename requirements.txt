@@ -1,0 +1,4 @@
+nxbt @ git+http://github.com/Brikwerk/nxbt.git@abb966d438be79678b1b23579b06517995246618
+hidapi
+pyusb
+python-uinput
