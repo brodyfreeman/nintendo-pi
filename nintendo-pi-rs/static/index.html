@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+<title>Nintendo Pi</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #1a1a2e; --surface: #16213e; --card: #0f3460;
+    --accent: #e94560; --accent2: #533483; --text: #eee; --muted: #888;
+    --green: #4caf50; --red: #e94560; --yellow: #ffc107; --blue: #2196f3;
+    --radius: 12px;
+  }
+  html { font-size: 16px; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg); color: var(--text);
+    min-height: 100vh; padding: 0 0 2rem;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .status-bar {
+    position: sticky; top: 0; z-index: 100;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0.6rem 1rem; background: var(--surface);
+    border-bottom: 1px solid rgba(255,255,255,0.05);
+  }
+  .status-bar h1 { font-size: 1rem; font-weight: 600; }
+  .conn-dot {
+    width: 10px; height: 10px; border-radius: 50%;
+    background: var(--red); display: inline-block; margin-right: 0.4rem;
+    transition: background 0.3s;
+  }
+  .conn-dot.connected { background: var(--green); }
+  .conn-label { font-size: 0.8rem; color: var(--muted); }
+  .section {
+    margin: 0.75rem; padding: 1rem;
+    background: var(--surface); border-radius: var(--radius);
+  }
+  .section-title {
+    font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.08em;
+    color: var(--muted); margin-bottom: 0.6rem;
+  }
+  .btn {
+    display: inline-flex; align-items: center; justify-content: center;
+    border: none; border-radius: var(--radius); cursor: pointer;
+    font-size: 1rem; font-weight: 600; color: #fff;
+    padding: 0.8rem 1.2rem; min-height: 48px;
+    transition: opacity 0.15s, transform 0.1s;
+    -webkit-user-select: none; user-select: none;
+  }
+  .btn:active { transform: scale(0.96); }
+  .btn:disabled { opacity: 0.4; pointer-events: none; }
+  .btn-accent { background: var(--accent); }
+  .btn-green { background: var(--green); }
+  .btn-blue { background: var(--blue); }
+  .btn-yellow { background: var(--yellow); color: #222; }
+  .btn-dark { background: rgba(255,255,255,0.1); }
+  .btn-red { background: var(--red); }
+  .toggle-row { display: flex; align-items: center; gap: 1rem; }
+  .toggle-row .label { flex: 1; font-size: 1.1rem; font-weight: 500; }
+  .toggle-status {
+    font-size: 0.85rem; padding: 0.3rem 0.7rem; border-radius: 6px; font-weight: 600;
+  }
+  .toggle-status.on { background: var(--green); color: #fff; }
+  .toggle-status.off { background: rgba(255,255,255,0.1); color: var(--muted); }
+  .slot-nav {
+    display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.8rem;
+  }
+  .slot-nav .btn { flex: 0 0 auto; padding: 0.8rem; font-size: 1.3rem; }
+  .slot-info { flex: 1; text-align: center; min-width: 0; }
+  .slot-num { font-size: 1.5rem; font-weight: 700; }
+  .slot-name {
+    font-size: 0.85rem; color: var(--muted);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .playback-row { display: flex; gap: 0.5rem; }
+  .playback-row .btn { flex: 1; }
+  .rec-status {
+    display: inline-block; padding: 0.25rem 0.6rem; border-radius: 6px;
+    font-size: 0.8rem; font-weight: 600; margin-left: 0.5rem;
+  }
+  .rec-status.active { background: var(--red); animation: pulse 1s infinite; }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.5; } }
+  .macro-item {
+    display: flex; align-items: center; gap: 0.5rem;
+    padding: 0.7rem 0; border-bottom: 1px solid rgba(255,255,255,0.05);
+  }
+  .macro-item:last-child { border-bottom: none; }
+  .macro-info { flex: 1; min-width: 0; }
+  .macro-name {
+    font-weight: 500; white-space: nowrap;
+    overflow: hidden; text-overflow: ellipsis;
+  }
+  .macro-meta { font-size: 0.75rem; color: var(--muted); }
+  .macro-actions { display: flex; gap: 0.3rem; }
+  .macro-actions .btn { padding: 0.4rem 0.6rem; font-size: 0.8rem; min-height: 36px; }
+  .empty-msg { color: var(--muted); font-size: 0.9rem; text-align: center; padding: 1rem; }
+  .modal-overlay {
+    display: none; position: fixed; inset: 0; z-index: 200;
+    background: rgba(0,0,0,0.7); align-items: center; justify-content: center;
+  }
+  .modal-overlay.show { display: flex; }
+  .modal {
+    background: var(--surface); border-radius: var(--radius);
+    padding: 1.5rem; width: 90%; max-width: 340px;
+  }
+  .modal h3 { margin-bottom: 1rem; font-size: 1.1rem; }
+  .modal input {
+    width: 100%; padding: 0.7rem; border-radius: 8px;
+    border: 1px solid rgba(255,255,255,0.15); background: var(--bg);
+    color: var(--text); font-size: 1rem; margin-bottom: 1rem;
+  }
+  .modal-btns { display: flex; gap: 0.5rem; }
+  .modal-btns .btn { flex: 1; }
+</style>
+</head>
+<body>
+
+<div class="status-bar">
+  <h1>Nintendo Pi</h1>
+  <div style="display:flex;align-items:center">
+    <span class="conn-dot" id="connDot"></span>
+    <span class="conn-label" id="connLabel">Connecting...</span>
+  </div>
+</div>
+
+<div class="section">
+  <div class="section-title">Macro Mode</div>
+  <div class="toggle-row">
+    <span class="label">Macro Mode</span>
+    <button class="btn btn-dark" id="btnMacroMode" onclick="sendCmd('TOGGLE_MACRO_MODE')">
+      <span class="toggle-status off" id="macroModeStatus">OFF</span>
+    </button>
+  </div>
+</div>
+
+<div class="section">
+  <div class="section-title">Slot &amp; Playback</div>
+  <div class="slot-nav">
+    <button class="btn btn-dark" onclick="sendCmd('PREV_SLOT')">&larr;</button>
+    <div class="slot-info">
+      <div class="slot-num" id="slotNum">0</div>
+      <div class="slot-name" id="slotName">--</div>
+    </div>
+    <button class="btn btn-dark" onclick="sendCmd('NEXT_SLOT')">&rarr;</button>
+  </div>
+  <div class="playback-row">
+    <button class="btn btn-green" id="btnPlay" onclick="sendCmd('PLAY_MACRO')">Play</button>
+    <button class="btn btn-red" id="btnStop" onclick="sendCmd('STOP_PLAYBACK')">Stop</button>
+  </div>
+</div>
+
+<div class="section">
+  <div class="section-title">Recording</div>
+  <div style="display:flex;align-items:center">
+    <button class="btn btn-accent" id="btnRecord" onclick="sendCmd('TOGGLE_RECORDING')" style="flex:1">
+      Start Recording
+    </button>
+    <span class="rec-status" id="recStatus" style="display:none">REC</span>
+  </div>
+</div>
+
+<div class="section">
+  <div class="section-title">Macro Library</div>
+  <div id="macroList"><div class="empty-msg">No macros yet</div></div>
+</div>
+
+<div class="modal-overlay" id="renameModal">
+  <div class="modal">
+    <h3>Rename Macro</h3>
+    <input type="text" id="renameInput" placeholder="New name" autocomplete="off">
+    <div class="modal-btns">
+      <button class="btn btn-dark" onclick="closeRename()">Cancel</button>
+      <button class="btn btn-blue" onclick="submitRename()">Rename</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function() {
+  var state = {};
+  var macros = [];
+  var renameId = null;
+  var ws = null;
+  var reconnectTimer = null;
+
+  function connect() {
+    var proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+    ws = new WebSocket(proto + '//' + location.host + '/ws');
+
+    ws.onopen = function() {
+      document.getElementById('connDot').classList.add('connected');
+      document.getElementById('connLabel').textContent = 'Connected';
+      if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
+    };
+
+    ws.onclose = function() {
+      document.getElementById('connDot').classList.remove('connected');
+      document.getElementById('connLabel').textContent = 'Disconnected';
+      reconnectTimer = setTimeout(connect, 2000);
+    };
+
+    ws.onerror = function() {
+      ws.close();
+    };
+
+    ws.onmessage = function(e) {
+      try {
+        var msg = JSON.parse(e.data);
+        if (msg.type === 'init') {
+          state = msg.state;
+          macros = msg.macros || [];
+          updateUI();
+          renderMacros();
+        } else if (msg.type === 'state_update') {
+          state = msg.state;
+          updateUI();
+        } else if (msg.type === 'macro_list') {
+          macros = msg.macros || [];
+          renderMacros();
+          updateSlotName();
+        }
+      } catch(err) {}
+    };
+  }
+
+  connect();
+
+  function updateUI() {
+    var modeEl = document.getElementById('macroModeStatus');
+    if (state.macro_mode) {
+      modeEl.textContent = 'ON';
+      modeEl.className = 'toggle-status on';
+    } else {
+      modeEl.textContent = 'OFF';
+      modeEl.className = 'toggle-status off';
+    }
+
+    document.getElementById('slotNum').textContent = state.slot_count > 0
+      ? (state.current_slot + 1) + ' / ' + state.slot_count
+      : '0 / 0';
+    updateSlotName();
+
+    var recBtn = document.getElementById('btnRecord');
+    var recStatus = document.getElementById('recStatus');
+    if (state.recording) {
+      recBtn.textContent = 'Stop Recording';
+      recBtn.className = 'btn btn-yellow';
+      recStatus.style.display = '';
+      recStatus.className = 'rec-status active';
+    } else {
+      recBtn.textContent = 'Start Recording';
+      recBtn.className = 'btn btn-accent';
+      recStatus.style.display = 'none';
+    }
+
+    var playBtn = document.getElementById('btnPlay');
+    if (state.playing) {
+      playBtn.textContent = 'Playing...';
+      playBtn.disabled = true;
+    } else {
+      playBtn.textContent = 'Play';
+      playBtn.disabled = false;
+    }
+  }
+
+  function updateSlotName() {
+    var nameEl = document.getElementById('slotName');
+    if (state.current_macro_name) {
+      nameEl.textContent = state.current_macro_name;
+    } else if (macros.length > 0 && state.current_slot < macros.length) {
+      nameEl.textContent = macros[state.current_slot].name;
+    } else {
+      nameEl.textContent = '--';
+    }
+  }
+
+  function renderMacros() {
+    var container = document.getElementById('macroList');
+    if (!macros || macros.length === 0) {
+      container.innerHTML = '<div class="empty-msg">No macros yet</div>';
+      return;
+    }
+    var html = '';
+    for (var i = 0; i < macros.length; i++) {
+      var m = macros[i];
+      var dur = m.duration_ms >= 1000
+        ? (m.duration_ms / 1000).toFixed(1) + 's'
+        : m.duration_ms + 'ms';
+      html += '<div class="macro-item">'
+        + '<div class="macro-info">'
+        + '<div class="macro-name">' + escHtml(m.name) + '</div>'
+        + '<div class="macro-meta">Slot ' + (i + 1) + ' &middot; ' + m.frame_count + ' frames &middot; ' + dur + '</div>'
+        + '</div>'
+        + '<div class="macro-actions">'
+        + '<button class="btn btn-dark" onclick="selectSlot(' + i + ')">Sel</button>'
+        + '<button class="btn btn-dark" onclick="openRename(' + m.id + ',\'' + escAttr(m.name) + '\')">Ren</button>'
+        + '<button class="btn btn-red" onclick="deleteMacro(' + m.id + ',\'' + escAttr(m.name) + '\')">Del</button>'
+        + '</div></div>';
+    }
+    container.innerHTML = html;
+  }
+
+  function escHtml(s) {
+    var d = document.createElement('div');
+    d.appendChild(document.createTextNode(s));
+    return d.innerHTML;
+  }
+  function escAttr(s) {
+    return s.replace(/'/g, "\\'").replace(/"/g, '&quot;');
+  }
+
+  window.sendCmd = function(cmd, data) {
+    if (ws && ws.readyState === 1) {
+      ws.send(JSON.stringify({ cmd: cmd, data: data || null }));
+    }
+  };
+
+  window.selectSlot = function(idx) {
+    if (ws && ws.readyState === 1) {
+      ws.send(JSON.stringify({ cmd: 'SELECT_SLOT', data: idx }));
+    }
+  };
+
+  window.openRename = function(id, name) {
+    renameId = id;
+    document.getElementById('renameInput').value = name;
+    document.getElementById('renameModal').classList.add('show');
+    setTimeout(function() { document.getElementById('renameInput').focus(); }, 100);
+  };
+
+  window.closeRename = function() {
+    document.getElementById('renameModal').classList.remove('show');
+    renameId = null;
+  };
+
+  window.submitRename = function() {
+    var name = document.getElementById('renameInput').value.trim();
+    if (name && renameId !== null) {
+      window.sendCmd('RENAME_MACRO', [renameId, name]);
+    }
+    closeRename();
+  };
+
+  window.deleteMacro = function(id, name) {
+    if (confirm('Delete macro "' + name + '"?')) {
+      window.sendCmd('DELETE_MACRO', id);
+    }
+  };
+
+  document.getElementById('renameInput').addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') window.submitRename();
+    if (e.key === 'Escape') window.closeRename();
+  });
+
+  document.getElementById('renameModal').addEventListener('click', function(e) {
+    if (e.target === this) window.closeRename();
+  });
+})();
+</script>
+</body>
+</html>
