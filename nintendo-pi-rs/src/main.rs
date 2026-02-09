@@ -83,10 +83,22 @@ async fn main() -> anyhow::Result<()> {
     // Give the web server a moment to bind
     tokio::time::sleep(Duration::from_millis(100)).await;
 
-    // --- Bluetooth setup (one-time) ---
-    let dbus_conn = zbus::Connection::system().await?;
-    bt::sdp::configure_adapter(&dbus_conn).await?;
-    bt::sdp::register_sdp_profile(&dbus_conn).await?;
+    // --- Bluetooth setup (one-time, retry until adapter is ready) ---
+    let _dbus_conn = loop {
+        match zbus::Connection::system().await {
+            Ok(conn) => {
+                match bt::sdp::configure_adapter(&conn).await {
+                    Ok(()) => match bt::sdp::register_sdp_profile(&conn).await {
+                        Ok(()) => break conn,
+                        Err(e) => warn!("[BT] SDP register failed: {e} — retrying in 3s..."),
+                    },
+                    Err(e) => warn!("[BT] Adapter config failed: {e} — retrying in 3s..."),
+                }
+            }
+            Err(e) => warn!("[BT] D-Bus connection failed: {e} — retrying in 3s..."),
+        }
+        tokio::time::sleep(Duration::from_secs(3)).await;
+    };
 
     // --- State emitter task (5Hz broadcast when changed) ---
     let emitter_state = mitm_state.clone();
