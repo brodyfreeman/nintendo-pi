@@ -3,6 +3,7 @@
 //! Ported directly from enable_procon2.py StickCalibrator.
 
 /// Stick calibrator with 32 radial calibration points and deadzone.
+#[derive(Clone)]
 pub struct StickCalibrator {
     radii: [f64; 32],
     deadzone: f64,
