@@ -53,6 +53,14 @@ const INIT_COMMANDS: &[&[u8]] = &[
     &[0x09, 0x91, 0x00, 0x07, 0x00, 0x08, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00],
 ];
 
+/// Check if the Switch 2 Pro Controller is present on the USB bus.
+pub fn is_device_present() -> bool {
+    let Ok(devices) = nusb::list_devices() else { return false };
+    devices
+        .into_iter()
+        .any(|d| d.vendor_id() == VENDOR_ID && d.product_id() == PRODUCT_ID)
+}
+
 /// Find and open the Switch 2 Pro Controller USB device.
 fn find_device() -> Option<nusb::Device> {
     for dev_info in nusb::list_devices().ok()? {

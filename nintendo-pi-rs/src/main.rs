@@ -83,55 +83,7 @@ async fn main() -> anyhow::Result<()> {
     // Give the web server a moment to bind
     tokio::time::sleep(Duration::from_millis(100)).await;
 
-    // --- Phase 0: USB Init (retry until controller is plugged in) ---
-    // Push initial state so web UI shows controller disconnected
-    mitm_state.update(StateSnapshot {
-        macro_mode: false, recording: false, playing: false,
-        current_slot: 0, slot_count: 0, current_macro_name: None,
-        usb_connected: false, bt_connected: false,
-    });
-    loop {
-        match usb::init::initialize_controller().await {
-            Ok(()) => break,
-            Err(e) => {
-                warn!("[USB] {e} — retrying in 5s...");
-                tokio::time::sleep(Duration::from_secs(5)).await;
-            }
-        }
-    }
-    // USB controller found — update state
-    mitm_state.update(StateSnapshot {
-        macro_mode: false, recording: false, playing: false,
-        current_slot: 0, slot_count: 0, current_macro_name: None,
-        usb_connected: true, bt_connected: false,
-    });
-
-    // Wait for HID device to appear after init
-    info!("[USB] Waiting for HID device to appear...");
-    tokio::time::sleep(Duration::from_secs(2)).await;
-
-    // --- Spawn HID reader thread ---
-    let hid_rx = usb::hid::spawn_reader(2);
-
-    // --- Auto-calibrate stick centers ---
-    info!("[USB] Calibrating stick centers (don't touch the sticks)...");
-    let mut cal_reports = Vec::with_capacity(20);
-    for _ in 0..20 {
-        match hid_rx.recv_timeout(Duration::from_millis(200)) {
-            Ok(report) => cal_reports.push(report),
-            Err(_) => break,
-        }
-    }
-    let (left_center, right_center) = auto_calibrate_centers(&cal_reports);
-    info!(
-        "[USB] Left stick center: ({}, {}), Right: ({}, {})",
-        left_center.0, left_center.1, right_center.0, right_center.1
-    );
-
-    let main_cal = StickCalibrator::new(MAIN_STICK_CAL, 10.0);
-    let c_cal = StickCalibrator::new(C_STICK_CAL, 10.0);
-
-    // --- Phase 1: Bluetooth setup ---
+    // --- Bluetooth setup (one-time) ---
     let dbus_conn = zbus::Connection::system().await?;
     bt::sdp::configure_adapter(&dbus_conn).await?;
     bt::sdp::register_sdp_profile(&dbus_conn).await?;
@@ -152,68 +104,141 @@ async fn main() -> anyhow::Result<()> {
         }
     });
 
-    // --- Main loop: accept BT connections, run passthrough ---
-    // Outer loop handles BT reconnection on Switch power cycle
+    // === Hardware lifecycle loop ===
+    // Outer loop handles USB controller disconnect/reconnect.
+    // Inner loop handles BT (Switch) disconnect/reconnect.
     loop {
-        info!("[BT] Waiting for Switch to connect...");
-        // Push state: USB up, BT waiting
+        // Drain stale web commands from previous session
+        while cmd_rx.try_recv().is_ok() {}
+
+        // --- Phase 0: USB Init (retry until controller is plugged in) ---
+        mitm_state.update(StateSnapshot {
+            macro_mode: false, recording: false, playing: false,
+            current_slot: 0, slot_count: 0, current_macro_name: None,
+            usb_connected: false, bt_connected: false,
+        });
+        loop {
+            match usb::init::initialize_controller().await {
+                Ok(()) => break,
+                Err(e) => {
+                    warn!("[USB] {e} — retrying in 5s...");
+                    tokio::time::sleep(Duration::from_secs(5)).await;
+                }
+            }
+        }
+        // USB controller found — update state
         mitm_state.update(StateSnapshot {
             macro_mode: false, recording: false, playing: false,
             current_slot: 0, slot_count: 0, current_macro_name: None,
             usb_connected: true, bt_connected: false,
         });
 
-        let mut bt_session = match bt::emulator::accept_connection().await {
-            Ok(session) => session,
-            Err(e) => {
-                error!("[BT] Connection error: {e}");
-                tokio::time::sleep(Duration::from_secs(2)).await;
+        // Wait for HID device to appear after init
+        info!("[USB] Waiting for HID device to appear...");
+        tokio::time::sleep(Duration::from_secs(2)).await;
+
+        // --- Spawn HID reader thread ---
+        let hid_rx = usb::hid::spawn_reader(2);
+
+        // --- Auto-calibrate stick centers ---
+        info!("[USB] Calibrating stick centers (don't touch the sticks)...");
+        let mut cal_reports = Vec::with_capacity(20);
+        for _ in 0..20 {
+            match hid_rx.recv_timeout(Duration::from_millis(200)) {
+                Ok(report) => cal_reports.push(report),
+                Err(_) => break,
+            }
+        }
+        let (left_center, right_center) = auto_calibrate_centers(&cal_reports);
+        info!(
+            "[USB] Left stick center: ({}, {}), Right: ({}, {})",
+            left_center.0, left_center.1, right_center.0, right_center.1
+        );
+
+        let main_cal = StickCalibrator::new(MAIN_STICK_CAL, 10.0);
+        let c_cal = StickCalibrator::new(C_STICK_CAL, 10.0);
+
+        // --- Phase 1: BT connection loop ---
+        // Inner loop handles Switch reconnection (e.g., power cycle)
+        'bt_loop: loop {
+            info!("[BT] Waiting for Switch to connect...");
+            mitm_state.update(StateSnapshot {
+                macro_mode: false, recording: false, playing: false,
+                current_slot: 0, slot_count: 0, current_macro_name: None,
+                usb_connected: true, bt_connected: false,
+            });
+
+            // Wait for BT connection, but check USB health every 2s
+            let mut bt_session = loop {
+                tokio::select! {
+                    result = bt::emulator::accept_connection() => {
+                        match result {
+                            Ok(session) => break session,
+                            Err(e) => {
+                                error!("[BT] Connection error: {e}");
+                                tokio::time::sleep(Duration::from_secs(2)).await;
+                            }
+                        }
+                    }
+                    _ = tokio::time::sleep(Duration::from_secs(2)) => {
+                        if !usb::init::is_device_present() {
+                            warn!("[USB] Controller disconnected. Waiting for reconnection...");
+                            mitm_state.update(StateSnapshot {
+                                macro_mode: false, recording: false, playing: false,
+                                current_slot: 0, slot_count: 0, current_macro_name: None,
+                                usb_connected: false, bt_connected: false,
+                            });
+                            break 'bt_loop;
+                        }
+                    }
+                }
+            };
+
+            // Run pairing
+            if let Err(e) = bt::emulator::run_pairing(&mut bt_session).await {
+                error!("[BT] Pairing error: {e}");
                 continue;
             }
-        };
 
-        // Run pairing
-        if let Err(e) = bt::emulator::run_pairing(&mut bt_session).await {
-            error!("[BT] Pairing error: {e}");
-            continue;
-        }
+            info!("[BT] Connected to Switch!");
+            led::set_led(&led::LED_NORMAL);
 
-        info!("[BT] Connected to Switch!");
-        led::set_led(&led::LED_NORMAL);
+            // Run passthrough loop
+            let disconnect = run_passthrough(
+                &hid_rx,
+                &mut bt_session,
+                &main_cal,
+                &c_cal,
+                left_center,
+                right_center,
+                &mitm_state,
+                &mut cmd_rx,
+                &state_broadcast,
+                &args.macros_dir,
+            )
+            .await;
 
-        // Run passthrough loop
-        let disconnect = run_passthrough(
-            &hid_rx,
-            &mut bt_session,
-            &main_cal,
-            &c_cal,
-            left_center,
-            right_center,
-            &mitm_state,
-            &mut cmd_rx,
-            &state_broadcast,
-            &args.macros_dir,
-        )
-        .await;
-
-        match disconnect {
-            DisconnectReason::SwitchDisconnected => {
-                warn!("[BT] Switch disconnected. Waiting for reconnection...");
-                led::set_led(&led::LED_NORMAL);
-            }
-            DisconnectReason::UsbDisconnected => {
-                error!("[USB] Controller disconnected. Exiting.");
-                break;
-            }
-            DisconnectReason::Shutdown => {
-                info!("[MITM] Shutting down...");
-                break;
+            match disconnect {
+                DisconnectReason::SwitchDisconnected => {
+                    warn!("[BT] Switch disconnected. Waiting for reconnection...");
+                    led::set_led(&led::LED_NORMAL);
+                }
+                DisconnectReason::UsbDisconnected => {
+                    warn!("[USB] Controller disconnected. Waiting for reconnection...");
+                    mitm_state.update(StateSnapshot {
+                        macro_mode: false, recording: false, playing: false,
+                        current_slot: 0, slot_count: 0, current_macro_name: None,
+                        usb_connected: false, bt_connected: false,
+                    });
+                    break 'bt_loop;
+                }
+                DisconnectReason::Shutdown => {
+                    info!("[MITM] Shutting down...");
+                    return Ok(());
+                }
             }
         }
     }
-
-    info!("Done.");
-    Ok(())
 }
 
 enum DisconnectReason {
@@ -242,6 +267,7 @@ async fn run_passthrough(
     let mut bt_timer: u8 = 0;
     let mut cached_slot_count = storage::get_slot_count(macros_dir);
     let mut cached_macro_name: Option<String> = None;
+    let mut usb_check_counter: u32 = 0;
 
     let refresh_cache = |slot: usize, macros_dir: &std::path::Path| -> (usize, Option<String>) {
         let count = storage::get_slot_count(macros_dir);
@@ -368,6 +394,14 @@ async fn run_passthrough(
         let raw_report = match hid_rx.recv_timeout(Duration::from_millis(8)) {
             Ok(report) => report,
             Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
+                // Periodically check if USB device is still present (~every 2s)
+                usb_check_counter += 1;
+                if usb_check_counter >= 250 {
+                    usb_check_counter = 0;
+                    if !usb::init::is_device_present() {
+                        return DisconnectReason::UsbDisconnected;
+                    }
+                }
                 // No report available, poll BT control and continue
                 match bt::emulator::poll_control(bt_session, &mut bt_timer).await {
                     Ok(true) => return DisconnectReason::SwitchDisconnected,
