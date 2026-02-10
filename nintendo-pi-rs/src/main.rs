@@ -518,5 +518,6 @@ fn update_state(
         stick_deadzone: ctrl.stick_deadzone,
         combo_hold_time: ctrl.combo_hold_time,
         auto_loop_default: ctrl.auto_loop_default,
+        playback_speed_default: ctrl.playback_speed_default,
     });
 }

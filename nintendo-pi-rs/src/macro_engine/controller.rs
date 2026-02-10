@@ -31,6 +31,7 @@ pub enum MacroCommand {
     SetStickDeadzone(f64),
     SetComboHoldTime(f64),
     SetAutoLoopDefault(bool),
+    SetPlaybackSpeedDefault(f64),
 }
 
 /// Side effects produced by executing a command.
@@ -64,6 +65,7 @@ pub struct MacroController {
     pub stick_deadzone: f64,
     pub combo_hold_time: f64,
     pub auto_loop_default: bool,
+    pub playback_speed_default: f64,
     macros_dir: PathBuf,
 }
 
@@ -84,6 +86,7 @@ impl MacroController {
             stick_deadzone: crate::calibration::DEFAULT_DEADZONE,
             combo_hold_time: crate::combo::DEFAULT_HOLD_DURATION,
             auto_loop_default: false,
+            playback_speed_default: 1.0,
             macros_dir,
         }
     }
@@ -106,6 +109,7 @@ impl MacroController {
             MacroCommand::SetStickDeadzone(dz) => self.set_stick_deadzone(dz),
             MacroCommand::SetComboHoldTime(t) => self.set_combo_hold_time(t),
             MacroCommand::SetAutoLoopDefault(v) => self.set_auto_loop_default(v),
+            MacroCommand::SetPlaybackSpeedDefault(s) => self.set_playback_speed_default(s),
         }
     }
 
@@ -229,6 +233,7 @@ impl MacroController {
         if let Some(macro_id) = storage::get_macro_id_by_slot(&self.macros_dir, self.current_slot) {
             if self.player.load(&self.macros_dir, macro_id) {
                 let should_loop = self.player.looping || self.auto_loop_default;
+                self.player.set_speed(self.playback_speed_default);
                 self.player.start(should_loop);
                 info!(
                     "[MACRO] Playing macro {} (slot {}, loop={}).",
@@ -300,6 +305,17 @@ impl MacroController {
         info!(
             "[SETTINGS] Auto-loop default: {}",
             if enabled { "ON" } else { "OFF" }
+        );
+        MacroEffect::none()
+    }
+
+    fn set_playback_speed_default(&mut self, speed: f64) -> MacroEffect {
+        use super::player::SPEED_PRESETS;
+        self.playback_speed_default =
+            speed.clamp(SPEED_PRESETS[0], SPEED_PRESETS[SPEED_PRESETS.len() - 1]);
+        info!(
+            "[SETTINGS] Playback speed default set to {:.2}x",
+            self.playback_speed_default
         );
         MacroEffect::none()
     }

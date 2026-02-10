@@ -820,6 +820,17 @@
   </div>
   <div class="setting-row">
     <div class="setting-label">
+      <span class="setting-name">Default Playback Speed</span>
+      <span class="setting-value" id="speedDefaultValue">1.0x</span>
+    </div>
+    <input type="range" class="setting-slider" id="speedDefaultSlider" min="0" max="4" step="1" value="2">
+    <div class="setting-range-labels">
+      <span>0.25x</span>
+      <span>4.0x</span>
+    </div>
+  </div>
+  <div class="setting-row">
+    <div class="setting-label">
       <span class="setting-name">Auto-Loop Playback</span>
       <button class="switch-toggle" id="autoLoopToggle" onclick="toggleAutoLoop()">
         <span class="knob"></span>
@@ -1146,6 +1157,7 @@
     syncDeadzone();
     syncHoldTime();
     syncAutoLoop();
+    syncSpeedDefault();
 
     // Update controller visualization
     updateController();
@@ -1517,6 +1529,33 @@
       toggle.classList.add('on');
     } else {
       toggle.classList.remove('on');
+    }
+  }
+
+  // === Default playback speed slider ===
+  var SPEED_PRESETS = [0.25, 0.5, 1.0, 2.0, 4.0];
+  var speedDefaultSlider = document.getElementById('speedDefaultSlider');
+  var speedDefaultValue = document.getElementById('speedDefaultValue');
+
+  speedDefaultSlider.addEventListener('input', function() {
+    var idx = parseInt(speedDefaultSlider.value);
+    speedDefaultValue.textContent = SPEED_PRESETS[idx] + 'x';
+  });
+
+  speedDefaultSlider.addEventListener('change', function() {
+    var idx = parseInt(speedDefaultSlider.value);
+    sfx.nav();
+    sendCmd('SET_PLAYBACK_SPEED_DEFAULT', SPEED_PRESETS[idx]);
+  });
+
+  function syncSpeedDefault() {
+    if (state.playback_speed_default !== undefined) {
+      var val = state.playback_speed_default;
+      speedDefaultValue.textContent = val + 'x';
+      if (document.activeElement !== speedDefaultSlider) {
+        var idx = SPEED_PRESETS.indexOf(val);
+        if (idx >= 0) speedDefaultSlider.value = idx;
+      }
     }
   }
 })();

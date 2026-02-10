@@ -180,6 +180,11 @@ fn parse_web_command(val: &serde_json::Value, _macros_dir: &std::path::Path) -> 
             debug!("[WEB] Set auto-loop default: {v}");
             Some(WebCommand::SetAutoLoopDefault(v))
         }
+        "SET_PLAYBACK_SPEED_DEFAULT" => {
+            let s = val.get("data")?.as_f64()?;
+            debug!("[WEB] Set playback speed default: {s}x");
+            Some(WebCommand::SetPlaybackSpeedDefault(s))
+        }
         _ => {
             warn!("[WEB] Unknown command: {cmd}");
             None
