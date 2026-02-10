@@ -170,6 +170,11 @@ fn parse_web_command(val: &serde_json::Value, _macros_dir: &std::path::Path) -> 
             debug!("[WEB] Set stick deadzone: {dz}");
             Some(WebCommand::SetStickDeadzone(dz))
         }
+        "SET_COMBO_HOLD_TIME" => {
+            let t = val.get("data")?.as_f64()?;
+            debug!("[WEB] Set combo hold time: {t}s");
+            Some(WebCommand::SetComboHoldTime(t))
+        }
         _ => {
             warn!("[WEB] Unknown command: {cmd}");
             None

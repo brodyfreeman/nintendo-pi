@@ -355,8 +355,9 @@ fn usb_processing_loop(
         // --- Drain web command queue ---
         while let Ok(web_cmd) = cmd_rx.try_recv() {
             let effect = ctrl.execute(web_cmd.into());
-            // Keep combo detector in sync with controller's macro_mode
+            // Keep combo detector in sync with controller state
             combo.macro_mode = ctrl.macro_mode;
+            combo.hold_duration = ctrl.combo_hold_time;
             // Sync stick deadzone to calibrators
             main_cal.deadzone = ctrl.stick_deadzone;
             c_cal.deadzone = ctrl.stick_deadzone;
@@ -515,5 +516,6 @@ fn update_state(
         playback_input: playback_input.map(PlaybackInput::from_input_state),
         live_input: live_input.map(PlaybackInput::from_input_state),
         stick_deadzone: ctrl.stick_deadzone,
+        combo_hold_time: ctrl.combo_hold_time,
     });
 }

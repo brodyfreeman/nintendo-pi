@@ -29,6 +29,7 @@ pub enum MacroCommand {
     SetPlaybackSpeed(f64),
     ToggleLoop,
     SetStickDeadzone(f64),
+    SetComboHoldTime(f64),
 }
 
 /// Side effects produced by executing a command.
@@ -60,6 +61,7 @@ pub struct MacroController {
     pub cached_slot_count: usize,
     pub cached_macro_name: Option<String>,
     pub stick_deadzone: f64,
+    pub combo_hold_time: f64,
     macros_dir: PathBuf,
 }
 
@@ -78,6 +80,7 @@ impl MacroController {
             cached_slot_count: slot_count,
             cached_macro_name: macro_name,
             stick_deadzone: crate::calibration::DEFAULT_DEADZONE,
+            combo_hold_time: crate::combo::DEFAULT_HOLD_DURATION,
             macros_dir,
         }
     }
@@ -98,6 +101,7 @@ impl MacroController {
             MacroCommand::SetPlaybackSpeed(speed) => self.set_playback_speed(speed),
             MacroCommand::ToggleLoop => self.toggle_loop(),
             MacroCommand::SetStickDeadzone(dz) => self.set_stick_deadzone(dz),
+            MacroCommand::SetComboHoldTime(t) => self.set_combo_hold_time(t),
         }
     }
 
@@ -273,6 +277,15 @@ impl MacroController {
         info!(
             "[SETTINGS] Stick deadzone set to {:.1}",
             self.stick_deadzone
+        );
+        MacroEffect::none()
+    }
+
+    fn set_combo_hold_time(&mut self, t: f64) -> MacroEffect {
+        self.combo_hold_time = t.clamp(0.1, 2.0);
+        info!(
+            "[SETTINGS] Combo hold time set to {:.1}s",
+            self.combo_hold_time
         );
         MacroEffect::none()
     }

@@ -21,6 +21,7 @@ pub enum WebCommand {
     SetPlaybackSpeed(f64),
     ToggleLoop,
     SetStickDeadzone(f64),
+    SetComboHoldTime(f64),
 }
 
 impl From<WebCommand> for crate::macro_engine::controller::MacroCommand {
@@ -39,6 +40,7 @@ impl From<WebCommand> for crate::macro_engine::controller::MacroCommand {
             WebCommand::SetPlaybackSpeed(speed) => Self::SetPlaybackSpeed(speed),
             WebCommand::ToggleLoop => Self::ToggleLoop,
             WebCommand::SetStickDeadzone(dz) => Self::SetStickDeadzone(dz),
+            WebCommand::SetComboHoldTime(t) => Self::SetComboHoldTime(t),
         }
     }
 }
@@ -114,6 +116,7 @@ pub struct StateSnapshot {
     pub playback_input: Option<PlaybackInput>,
     pub live_input: Option<PlaybackInput>,
     pub stick_deadzone: f64,
+    pub combo_hold_time: f64,
 }
 
 impl Default for StateSnapshot {
@@ -134,6 +137,7 @@ impl Default for StateSnapshot {
             playback_input: None,
             live_input: None,
             stick_deadzone: crate::calibration::DEFAULT_DEADZONE,
+            combo_hold_time: crate::combo::DEFAULT_HOLD_DURATION,
         }
     }
 }

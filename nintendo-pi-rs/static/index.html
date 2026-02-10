@@ -807,6 +807,17 @@
       <span>50 (max)</span>
     </div>
   </div>
+  <div class="setting-row">
+    <div class="setting-label">
+      <span class="setting-name">Combo Hold Time</span>
+      <span class="setting-value" id="holdTimeValue">0.5s</span>
+    </div>
+    <input type="range" class="setting-slider" id="holdTimeSlider" min="0.1" max="2.0" step="0.1" value="0.5">
+    <div class="setting-range-labels">
+      <span>0.1s (fast)</span>
+      <span>2.0s (slow)</span>
+    </div>
+  </div>
 </div>
 
 <div class="section grid-span-full">
@@ -1122,6 +1133,7 @@
 
     // Sync settings
     syncDeadzone();
+    syncHoldTime();
 
     // Update controller visualization
     updateController();
@@ -1445,9 +1457,33 @@
     if (state.stick_deadzone !== undefined) {
       var val = state.stick_deadzone;
       deadzoneValue.textContent = val.toFixed(1);
-      // Only update slider if user isn't dragging it
       if (document.activeElement !== deadzoneSlider) {
         deadzoneSlider.value = val;
+      }
+    }
+  }
+
+  // === Combo hold time slider ===
+  var holdTimeSlider = document.getElementById('holdTimeSlider');
+  var holdTimeValue = document.getElementById('holdTimeValue');
+
+  holdTimeSlider.addEventListener('input', function() {
+    var val = parseFloat(holdTimeSlider.value);
+    holdTimeValue.textContent = val.toFixed(1) + 's';
+  });
+
+  holdTimeSlider.addEventListener('change', function() {
+    var val = parseFloat(holdTimeSlider.value);
+    sfx.nav();
+    sendCmd('SET_COMBO_HOLD_TIME', val);
+  });
+
+  function syncHoldTime() {
+    if (state.combo_hold_time !== undefined) {
+      var val = state.combo_hold_time;
+      holdTimeValue.textContent = val.toFixed(1) + 's';
+      if (document.activeElement !== holdTimeSlider) {
+        holdTimeSlider.value = val;
       }
     }
   }

@@ -56,8 +56,8 @@ impl From<ComboAction> for Option<crate::macro_engine::controller::MacroCommand>
     }
 }
 
-/// Hold duration for macro mode toggle (seconds).
-const HOLD_DURATION: f64 = 0.5;
+/// Default hold duration for macro mode toggle (seconds).
+pub const DEFAULT_HOLD_DURATION: f64 = 0.5;
 
 /// Instant combos: button -> action (edge-triggered when L3+R3 held).
 const INSTANT_COMBOS: &[(Button, ComboAction)] = &[
@@ -109,6 +109,7 @@ impl SuppressedButtons {
 /// Combo detector state machine.
 pub struct ComboDetector {
     pub macro_mode: bool,
+    pub hold_duration: f64,
     dpad_down_start: Option<Instant>,
     prev_buttons: ButtonState,
     prev_base_held: bool,
@@ -118,6 +119,7 @@ impl ComboDetector {
     pub fn new() -> Self {
         Self {
             macro_mode: false,
+            hold_duration: DEFAULT_HOLD_DURATION,
             dpad_down_start: None,
             prev_buttons: ButtonState::default(),
             prev_base_held: false,
@@ -146,11 +148,14 @@ impl ComboDetector {
                 suppressed.add(Button::DpadDown);
                 match self.dpad_down_start {
                     None => {
-                        debug!("[COMBO] D-pad Down hold started (need {HOLD_DURATION}s for macro mode toggle)");
+                        debug!(
+                            "[COMBO] D-pad Down hold started (need {}s for macro mode toggle)",
+                            self.hold_duration
+                        );
                         self.dpad_down_start = Some(Instant::now());
                     }
                     Some(start) => {
-                        if start.elapsed().as_secs_f64() >= HOLD_DURATION {
+                        if start.elapsed().as_secs_f64() >= self.hold_duration {
                             action = ComboAction::ToggleMacroMode;
                             self.dpad_down_start = None;
                         }
