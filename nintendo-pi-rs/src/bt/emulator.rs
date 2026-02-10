@@ -7,13 +7,32 @@
 
 use std::io;
 use std::os::unix::io::{AsRawFd, RawFd};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use tokio::io::unix::AsyncFd;
 use tokio::io::Interest;
 use tracing::{debug, info, warn};
 
 use super::protocol;
+
+/// Human-readable name for a BT subcommand ID.
+fn subcmd_name(id: u8) -> &'static str {
+    match id {
+        0x02 => "RequestDeviceInfo",
+        0x03 => "SetInputReportMode",
+        0x04 => "TriggerButtonsElapsed",
+        0x08 => "SetShipmentState",
+        0x10 => "SPIFlashRead",
+        0x21 => "SetNfcIrMcuConfig",
+        0x22 => "SetNfcIrState",
+        0x30 => "SetPlayerLights",
+        0x38 => "SetHomeLed",
+        0x40 => "EnableIMU",
+        0x41 => "SetIMUSensitivity",
+        0x48 => "EnableVibration",
+        _ => "Unknown",
+    }
+}
 
 /// PSM for HID Control channel.
 const PSM_CONTROL: u16 = 17;
@@ -130,7 +149,9 @@ pub struct BtSession {
 fn bind_l2cap(psm: u16) -> io::Result<RawFd> {
     let fd = unsafe { libc::socket(AF_BLUETOOTH, libc::SOCK_SEQPACKET, BTPROTO_L2CAP) };
     if fd < 0 {
-        return Err(io::Error::last_os_error());
+        let err = io::Error::last_os_error();
+        warn!("[BT] Failed to create L2CAP socket for PSM {psm}: {err}");
+        return Err(err);
     }
 
     let addr = SockAddrL2 {
@@ -163,6 +184,7 @@ fn bind_l2cap(psm: u16) -> io::Result<RawFd> {
                 ),
             ));
         }
+        warn!("[BT] Failed to bind L2CAP socket on PSM {psm}: {err}");
         return Err(err);
     }
 
@@ -172,9 +194,11 @@ fn bind_l2cap(psm: u16) -> io::Result<RawFd> {
         unsafe {
             libc::close(fd);
         }
+        warn!("[BT] Failed to listen on L2CAP PSM {psm}: {err}");
         return Err(err);
     }
 
+    debug!("[BT] L2CAP listener bound on PSM {psm} (fd={fd})");
     Ok(fd)
 }
 
@@ -232,6 +256,8 @@ pub async fn accept_connection() -> anyhow::Result<BtSession> {
     info!("[BT] Waiting for Switch to connect...");
     info!("[BT] >> Open 'Change Grip/Order' on the Switch <<");
 
+    let wait_start = Instant::now();
+
     // Accept both channels concurrently — the Switch may connect them in either order
     let (ctrl_result, itr_result) =
         tokio::join!(async_accept(ctrl_listener), async_accept(itr_listener),);
@@ -247,7 +273,10 @@ pub async fn accept_connection() -> anyhow::Result<BtSession> {
     let ctrl_fd = ctrl_result?;
     info!("[BT] Control channel connected");
     let itr_fd = itr_result?;
-    info!("[BT] Interrupt channel connected");
+    info!(
+        "[BT] Interrupt channel connected (both channels up in {:.1}s)",
+        wait_start.elapsed().as_secs_f64()
+    );
 
     let control = L2capSocket::from_raw_fd(ctrl_fd)?;
     let interrupt = L2capSocket::from_raw_fd(itr_fd)?;
@@ -293,14 +322,17 @@ impl PairingProgress {
 pub async fn run_pairing(session: &mut BtSession) -> anyhow::Result<()> {
     info!("[BT] Starting pairing handshake...");
 
+    let pairing_start = Instant::now();
     let mut timer: u8 = 0;
     let mut itr_buf = [0u8; 512];
     let mut progress = PairingProgress::default();
+    let mut subcmd_count: u32 = 0;
 
     // Send an initial empty report to prompt the Switch (like NXBT)
     let initial_report = build_empty_input_report(timer, progress.device_info_queried);
     session.interrupt.write_all(&initial_report).await?;
     timer = timer.wrapping_add(1);
+    debug!("[BT] Sent initial empty report to prompt Switch");
 
     loop {
         // Non-blocking read from interrupt channel only (like NXBT)
@@ -308,11 +340,17 @@ pub async fn run_pairing(session: &mut BtSession) -> anyhow::Result<()> {
             result = session.interrupt.read(&mut itr_buf) => {
                 match result {
                     Ok(0) => {
-                        warn!("[BT] Interrupt channel closed during pairing");
+                        warn!(
+                            "[BT] Interrupt channel closed during pairing after {subcmd_count} subcommands ({:.1}s)",
+                            pairing_start.elapsed().as_secs_f64()
+                        );
                         return Err(anyhow::anyhow!("Interrupt channel closed"));
                     }
                     Ok(n) => Some(n),
                     Err(e) => {
+                        warn!(
+                            "[BT] Interrupt read error during pairing after {subcmd_count} subcommands: {e}"
+                        );
                         return Err(anyhow::anyhow!("Interrupt read error: {e}"));
                     }
                 }
@@ -326,20 +364,34 @@ pub async fn run_pairing(session: &mut BtSession) -> anyhow::Result<()> {
             let data = &itr_buf[..n];
             debug!("[BT] Pairing recv ({n} bytes): {:02X?}", &data[..n.min(30)]);
 
+            if !progress.received_first_message {
+                info!(
+                    "[BT] First message from Switch after {:.1}s",
+                    pairing_start.elapsed().as_secs_f64()
+                );
+            }
             progress.received_first_message = true;
 
             if let Some((subcmd_id, subcmd_data)) = extract_subcommand(data) {
+                subcmd_count += 1;
                 let (ack, reply_data) = protocol::handle_subcommand(subcmd_id, subcmd_data);
                 let reply = protocol::build_subcommand_reply(timer, subcmd_id, ack, &reply_data);
                 timer = timer.wrapping_add(1);
 
-                info!("[BT] Pairing: subcmd 0x{subcmd_id:02X} -> ACK 0x{ack:02X}");
+                let name = subcmd_name(subcmd_id);
+                info!(
+                    "[BT] Pairing [{subcmd_count}]: {name} (0x{subcmd_id:02X}) -> ACK 0x{ack:02X}, reply {} bytes",
+                    reply_data.len()
+                );
                 session.interrupt.write_all(&reply).await?;
 
                 progress.track(subcmd_id);
 
                 if progress.is_complete() {
-                    info!("[BT] Pairing complete! (vibration enabled + player lights set)");
+                    info!(
+                        "[BT] Pairing complete in {:.1}s ({subcmd_count} subcommands handled)",
+                        pairing_start.elapsed().as_secs_f64()
+                    );
                     return Ok(());
                 }
 
@@ -351,7 +403,7 @@ pub async fn run_pairing(session: &mut BtSession) -> anyhow::Result<()> {
         let report = build_empty_input_report(timer, progress.device_info_queried);
         timer = timer.wrapping_add(1);
         if let Err(e) = session.interrupt.write_all(&report).await {
-            debug!("[BT] Pairing send error: {e}");
+            warn!("[BT] Pairing: failed to send keepalive report: {e}");
         }
     }
 }
@@ -397,6 +449,7 @@ pub async fn poll_control(session: &mut BtSession, timer: &mut u8) -> anyhow::Re
                 }
                 Err(e) => {
                     if e.kind() == std::io::ErrorKind::ConnectionReset {
+                        info!("[BT] Interrupt channel reset by Switch (ConnectionReset)");
                         return Ok(true);
                     }
                     // Other errors may be transient
@@ -439,7 +492,15 @@ async fn handle_incoming_subcommand(session: &mut BtSession, data: &[u8], timer:
         let (ack, reply_data) = protocol::handle_subcommand(subcmd_id, subcmd_data);
         let reply = protocol::build_subcommand_reply(*timer, subcmd_id, ack, &reply_data);
         *timer = timer.wrapping_add(1);
-        debug!("[BT] Subcmd 0x{subcmd_id:02X} -> ACK 0x{ack:02X}");
-        let _ = session.interrupt.write_all(&reply).await;
+        debug!(
+            "[BT] Subcmd {} (0x{subcmd_id:02X}) -> ACK 0x{ack:02X}",
+            subcmd_name(subcmd_id)
+        );
+        if let Err(e) = session.interrupt.write_all(&reply).await {
+            warn!(
+                "[BT] Failed to send reply for {} (0x{subcmd_id:02X}): {e}",
+                subcmd_name(subcmd_id)
+            );
+        }
     }
 }

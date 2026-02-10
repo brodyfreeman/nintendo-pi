@@ -119,10 +119,17 @@ pub fn handle_subcommand(subcmd_id: u8, subcmd_data: &[u8]) -> (u8, Vec<u8>) {
             if let Some(header) = subcmd_data.get(..5) {
                 let addr = u32::from_le_bytes(header[..4].try_into().unwrap());
                 let length = header[4];
+                tracing::debug!(
+                    "[BT] SPI read: addr=0x{addr:04X} len=0x{length:02X} ({length} bytes)"
+                );
                 let mut reply_data = header.to_vec();
                 reply_data.extend_from_slice(&spi_read_response(addr, length));
                 (0x90, reply_data)
             } else {
+                tracing::warn!(
+                    "[BT] SPI read with missing/short header ({} bytes)",
+                    subcmd_data.len()
+                );
                 (0x80, vec![])
             }
         }
