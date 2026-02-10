@@ -1,19 +1,19 @@
 pub mod state;
 
-use std::sync::Arc;
+use std::{convert::Infallible, sync::Arc};
 
 use axum::{
-    extract::{
-        ws::{Message, WebSocket, WebSocketUpgrade},
-        State,
+    extract::State,
+    response::{
+        sse::{Event, Sse},
+        Html, Json,
     },
-    response::{Html, IntoResponse, Json},
-    routing::get,
+    routing::{get, post},
     Router,
 };
-use futures::{SinkExt, StreamExt};
 use tokio::sync::{broadcast, mpsc};
-use tracing::{debug, error, info, warn};
+use tokio_stream::{wrappers::BroadcastStream, Stream, StreamExt};
+use tracing::{error, info, warn};
 
 use self::state::{MitmState, WebCommand};
 use crate::macro_engine::storage::{self, MacroEntry};
@@ -45,7 +45,8 @@ pub async fn start_server(
         .route("/", get(index_handler))
         .route("/api/state", get(api_state))
         .route("/api/macros", get(api_macros))
-        .route("/ws", get(ws_handler))
+        .route("/events", get(sse_handler))
+        .route("/api/cmd", post(cmd_handler))
         .with_state(shared);
 
     let addr = format!("0.0.0.0:{port}");
@@ -72,15 +73,10 @@ async fn api_macros(State(state): State<Arc<WebState>>) -> Json<Vec<MacroEntry>>
     Json(storage::list_macros(&state.macros_dir))
 }
 
-/// WebSocket handler for real-time state updates and commands.
-async fn ws_handler(ws: WebSocketUpgrade, State(state): State<Arc<WebState>>) -> impl IntoResponse {
-    ws.on_upgrade(move |socket| handle_ws(socket, state))
-}
-
-async fn handle_ws(socket: WebSocket, state: Arc<WebState>) {
-    let (mut sender, mut receiver) = socket.split();
-
-    // Send initial state
+/// GET /events — SSE endpoint for real-time state updates.
+async fn sse_handler(
+    State(state): State<Arc<WebState>>,
+) -> Sse<impl Stream<Item = Result<Event, Infallible>>> {
     let initial_state = state.mitm_state.snapshot_json();
     let initial_macros = storage::list_macros(&state.macros_dir);
     let init_msg = serde_json::json!({
@@ -88,50 +84,37 @@ async fn handle_ws(socket: WebSocket, state: Arc<WebState>) {
         "state": initial_state,
         "macros": initial_macros,
     });
-    if let Err(e) = sender.send(Message::Text(init_msg.to_string())).await {
-        debug!("[WEB] Failed to send init: {e}");
-        return;
-    }
 
-    let mut state_rx = state.state_rx.subscribe();
-    let cmd_tx = state.cmd_tx.clone();
-    let macros_dir = state.macros_dir.clone();
-
-    // Task to forward state broadcasts to the WebSocket
-    let send_task = tokio::spawn(async move {
-        while let Ok(msg) = state_rx.recv().await {
-            if sender.send(Message::Text(msg)).await.is_err() {
-                break;
-            }
-        }
+    let rx = state.state_rx.subscribe();
+    let broadcast_stream = BroadcastStream::new(rx).filter_map(|result| match result {
+        Ok(msg) => Some(Ok(Event::default().data(msg))),
+        Err(_) => None,
     });
 
-    // Task to receive commands from the WebSocket
-    while let Some(msg) = receiver.next().await {
-        match msg {
-            Ok(Message::Text(text)) => match serde_json::from_str::<serde_json::Value>(&text) {
-                Ok(val) => {
-                    if let Some(cmd) = parse_web_command(&val, &macros_dir) {
-                        if let Err(e) = cmd_tx.send(cmd).await {
-                            error!("[WEB] Failed to send command: {e}");
-                        }
-                    }
-                }
-                Err(e) => {
-                    warn!("[WEB] Invalid JSON from WebSocket: {e}");
-                }
-            },
-            Ok(Message::Close(_)) => break,
-            Err(e) => {
-                debug!("[WEB] WebSocket error: {e}");
-                break;
+    let init_event = tokio_stream::once(Ok(Event::default().data(init_msg.to_string())));
+
+    Sse::new(init_event.chain(broadcast_stream))
+}
+
+/// POST /api/cmd — receive commands from the web UI.
+async fn cmd_handler(
+    State(state): State<Arc<WebState>>,
+    axum::Json(val): axum::Json<serde_json::Value>,
+) -> axum::http::StatusCode {
+    match parse_web_command(&val, &state.macros_dir) {
+        Some(cmd) => {
+            if let Err(e) = state.cmd_tx.send(cmd).await {
+                error!("[WEB] Failed to send command: {e}");
+                axum::http::StatusCode::INTERNAL_SERVER_ERROR
+            } else {
+                axum::http::StatusCode::OK
             }
-            _ => {}
+        }
+        None => {
+            warn!("[WEB] Invalid command: {val}");
+            axum::http::StatusCode::BAD_REQUEST
         }
     }
-
-    send_task.abort();
-    debug!("[WEB] WebSocket connection closed");
 }
 
 fn parse_web_command(val: &serde_json::Value, _macros_dir: &std::path::Path) -> Option<WebCommand> {

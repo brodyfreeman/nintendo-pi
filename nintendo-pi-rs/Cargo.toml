@@ -15,7 +15,7 @@ zbus = "4"
 # Async runtime (required by bluer, axum, zbus)
 tokio = { version = "1", features = ["full"] }
 # Web server
-axum = { version = "0.7", features = ["ws"] }
+axum = "0.7"
 # Macro mmap
 memmap2 = "0.9"
 # Serialization
@@ -26,8 +26,8 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 # CLI
 clap = { version = "4", features = ["derive"] }
-# Futures utilities
-futures = "0.3"
+# SSE streaming
+tokio-stream = { version = "0.1", features = ["sync"] }
 # Error handling
 anyhow = "1"
 libc = "0.2.181"

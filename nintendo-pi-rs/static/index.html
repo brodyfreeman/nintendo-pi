@@ -200,30 +200,22 @@
   var state = {};
   var macros = [];
   var renameId = null;
-  var ws = null;
-  var reconnectTimer = null;
+  var es = null;
 
   function connect() {
-    var proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
-    ws = new WebSocket(proto + '//' + location.host + '/ws');
+    es = new EventSource('/events');
 
-    ws.onopen = function() {
+    es.onopen = function() {
       setStatusDot('piDot', 'green');
-      if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
     };
 
-    ws.onclose = function() {
+    es.onerror = function() {
       setStatusDot('piDot', 'red');
       setStatusDot('ctrlDot', 'red');
       setStatusDot('switchDot', 'red');
-      reconnectTimer = setTimeout(connect, 2000);
     };
 
-    ws.onerror = function() {
-      ws.close();
-    };
-
-    ws.onmessage = function(e) {
+    es.onmessage = function(e) {
       try {
         var msg = JSON.parse(e.data);
         if (msg.type === 'init') {
@@ -358,15 +350,19 @@
   }
 
   window.sendCmd = function(cmd, data) {
-    if (ws && ws.readyState === 1) {
-      ws.send(JSON.stringify({ cmd: cmd, data: data || null }));
-    }
+    fetch('/api/cmd', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ cmd: cmd, data: data || null })
+    });
   };
 
   window.selectSlot = function(idx) {
-    if (ws && ws.readyState === 1) {
-      ws.send(JSON.stringify({ cmd: 'SELECT_SLOT', data: idx }));
-    }
+    fetch('/api/cmd', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ cmd: 'SELECT_SLOT', data: idx })
+    });
   };
 
   window.openRename = function(id, name) {
