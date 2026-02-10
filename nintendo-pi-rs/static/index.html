@@ -335,6 +335,64 @@
   .modal-btns { display: flex; gap: 0.5rem; }
   .modal-btns .btn { flex: 1; }
 
+  /* === Controller visualization === */
+  .controller-section {
+    margin: 0.6rem 0.75rem; padding: 0.8rem 0.5rem 0.6rem;
+    background: var(--surface); border-radius: var(--radius);
+    border: 1px solid rgba(255,255,255,0.06);
+    border-left: 2px solid rgba(0,195,227,0.2);
+    border-right: 2px solid rgba(255,60,40,0.2);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+    text-align: center;
+    animation: section-in 0.35s cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+  .controller-svg-wrap {
+    display: inline-block; max-width: 320px; width: 100%;
+    filter: drop-shadow(0 4px 12px rgba(0,0,0,0.4));
+    transition: filter 0.3s ease;
+  }
+  .controller-svg-wrap.disconnected { filter: drop-shadow(0 2px 6px rgba(0,0,0,0.3)) saturate(0.2) brightness(0.6); }
+  .controller-svg-wrap.recording { animation: ctrl-rec-pulse 1.2s ease-in-out infinite; }
+  @keyframes ctrl-rec-pulse {
+    0%, 100% { filter: drop-shadow(0 4px 12px rgba(0,0,0,0.4)); }
+    50% { filter: drop-shadow(0 4px 12px rgba(0,0,0,0.4)) drop-shadow(0 0 16px rgba(230,0,18,0.5)); }
+  }
+  /* Controller SVG element styles */
+  .ctrl-body { fill: #333; stroke: #555; stroke-width: 1.5; }
+  .ctrl-grip-l { fill: #0ab9d6; }
+  .ctrl-grip-r { fill: #ff4554; }
+  .ctrl-grip-l, .ctrl-grip-r { opacity: 0.85; transition: opacity 0.3s; }
+  .disconnected .ctrl-grip-l, .disconnected .ctrl-grip-r { opacity: 0.3; }
+  .ctrl-stick-base { fill: #222; stroke: #444; stroke-width: 1; }
+  .ctrl-stick-cap { fill: #2a2a2a; stroke: #555; stroke-width: 0.8; transition: fill 0.1s, cx 0.1s, cy 0.1s; }
+  .ctrl-stick-cap.active { fill: #49b84f; }
+  .ctrl-btn { fill: #222; stroke: rgba(255,255,255,0.15); stroke-width: 0.8; transition: fill 0.1s; }
+  .ctrl-btn.active-a { fill: var(--green); }
+  .ctrl-btn.active-b { fill: var(--red); }
+  .ctrl-btn.active-x { fill: var(--blue); }
+  .ctrl-btn.active-y { fill: var(--yellow); }
+  .ctrl-btn-label { fill: rgba(255,255,255,0.5); font-size: 6px; font-weight: 800; font-family: 'Nunito', sans-serif; pointer-events: none; text-anchor: middle; dominant-baseline: central; }
+  .ctrl-btn.active-a .ctrl-btn-label, .ctrl-btn.active-b .ctrl-btn-label,
+  .ctrl-btn.active-x .ctrl-btn-label { fill: #fff; }
+  .ctrl-btn.active-y .ctrl-btn-label { fill: #222; }
+  .ctrl-dpad { fill: #222; stroke: rgba(255,255,255,0.1); stroke-width: 0.8; }
+  .ctrl-dpad-btn { fill: transparent; transition: fill 0.1s; }
+  .ctrl-dpad-btn.active { fill: rgba(255,255,255,0.25); }
+  .ctrl-bumper { fill: #2a2a2a; stroke: #444; stroke-width: 0.8; rx: 3; transition: fill 0.1s; }
+  .ctrl-bumper.active { fill: #666; }
+  .ctrl-trigger { fill: #252525; stroke: #444; stroke-width: 0.8; rx: 2; transition: fill 0.1s; }
+  .ctrl-trigger.active { fill: #666; }
+  .ctrl-special { fill: #2a2a2a; stroke: rgba(255,255,255,0.1); stroke-width: 0.6; transition: fill 0.1s; }
+  .ctrl-special.active { fill: #666; }
+  .ctrl-home { fill: #333; stroke: rgba(255,255,255,0.15); stroke-width: 0.8; }
+  .ctrl-capture { fill: #333; stroke: rgba(255,255,255,0.15); stroke-width: 0.8; }
+  .ctrl-status-text {
+    font-size: 0.7rem; color: var(--muted); font-weight: 700; margin-top: 0.4rem;
+    letter-spacing: 0.05em;
+  }
+  .ctrl-status-text.recording { color: var(--red); }
+  .ctrl-status-text.playing { color: var(--green); }
+
   /* === Switch-style entrance animations === */
   @keyframes section-in {
     from { opacity: 0; transform: translateY(18px); }
@@ -440,6 +498,8 @@
     }
     .macro-tile-actions .tile-btn:hover { background: rgba(255,255,255,0.06); color: var(--text); }
     .macro-tile-actions .tile-btn.tile-btn-del:hover { color: #ff4444; background: rgba(230,0,18,0.08); }
+    .controller-section { margin: 0.6rem 0.5rem; }
+    .controller-section:hover { box-shadow: 0 4px 16px rgba(0,0,0,0.25); }
   }
 
   /* Desktop: wider spacing, capped width */
@@ -449,6 +509,8 @@
     .status-bar { margin: 0 0.5rem; }
     .stick-circle { width: 100px; height: 100px; }
     .macro-list-grid { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 0.75rem; }
+    .controller-svg-wrap { max-width: 380px; }
+    .controller-section { padding: 1rem 0.5rem 0.8rem; }
   }
 </style>
 </head>
@@ -463,6 +525,84 @@
     <div class="status-pill"><span class="status-dot red" id="ctrlDot"></span><span id="ctrlLabel">Controller</span></div>
     <div class="status-pill"><span class="status-dot red" id="switchDot"></span><span id="switchLabel">Switch</span></div>
   </div>
+</div>
+
+<div class="controller-section">
+  <div class="controller-svg-wrap disconnected" id="controllerWrap">
+    <svg viewBox="0 0 200 100" xmlns="http://www.w3.org/2000/svg">
+      <!-- Controller body -->
+      <path class="ctrl-body" d="M40,18 Q40,8 50,8 L150,8 Q160,8 160,18 L160,55 Q160,70 150,78 L140,85 Q132,92 120,92 L112,92 Q105,92 100,85 Q95,92 88,92 L80,92 Q68,92 60,85 L50,78 Q40,70 40,55 Z"/>
+      <!-- Left grip -->
+      <path class="ctrl-grip-l" d="M40,18 Q40,8 50,8 L68,8 L68,55 Q68,70 60,78 L50,78 Q40,70 40,55 Z" rx="4"/>
+      <!-- Right grip -->
+      <path class="ctrl-grip-r" d="M132,8 L150,8 Q160,8 160,18 L160,55 Q160,70 150,78 L140,78 Q132,70 132,55 Z" rx="4"/>
+
+      <!-- Left stick -->
+      <circle class="ctrl-stick-base" cx="62" cy="38" r="12"/>
+      <circle class="ctrl-stick-cap" id="ctrlLStick" cx="62" cy="38" r="8"/>
+
+      <!-- D-pad -->
+      <g id="ctrlDpad">
+        <rect class="ctrl-dpad" x="72" y="50" width="16" height="5" rx="1"/>
+        <rect class="ctrl-dpad" x="77.5" y="44.5" width="5" height="16" rx="1"/>
+        <rect class="ctrl-dpad-btn" id="ctrlDLeft" x="72" y="50" width="5.5" height="5" rx="1"/>
+        <rect class="ctrl-dpad-btn" id="ctrlDRight" x="82.5" y="50" width="5.5" height="5" rx="1"/>
+        <rect class="ctrl-dpad-btn" id="ctrlDUp" x="77.5" y="44.5" width="5" height="5.5" rx="1"/>
+        <rect class="ctrl-dpad-btn" id="ctrlDDown" x="77.5" y="55" width="5" height="5.5" rx="1"/>
+      </g>
+
+      <!-- Face buttons -->
+      <g id="ctrlBtnA" class="ctrl-btn">
+        <circle cx="138" cy="38" r="5.5"/>
+        <text class="ctrl-btn-label" x="138" y="38">A</text>
+      </g>
+      <g id="ctrlBtnB" class="ctrl-btn">
+        <circle cx="128" cy="45" r="5.5"/>
+        <text class="ctrl-btn-label" x="128" y="45">B</text>
+      </g>
+      <g id="ctrlBtnX" class="ctrl-btn">
+        <circle cx="128" cy="31" r="5.5"/>
+        <text class="ctrl-btn-label" x="128" y="31">X</text>
+      </g>
+      <g id="ctrlBtnY" class="ctrl-btn">
+        <circle cx="118" cy="38" r="5.5"/>
+        <text class="ctrl-btn-label" x="118" y="38">Y</text>
+      </g>
+
+      <!-- Right stick -->
+      <circle class="ctrl-stick-base" cx="118" cy="58" r="12"/>
+      <circle class="ctrl-stick-cap" id="ctrlRStick" cx="118" cy="58" r="8"/>
+
+      <!-- Bumpers (L/R) -->
+      <rect class="ctrl-bumper" id="ctrlL" x="44" y="5" width="24" height="6" rx="3"/>
+      <rect class="ctrl-bumper" id="ctrlR" x="132" y="5" width="24" height="6" rx="3"/>
+
+      <!-- Triggers (ZL/ZR) -->
+      <rect class="ctrl-trigger" id="ctrlZL" x="46" y="0" width="20" height="5" rx="2"/>
+      <rect class="ctrl-trigger" id="ctrlZR" x="134" y="0" width="20" height="5" rx="2"/>
+
+      <!-- Minus / Plus -->
+      <circle class="ctrl-special" id="ctrlMinus" cx="84" cy="24" r="3.5"/>
+      <circle class="ctrl-special" id="ctrlPlus" cx="116" cy="24" r="3.5"/>
+      <!-- Minus/Plus symbols -->
+      <line x1="82" y1="24" x2="86" y2="24" stroke="rgba(255,255,255,0.35)" stroke-width="0.8"/>
+      <line x1="114" y1="24" x2="118" y2="24" stroke="rgba(255,255,255,0.35)" stroke-width="0.8"/>
+      <line x1="116" y1="22" x2="116" y2="26" stroke="rgba(255,255,255,0.35)" stroke-width="0.8"/>
+
+      <!-- Home button -->
+      <circle class="ctrl-home" id="ctrlHome" cx="108" cy="24" r="4"/>
+      <circle cx="108" cy="24" r="2" fill="none" stroke="rgba(255,255,255,0.2)" stroke-width="0.5"/>
+
+      <!-- Capture button -->
+      <rect class="ctrl-capture" id="ctrlCapture" x="90" y="21" width="6" height="6" rx="1"/>
+      <rect x="91.5" y="22.5" width="3" height="3" rx="0.5" fill="none" stroke="rgba(255,255,255,0.2)" stroke-width="0.4"/>
+
+      <!-- Stick click indicators (L3/R3) — tiny dots -->
+      <circle id="ctrlL3" cx="62" cy="38" r="2" fill="transparent" stroke="none"/>
+      <circle id="ctrlR3" cx="118" cy="58" r="2" fill="transparent" stroke="none"/>
+    </svg>
+  </div>
+  <div class="ctrl-status-text" id="ctrlStatusText">Waiting for controller...</div>
 </div>
 
 <div class="grid-area">
@@ -834,6 +974,110 @@
       document.getElementById('vizButtons').innerHTML = html;
     } else {
       vizEl.classList.remove('show');
+    }
+
+    // Update controller visualization
+    updateController();
+  }
+
+  // === Controller visualization ===
+  var CTRL_BTN_MAP = {
+    'A': 'ctrlBtnA', 'B': 'ctrlBtnB', 'X': 'ctrlBtnX', 'Y': 'ctrlBtnY',
+    'L': 'ctrlL', 'R': 'ctrlR', 'ZL': 'ctrlZL', 'ZR': 'ctrlZR',
+    'Plus': 'ctrlPlus', 'Minus': 'ctrlMinus',
+    'Home': 'ctrlHome', 'Capture': 'ctrlCapture',
+    'L3': 'ctrlL3', 'R3': 'ctrlR3',
+    'DUp': 'ctrlDUp', 'DDown': 'ctrlDDown', 'DLeft': 'ctrlDLeft', 'DRight': 'ctrlDRight'
+  };
+  var CTRL_BTN_ACTIVE_CLASS = {
+    'A': 'active-a', 'B': 'active-b', 'X': 'active-x', 'Y': 'active-y'
+  };
+
+  // Stick rest positions (cx, cy) in SVG coords
+  var LSTICK_REST = [62, 38], RSTICK_REST = [118, 58], STICK_RANGE = 8;
+
+  function updateController() {
+    var wrap = document.getElementById('controllerWrap');
+    var statusText = document.getElementById('ctrlStatusText');
+    var connected = state.usb_connected;
+
+    // Connection state
+    if (connected) {
+      wrap.classList.remove('disconnected');
+    } else {
+      wrap.classList.add('disconnected');
+    }
+
+    // Recording pulse
+    if (state.recording) {
+      wrap.classList.add('recording');
+    } else {
+      wrap.classList.remove('recording');
+    }
+
+    // Status text
+    if (!connected) {
+      statusText.textContent = 'Waiting for controller...';
+      statusText.className = 'ctrl-status-text';
+    } else if (state.recording) {
+      statusText.textContent = 'Recording';
+      statusText.className = 'ctrl-status-text recording';
+    } else if (state.playing) {
+      statusText.textContent = 'Playing';
+      statusText.className = 'ctrl-status-text playing';
+    } else if (state.macro_mode) {
+      statusText.textContent = 'Macro mode active';
+      statusText.className = 'ctrl-status-text';
+    } else {
+      statusText.textContent = 'Connected';
+      statusText.className = 'ctrl-status-text';
+    }
+
+    // Reset all buttons
+    var allIds = Object.values(CTRL_BTN_MAP);
+    for (var i = 0; i < allIds.length; i++) {
+      var el = document.getElementById(allIds[i]);
+      if (el) {
+        el.classList.remove('active', 'active-a', 'active-b', 'active-x', 'active-y');
+      }
+    }
+
+    // Reset sticks to center
+    var lStick = document.getElementById('ctrlLStick');
+    var rStick = document.getElementById('ctrlRStick');
+    lStick.setAttribute('cx', LSTICK_REST[0]);
+    lStick.setAttribute('cy', LSTICK_REST[1]);
+    lStick.classList.remove('active');
+    rStick.setAttribute('cx', RSTICK_REST[0]);
+    rStick.setAttribute('cy', RSTICK_REST[1]);
+    rStick.classList.remove('active');
+
+    // Animate from playback input
+    if (state.playing && state.playback_input) {
+      var pi = state.playback_input;
+
+      // Light up active buttons
+      for (var j = 0; j < pi.buttons.length; j++) {
+        var btn = pi.buttons[j];
+        var elId = CTRL_BTN_MAP[btn];
+        if (elId) {
+          var btnEl = document.getElementById(elId);
+          if (btnEl) {
+            var cls = CTRL_BTN_ACTIVE_CLASS[btn];
+            btnEl.classList.add(cls || 'active');
+          }
+        }
+      }
+
+      // Move sticks
+      var ls = pi.left_stick;
+      var rs = pi.right_stick;
+      lStick.setAttribute('cx', LSTICK_REST[0] + ls[0] * STICK_RANGE);
+      lStick.setAttribute('cy', LSTICK_REST[1] - ls[1] * STICK_RANGE);
+      if (Math.abs(ls[0]) > 0.05 || Math.abs(ls[1]) > 0.05) lStick.classList.add('active');
+      rStick.setAttribute('cx', RSTICK_REST[0] + rs[0] * STICK_RANGE);
+      rStick.setAttribute('cy', RSTICK_REST[1] - rs[1] * STICK_RANGE);
+      if (Math.abs(rs[0]) > 0.05 || Math.abs(rs[1]) > 0.05) rStick.classList.add('active');
     }
   }
 
