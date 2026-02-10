@@ -26,10 +26,9 @@ Pi Zero 2 W access:
 ssh brody@Nintendo-Pi
 ```
 
-Deploy binary and static web assets:
+Deploy binary (web assets are embedded at compile time):
 ```
 rsync -avz nintendo-pi-rs/target/aarch64-unknown-linux-gnu/release/nintendo-pi brody@Nintendo-Pi:~/nintendo-pi/
-rsync -avz nintendo-pi-rs/static/ brody@Nintendo-Pi:~/nintendo-pi/static/
 ```
 
 ## Service
