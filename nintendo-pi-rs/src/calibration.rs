@@ -2,6 +2,8 @@
 //!
 //! Ported directly from enable_procon2.py StickCalibrator.
 
+use tracing::{debug, trace, warn};
+
 /// Stick calibrator with 32 radial calibration points and deadzone.
 #[derive(Clone)]
 pub struct StickCalibrator {
@@ -18,11 +20,19 @@ pub const C_STICK_CAL: &str = "54.74 52.52 52.24 54.58 58.28 55.75 54.01 54.52 5
 impl StickCalibrator {
     pub fn new(calibration_str: &str, deadzone: f64) -> Self {
         let mut radii = [0.0f64; 32];
+        let mut count = 0;
         for (i, val) in calibration_str.split_whitespace().enumerate() {
             if i < 32 {
                 radii[i] = val.parse().unwrap_or(50.0);
+                count += 1;
             }
         }
+        if count < 32 {
+            warn!("[CAL] Only parsed {count}/32 calibration radii, remaining default to 0.0");
+        }
+        let min_r = radii.iter().cloned().fold(f64::INFINITY, f64::min);
+        let max_r = radii.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
+        debug!("[CAL] Loaded {count} radii (range {min_r:.1}–{max_r:.1}), deadzone={deadzone:.1}");
         Self { radii, deadzone }
     }
 
@@ -34,6 +44,10 @@ impl StickCalibrator {
         let magnitude = (x * x + y * y).sqrt() / 1.3;
 
         if magnitude < self.deadzone {
+            trace!(
+                "[CAL] Deadzone: raw=({x:.1},{y:.1}) mag={magnitude:.1} < {dz:.1}",
+                dz = self.deadzone,
+            );
             return (0.0, 0.0);
         }
 
@@ -58,6 +72,12 @@ impl StickCalibrator {
         let corrected_x = corrected_magnitude * angle.cos();
         let corrected_y = corrected_magnitude * angle.sin();
 
+        trace!(
+            "[CAL] raw=({x:.1},{y:.1}) mag={magnitude:.1} angle={deg:.1}° pts=[{index1},{index2}] \
+             radius={calibrated_radius_pct:.1} → ({corrected_x:.1},{corrected_y:.1})",
+            deg = angle.to_degrees(),
+        );
+
         (corrected_x, corrected_y)
     }
 }
@@ -67,6 +87,7 @@ impl StickCalibrator {
 /// Returns (left_center, right_center) as (x, y) averages.
 pub fn auto_calibrate_centers(reports: &[[u8; 64]]) -> ((u16, u16), (u16, u16)) {
     if reports.is_empty() {
+        warn!("[CAL] No reports for auto-calibration, using default centers (2048, 2048)");
         return ((2048, 2048), (2048, 2048));
     }
 
@@ -75,19 +96,59 @@ pub fn auto_calibrate_centers(reports: &[[u8; 64]]) -> ((u16, u16), (u16, u16)) 
     let mut rx_sum: u64 = 0;
     let mut ry_sum: u64 = 0;
 
+    let mut lx_min = u16::MAX;
+    let mut lx_max = u16::MIN;
+    let mut ly_min = u16::MAX;
+    let mut ly_max = u16::MIN;
+    let mut rx_min = u16::MAX;
+    let mut rx_max = u16::MIN;
+    let mut ry_min = u16::MAX;
+    let mut ry_max = u16::MIN;
+
     for report in reports {
         let parsed = crate::input::parse_hid_report(report);
-        lx_sum += parsed.left_stick_raw.0 as u64;
-        ly_sum += parsed.left_stick_raw.1 as u64;
-        rx_sum += parsed.right_stick_raw.0 as u64;
-        ry_sum += parsed.right_stick_raw.1 as u64;
+        let (lx, ly) = parsed.left_stick_raw;
+        let (rx, ry) = parsed.right_stick_raw;
+
+        lx_sum += lx as u64;
+        ly_sum += ly as u64;
+        rx_sum += rx as u64;
+        ry_sum += ry as u64;
+
+        lx_min = lx_min.min(lx);
+        lx_max = lx_max.max(lx);
+        ly_min = ly_min.min(ly);
+        ly_max = ly_max.max(ly);
+        rx_min = rx_min.min(rx);
+        rx_max = rx_max.max(rx);
+        ry_min = ry_min.min(ry);
+        ry_max = ry_max.max(ry);
     }
 
     let n = reports.len() as u64;
-    (
-        ((lx_sum / n) as u16, (ly_sum / n) as u16),
-        ((rx_sum / n) as u16, (ry_sum / n) as u16),
-    )
+    let left = ((lx_sum / n) as u16, (ly_sum / n) as u16);
+    let right = ((rx_sum / n) as u16, (ry_sum / n) as u16);
+
+    let lx_spread = lx_max - lx_min;
+    let ly_spread = ly_max - ly_min;
+    let rx_spread = rx_max - rx_min;
+    let ry_spread = ry_max - ry_min;
+
+    debug!(
+        "[CAL] Auto-calibrate from {n} samples: \
+         left=({},{}) spread=({lx_spread},{ly_spread}), \
+         right=({},{}) spread=({rx_spread},{ry_spread})",
+        left.0, left.1, right.0, right.1,
+    );
+
+    if lx_spread > 100 || ly_spread > 100 || rx_spread > 100 || ry_spread > 100 {
+        warn!(
+            "[CAL] High stick variance during calibration (spreads: L=({lx_spread},{ly_spread}) \
+             R=({rx_spread},{ry_spread})) — sticks may have been touched"
+        );
+    }
+
+    (left, right)
 }
 
 #[cfg(test)]
