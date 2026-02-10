@@ -121,10 +121,6 @@
     min-height: unset;
   }
   .btn-home:active { transform: translateY(3px); box-shadow: 0 0 0 rgba(0,0,0,0.3); }
-  .slot-nav {
-    display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.8rem;
-  }
-  .slot-nav .btn { flex: 0 0 auto; padding: 0.8rem; font-size: 1.3rem; border-radius: 50%; width: 46px; height: 46px; }
   /* D-pad style nav buttons */
   .dpad-btn {
     width: 50px; height: 50px; border-radius: 4px; font-size: 1.1rem;
@@ -137,7 +133,6 @@
     border: 1px solid rgba(255,255,255,0.04);
   }
   .dpad-btn:active { transform: translateY(3px); box-shadow: 0 0 0 rgba(0,0,0,0.35); }
-  .slot-info { flex: 1; text-align: center; min-width: 0; }
   .slot-num { font-size: 1.6rem; font-weight: 900; letter-spacing: -0.02em; }
   .slot-name {
     font-size: 0.85rem; color: var(--muted); font-weight: 600;
@@ -154,7 +149,7 @@
     0%, 100% { opacity: 0.7; box-shadow: 0 0 4px rgba(73,184,79,0.5); }
     50% { opacity: 1; box-shadow: 0 0 10px rgba(73,184,79,0.9); }
   }
-  .speed-row { display: flex; gap: 0.4rem; margin-top: 0.6rem; }
+  .speed-row { display: flex; gap: 0.4rem; }
   .speed-row .btn {
     flex: 1; padding: 0.5rem 0.3rem; font-size: 0.78rem; min-height: 38px;
     border-radius: 20px; font-weight: 800;
@@ -173,11 +168,6 @@
     transform: translateY(4px);
     box-shadow: 0 0 0 rgba(0,0,0,0.3), 0 0 0 3px rgba(0,0,0,0.15), inset 0 2px 3px rgba(0,0,0,0.3);
   }
-  .playback-controls {
-    display: flex; align-items: center; justify-content: center;
-    gap: 0.8rem; margin-bottom: 0.6rem; padding: 0.4rem 0;
-  }
-  .playback-controls .btn-face { flex: 0 0 auto; }
   /* Plus/Minus shaped speed buttons */
   .speed-row .btn.pm-btn {
     position: relative; min-width: 42px;
@@ -253,8 +243,8 @@
     transition: background 0.15s, color 0.15s;
     -webkit-tap-highlight-color: transparent;
   }
-  .macro-tile-actions .tile-btn:first-child {
-    border-right: 1px solid rgba(255,255,255,0.06);
+  .macro-tile-actions .tile-btn + .tile-btn {
+    border-left: 1px solid rgba(255,255,255,0.06);
   }
   .macro-tile-actions .tile-btn:active { background: rgba(255,255,255,0.08); }
   .macro-tile-actions .tile-btn.tile-btn-del { color: var(--red); }
@@ -302,6 +292,7 @@
     box-shadow: 0 2px 8px rgba(0,0,0,0.15);
     text-align: center;
     animation: section-in 0.35s cubic-bezier(0.22, 1, 0.36, 1) both;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
   }
   .controller-svg-wrap {
     display: inline-block; max-width: 320px; width: 100%;
@@ -359,8 +350,10 @@
   }
 
   /* === Consolidated controls bar === */
-  .controls-row {
+  .controls-top-row {
     display: flex; align-items: center; gap: 0.8rem;
+    margin-bottom: 0.7rem; padding-bottom: 0.7rem;
+    border-bottom: 1px solid rgba(255,255,255,0.06);
   }
   .control-group {
     display: flex; align-items: center; gap: 0.5rem;
@@ -381,21 +374,42 @@
     border-color: rgba(230,0,18,0.3);
     box-shadow: 0 2px 8px rgba(0,0,0,0.15), inset 0 0 0 1px rgba(230,0,18,0.1);
   }
+  /* Playback strip — slot nav + play/stop/loop on one row */
+  .playback-strip {
+    display: flex; align-items: center; gap: 0.5rem;
+    margin-bottom: 0.5rem;
+  }
+  .slot-info-compact {
+    flex: 1; text-align: center; min-width: 0;
+  }
+  .slot-info-compact .slot-num { font-size: 1.2rem; font-weight: 900; letter-spacing: -0.02em; line-height: 1.1; }
+  .slot-info-compact .slot-name {
+    font-size: 0.75rem; color: var(--muted); font-weight: 600;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .playback-strip-divider {
+    width: 1px; height: 32px; background: rgba(255,255,255,0.08); flex-shrink: 0;
+  }
+  .dpad-sm { width: 40px; height: 40px; font-size: 1rem; }
+  .btn-face-sm {
+    width: 48px; height: 48px; font-size: 0.72rem;
+  }
+  /* Play button on macro tiles */
+  .macro-tile-actions .tile-btn-play { color: var(--green); }
+  .macro-tile-actions .tile-btn-play:active { background: rgba(73,184,79,0.12); }
 
   /* === Switch-style entrance animations === */
   @keyframes section-in {
     from { opacity: 0; transform: translateY(18px); }
     to { opacity: 1; transform: translateY(0); }
   }
-  .section, .status-bar {
+  .section, .status-bar, .controller-section {
     animation: section-in 0.35s cubic-bezier(0.22, 1, 0.36, 1) both;
   }
   .status-bar { animation-delay: 0s; }
-  .grid-area .section:nth-child(1) { animation-delay: 0.04s; }
-  .grid-area .section:nth-child(2) { animation-delay: 0.08s; }
-  .grid-area .section:nth-child(3) { animation-delay: 0.12s; }
-  .grid-area .section:nth-child(4) { animation-delay: 0.16s; }
-  .grid-area .section:nth-child(5) { animation-delay: 0.20s; }
+  .grid-area > :nth-child(1) { animation-delay: 0.04s; }
+  .grid-area > :nth-child(2) { animation-delay: 0.08s; }
+  .grid-area > :nth-child(3) { animation-delay: 0.12s; }
 
 
   /* === Slot number pop on change === */
@@ -446,8 +460,9 @@
     grid-template-columns: 1fr;
     gap: 0;
   }
+  .grid-span-full { grid-column: 1 / -1; }
 
-  /* Tablet: 2-column grid for main controls, library spans full width */
+  /* Tablet: controller viz + controls side-by-side, library below */
   @media (min-width: 600px) {
     .content-wrap { padding: 0 0.5rem; }
     .grid-area {
@@ -455,13 +470,17 @@
       gap: 0 0.25rem;
     }
     .grid-area .section { margin: 0.6rem 0.5rem; }
-    .grid-span-full { grid-column: 1 / -1; }
+    .controller-section { margin: 0.6rem 0.5rem; }
     .status-bar { border-radius: 0 0 var(--radius) var(--radius); }
     .section { transition: box-shadow 0.2s ease, border-color 0.2s ease; }
     .section:hover {
       box-shadow: 0 4px 16px rgba(0,0,0,0.25);
       border-color: rgba(255,255,255,0.1);
     }
+    .controller-section:hover { box-shadow: 0 4px 16px rgba(0,0,0,0.25); }
+    /* On tablet, playback strip goes vertical since the column is narrower */
+    .playback-strip { flex-wrap: wrap; }
+    .playback-strip-divider { width: 100%; height: 1px; }
     .macro-tile:hover {
       transform: translateY(-2px);
       box-shadow: 0 6px 20px rgba(0,0,0,0.3);
@@ -472,19 +491,20 @@
       box-shadow: 0 0 0 2px rgba(0,195,227,0.45), 0 6px 20px rgba(0,195,227,0.2);
     }
     .macro-tile-actions .tile-btn:hover { background: rgba(255,255,255,0.06); color: var(--text); }
+    .macro-tile-actions .tile-btn.tile-btn-play:hover { color: #5cd465; background: rgba(73,184,79,0.1); }
     .macro-tile-actions .tile-btn.tile-btn-del:hover { color: #ff4444; background: rgba(230,0,18,0.08); }
-    .controller-section { margin: 0.6rem 0.5rem; }
-    .controller-section:hover { box-shadow: 0 4px 16px rgba(0,0,0,0.25); }
   }
 
-  /* Desktop: wider spacing, capped width */
+  /* Desktop: wider, single-row playback strip fits again */
   @media (min-width: 900px) {
     .content-wrap { padding: 0 1rem; }
     .grid-area .section { margin: 0.75rem 0.5rem; padding: 1.25rem; }
     .status-bar { margin: 0 0.5rem; }
     .macro-list-grid { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 0.75rem; }
     .controller-svg-wrap { max-width: 380px; }
-    .controller-section { padding: 1rem 0.5rem 0.8rem; }
+    .controller-section { padding: 1rem 0.5rem 0.8rem; margin: 0.75rem 0.5rem; }
+    .playback-strip { flex-wrap: nowrap; }
+    .playback-strip-divider { width: 1px; height: 32px; }
   }
 </style>
 </head>
@@ -500,6 +520,8 @@
     <div class="status-pill"><span class="status-dot red" id="switchDot"></span><span id="switchLabel">Switch</span></div>
   </div>
 </div>
+
+<div class="grid-area">
 
 <div class="controller-section">
   <div class="controller-svg-wrap disconnected" id="controllerWrap">
@@ -583,11 +605,8 @@
   </div>
 </div>
 
-<div class="grid-area">
-
-<div class="section grid-span-full controls-bar">
-  <div class="section-title">Controls</div>
-  <div class="controls-row">
+<div class="section controls-bar">
+  <div class="controls-top-row">
     <div class="control-group">
       <span class="control-label">Macro Mode</span>
       <div class="control-inline">
@@ -605,22 +624,17 @@
       <span class="rec-status" id="recStatus" style="display:none">REC</span>
     </div>
   </div>
-</div>
-
-<div class="section grid-span-full">
-  <div class="section-title">Playback</div>
-  <div class="slot-nav">
-    <button class="btn dpad-btn" onclick="sendCmd('PREV_SLOT')">&larr;</button>
-    <div class="slot-info">
+  <div class="playback-strip">
+    <button class="btn dpad-btn dpad-sm" onclick="sendCmd('PREV_SLOT')">&larr;</button>
+    <div class="slot-info-compact">
       <div class="slot-num" id="slotNum">0</div>
       <div class="slot-name" id="slotName">--</div>
     </div>
-    <button class="btn dpad-btn" onclick="sendCmd('NEXT_SLOT')">&rarr;</button>
-  </div>
-  <div class="playback-controls">
-    <button class="btn btn-green btn-face" id="btnPlay" onclick="sendCmd('PLAY_MACRO')">PLAY</button>
-    <button class="btn btn-red btn-face" id="btnStop" onclick="sendCmd('STOP_PLAYBACK')">STOP</button>
-    <button class="btn btn-dark btn-face" id="btnLoop" onclick="sendCmd('TOGGLE_LOOP')" style="font-size:0.7rem">LOOP<br>OFF</button>
+    <button class="btn dpad-btn dpad-sm" onclick="sendCmd('NEXT_SLOT')">&rarr;</button>
+    <div class="playback-strip-divider"></div>
+    <button class="btn btn-green btn-face btn-face-sm" id="btnPlay" onclick="sendCmd('PLAY_MACRO')">PLAY</button>
+    <button class="btn btn-red btn-face btn-face-sm" id="btnStop" onclick="sendCmd('STOP_PLAYBACK')">STOP</button>
+    <button class="btn btn-dark btn-face btn-face-sm" id="btnLoop" onclick="sendCmd('TOGGLE_LOOP')" style="font-size:0.6rem">LOOP<br>OFF</button>
   </div>
   <div class="speed-row" id="speedRow">
     <button class="btn btn-dark" onclick="setSpeed(0.25)">0.25x</button>
@@ -1075,6 +1089,7 @@
         + '<div class="macro-tile-meta"><span>' + m.frame_count + ' fr</span><span>' + dur + '</span></div>'
         + '</div>'
         + '<div class="macro-tile-actions">'
+        + '<button class="tile-btn tile-btn-play" onclick="event.stopPropagation();playSlot(' + i + ')">&#9654; Play</button>'
         + '<button class="tile-btn" onclick="event.stopPropagation();openRename(' + m.id + ',\'' + escAttr(m.name) + '\')">Rename</button>'
         + '<button class="tile-btn tile-btn-del" onclick="event.stopPropagation();deleteMacro(' + m.id + ',\'' + escAttr(m.name) + '\')">Delete</button>'
         + '</div></div>';
@@ -1126,6 +1141,21 @@
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ cmd: 'SELECT_SLOT', data: idx })
+    });
+  };
+
+  window.playSlot = function(idx) {
+    sfx.play();
+    fetch('/api/cmd', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ cmd: 'SELECT_SLOT', data: idx })
+    }).then(function() {
+      return fetch('/api/cmd', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cmd: 'PLAY_MACRO', data: null })
+      });
     });
   };
 
