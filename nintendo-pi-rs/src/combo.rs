@@ -68,12 +68,14 @@ pub const DEFAULT_STOP_PLAYBACK_BUTTON: Button = Button::B;
 /// Default toggle macro mode button (hold-triggered).
 pub const DEFAULT_TOGGLE_MACRO_MODE_BUTTON: Button = Button::DpadDown;
 
+/// Default toggle loop button.
+pub const DEFAULT_TOGGLE_LOOP_BUTTON: Button = Button::Y;
+
 /// Fixed instant combos (not configurable).
 const FIXED_COMBOS: &[(Button, ComboAction)] = &[
     (Button::DpadLeft, ComboAction::PrevSlot),
     (Button::DpadRight, ComboAction::NextSlot),
     (Button::DpadUp, ComboAction::CycleSpeed),
-    (Button::Y, ComboAction::ToggleLoop),
 ];
 
 /// Set of buttons to suppress (smallvec would be overkill, just use a fixed array).
@@ -120,6 +122,7 @@ pub struct ComboDetector {
     pub play_macro_button: Button,
     pub stop_playback_button: Button,
     pub toggle_macro_mode_button: Button,
+    pub toggle_loop_button: Button,
     hold_button_start: Option<Instant>,
     prev_buttons: ButtonState,
     prev_base_held: bool,
@@ -133,6 +136,7 @@ impl ComboDetector {
             play_macro_button: DEFAULT_PLAY_MACRO_BUTTON,
             stop_playback_button: DEFAULT_STOP_PLAYBACK_BUTTON,
             toggle_macro_mode_button: DEFAULT_TOGGLE_MACRO_MODE_BUTTON,
+            toggle_loop_button: DEFAULT_TOGGLE_LOOP_BUTTON,
             hold_button_start: None,
             prev_buttons: ButtonState::default(),
             prev_base_held: false,
@@ -221,12 +225,25 @@ impl ComboDetector {
                 }
             }
 
+            // Check configurable toggle loop button (edge-triggered)
+            {
+                let pressed = buttons.get(self.toggle_loop_button);
+                let was_pressed = self.prev_buttons.get(self.toggle_loop_button);
+                if pressed {
+                    suppressed.add(self.toggle_loop_button);
+                }
+                if pressed && !was_pressed {
+                    action = ComboAction::ToggleLoop;
+                }
+            }
+
             // In macro mode, L3+R3 alone toggles recording (rising edge)
             if self.macro_mode && !self.prev_base_held {
                 let any_combo_btn = hold_btn_pressed
                     || FIXED_COMBOS.iter().any(|&(btn, _)| buttons.get(btn))
                     || buttons.get(self.play_macro_button)
-                    || buttons.get(self.stop_playback_button);
+                    || buttons.get(self.stop_playback_button)
+                    || buttons.get(self.toggle_loop_button);
                 if !any_combo_btn {
                     action = ComboAction::ToggleRecording;
                 }

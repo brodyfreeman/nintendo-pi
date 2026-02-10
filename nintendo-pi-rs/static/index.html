@@ -876,6 +876,22 @@
   </div>
   <div class="setting-row">
     <div class="setting-label">
+      <span class="setting-name">Toggle Loop Button</span>
+      <span class="setting-value" id="toggleLoopBtnValue">Y</span>
+    </div>
+    <select class="setting-select" id="toggleLoopBtnSelect">
+      <option value="Y">Y</option>
+      <option value="A">A</option>
+      <option value="B">B</option>
+      <option value="X">X</option>
+      <option value="L">L</option>
+      <option value="R">R</option>
+      <option value="ZL">ZL</option>
+      <option value="ZR">ZR</option>
+    </select>
+  </div>
+  <div class="setting-row">
+    <div class="setting-label">
       <span class="setting-name">Default Playback Speed</span>
       <span class="setting-value" id="speedDefaultValue">1.0x</span>
     </div>
@@ -1287,6 +1303,7 @@
     syncPlayBtn();
     syncStopBtn();
     syncToggleModeBtn();
+    syncToggleLoopBtn();
     syncAutoLoop();
     syncSpeedDefault();
     syncStartDelay();
@@ -1717,6 +1734,30 @@
       toggleModeBtnValue.textContent = TOGGLE_MODE_BTN_LABELS[val] || val;
       if (document.activeElement !== toggleModeBtnSelect) {
         toggleModeBtnSelect.value = val;
+      }
+    }
+  }
+
+  // === Toggle loop button select ===
+  var toggleLoopBtnSelect = document.getElementById('toggleLoopBtnSelect');
+  var toggleLoopBtnValue = document.getElementById('toggleLoopBtnValue');
+  var TOGGLE_LOOP_BTN_LABELS = {
+    'Y': 'Y', 'A': 'A', 'B': 'B', 'X': 'X', 'L': 'L', 'R': 'R', 'ZL': 'ZL', 'ZR': 'ZR'
+  };
+
+  toggleLoopBtnSelect.addEventListener('change', function() {
+    var val = toggleLoopBtnSelect.value;
+    toggleLoopBtnValue.textContent = TOGGLE_LOOP_BTN_LABELS[val] || val;
+    sfx.nav();
+    sendCmd('SET_TOGGLE_LOOP_BUTTON', val);
+  });
+
+  function syncToggleLoopBtn() {
+    if (state.toggle_loop_button !== undefined) {
+      var val = state.toggle_loop_button;
+      toggleLoopBtnValue.textContent = TOGGLE_LOOP_BTN_LABELS[val] || val;
+      if (document.activeElement !== toggleLoopBtnSelect) {
+        toggleLoopBtnSelect.value = val;
       }
     }
   }

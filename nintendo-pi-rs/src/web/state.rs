@@ -33,6 +33,7 @@ pub enum WebCommand {
     SetPlayMacroButton(String),
     SetStopPlaybackButton(String),
     SetToggleMacroModeButton(String),
+    SetToggleLoopButton(String),
 }
 
 impl From<WebCommand> for crate::macro_engine::controller::MacroCommand {
@@ -63,6 +64,7 @@ impl From<WebCommand> for crate::macro_engine::controller::MacroCommand {
             WebCommand::SetPlayMacroButton(s) => Self::SetPlayMacroButton(s),
             WebCommand::SetStopPlaybackButton(s) => Self::SetStopPlaybackButton(s),
             WebCommand::SetToggleMacroModeButton(s) => Self::SetToggleMacroModeButton(s),
+            WebCommand::SetToggleLoopButton(s) => Self::SetToggleLoopButton(s),
         }
     }
 }
@@ -151,6 +153,7 @@ pub struct StateSnapshot {
     pub play_macro_button: String,
     pub stop_playback_button: String,
     pub toggle_macro_mode_button: String,
+    pub toggle_loop_button: String,
 }
 
 impl Default for StateSnapshot {
@@ -188,6 +191,9 @@ impl Default for StateSnapshot {
                 .display_name()
                 .to_string(),
             toggle_macro_mode_button: crate::combo::DEFAULT_TOGGLE_MACRO_MODE_BUTTON
+                .display_name()
+                .to_string(),
+            toggle_loop_button: crate::combo::DEFAULT_TOGGLE_LOOP_BUTTON
                 .display_name()
                 .to_string(),
         }
