@@ -98,24 +98,76 @@
   }
   .toggle-status.on { background: var(--green); color: #fff; }
   .toggle-status.off { background: rgba(255,255,255,0.1); color: var(--muted); }
+  /* Home-button style toggle */
+  .btn-home {
+    width: 52px; height: 52px; border-radius: 50%; padding: 0;
+    display: inline-flex; align-items: center; justify-content: center;
+    background: #333; border: 2px solid rgba(255,255,255,0.1);
+    box-shadow: 0 3px 0 rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.06);
+    min-height: unset;
+  }
+  .btn-home:active { transform: translateY(3px); box-shadow: 0 0 0 rgba(0,0,0,0.3); }
   .slot-nav {
     display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.8rem;
   }
   .slot-nav .btn { flex: 0 0 auto; padding: 0.8rem; font-size: 1.3rem; border-radius: 50%; width: 46px; height: 46px; }
+  /* D-pad style nav buttons */
+  .dpad-btn {
+    width: 50px; height: 50px; border-radius: 4px; font-size: 1.1rem;
+    background: #333; border: 2px solid rgba(255,255,255,0.08);
+    box-shadow: 0 3px 0 rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.06);
+    position: relative;
+  }
+  .dpad-btn::after {
+    content: ''; position: absolute; inset: 6px; border-radius: 2px;
+    border: 1px solid rgba(255,255,255,0.04);
+  }
+  .dpad-btn:active { transform: translateY(3px); box-shadow: 0 0 0 rgba(0,0,0,0.35); }
   .slot-info { flex: 1; text-align: center; min-width: 0; }
   .slot-num { font-size: 1.6rem; font-weight: 900; letter-spacing: -0.02em; }
   .slot-name {
     font-size: 0.85rem; color: var(--muted); font-weight: 600;
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   }
-  .playback-row { display: flex; gap: 0.5rem; }
-  .playback-row .btn { flex: 1; border-radius: var(--radius-sm); }
+  /* Power LED indicator */
+  .power-led {
+    width: 6px; height: 6px; border-radius: 50%; display: inline-block;
+    background: var(--green); box-shadow: 0 0 6px rgba(73,184,79,0.7);
+    margin-right: 0.5rem; vertical-align: middle;
+    animation: led-breathe 3s ease-in-out infinite;
+  }
+  @keyframes led-breathe {
+    0%, 100% { opacity: 0.7; box-shadow: 0 0 4px rgba(73,184,79,0.5); }
+    50% { opacity: 1; box-shadow: 0 0 10px rgba(73,184,79,0.9); }
+  }
   .speed-row { display: flex; gap: 0.4rem; margin-top: 0.6rem; }
   .speed-row .btn {
     flex: 1; padding: 0.5rem 0.3rem; font-size: 0.78rem; min-height: 38px;
     border-radius: 20px; font-weight: 800;
   }
   .speed-row .btn.active { background: var(--blue); box-shadow: 0 3px 0 rgba(0,0,0,0.25); }
+  /* Face-button style circular action buttons */
+  .btn-face {
+    width: 62px; height: 62px; border-radius: 50%; padding: 0;
+    font-size: 0.85rem; font-weight: 900; letter-spacing: 0.04em;
+    border: 2.5px solid rgba(255,255,255,0.12);
+    box-shadow: 0 4px 0 rgba(0,0,0,0.3), 0 0 0 3px rgba(0,0,0,0.15), inset 0 1px 1px rgba(255,255,255,0.15);
+    text-shadow: 0 1px 2px rgba(0,0,0,0.3);
+    min-height: unset;
+  }
+  .btn-face:active {
+    transform: translateY(4px);
+    box-shadow: 0 0 0 rgba(0,0,0,0.3), 0 0 0 3px rgba(0,0,0,0.15), inset 0 2px 3px rgba(0,0,0,0.3);
+  }
+  .playback-controls {
+    display: flex; align-items: center; justify-content: center;
+    gap: 0.8rem; margin-bottom: 0.6rem; padding: 0.4rem 0;
+  }
+  .playback-controls .btn-face { flex: 0 0 auto; }
+  /* Plus/Minus shaped speed buttons */
+  .speed-row .btn.pm-btn {
+    position: relative; min-width: 42px;
+  }
   .rec-status {
     display: inline-block; padding: 0.25rem 0.6rem; border-radius: 20px;
     font-size: 0.75rem; font-weight: 800; margin-left: 0.5rem;
@@ -206,7 +258,7 @@
 <body>
 
 <div class="status-bar">
-  <h1>Nintendo Pi</h1>
+  <h1><span class="power-led"></span>Nintendo Pi</h1>
   <div class="status-pills">
     <div class="status-pill"><span class="status-dot red" id="piDot"></span><span id="piLabel">Pi</span></div>
     <div class="status-pill"><span class="status-dot red" id="ctrlDot"></span><span id="ctrlLabel">Controller</span></div>
@@ -218,7 +270,7 @@
   <div class="section-title">Macro Mode</div>
   <div class="toggle-row">
     <span class="label">Macro Mode</span>
-    <button class="btn btn-dark" id="btnMacroMode" onclick="sendCmd('TOGGLE_MACRO_MODE')">
+    <button class="btn btn-home" id="btnMacroMode" onclick="sendCmd('TOGGLE_MACRO_MODE')">
       <span class="toggle-status off" id="macroModeStatus">OFF</span>
     </button>
   </div>
@@ -227,17 +279,17 @@
 <div class="section">
   <div class="section-title">Slot &amp; Playback</div>
   <div class="slot-nav">
-    <button class="btn btn-dark" onclick="sendCmd('PREV_SLOT')">&larr;</button>
+    <button class="btn dpad-btn" onclick="sendCmd('PREV_SLOT')">&larr;</button>
     <div class="slot-info">
       <div class="slot-num" id="slotNum">0</div>
       <div class="slot-name" id="slotName">--</div>
     </div>
-    <button class="btn btn-dark" onclick="sendCmd('NEXT_SLOT')">&rarr;</button>
+    <button class="btn dpad-btn" onclick="sendCmd('NEXT_SLOT')">&rarr;</button>
   </div>
-  <div class="playback-row">
-    <button class="btn btn-green" id="btnPlay" onclick="sendCmd('PLAY_MACRO')">Play</button>
-    <button class="btn btn-red" id="btnStop" onclick="sendCmd('STOP_PLAYBACK')">Stop</button>
-    <button class="btn btn-dark" id="btnLoop" onclick="sendCmd('TOGGLE_LOOP')">Loop: OFF</button>
+  <div class="playback-controls">
+    <button class="btn btn-green btn-face" id="btnPlay" onclick="sendCmd('PLAY_MACRO')">PLAY</button>
+    <button class="btn btn-red btn-face" id="btnStop" onclick="sendCmd('STOP_PLAYBACK')">STOP</button>
+    <button class="btn btn-dark btn-face" id="btnLoop" onclick="sendCmd('TOGGLE_LOOP')" style="font-size:0.7rem">LOOP<br>OFF</button>
   </div>
   <div class="speed-row" id="speedRow">
     <button class="btn btn-dark" onclick="setSpeed(0.25)">0.25x</button>
@@ -267,9 +319,9 @@
 
 <div class="section">
   <div class="section-title">Recording</div>
-  <div style="display:flex;align-items:center">
-    <button class="btn btn-accent" id="btnRecord" onclick="sendCmd('TOGGLE_RECORDING')" style="flex:1">
-      Start Recording
+  <div style="display:flex;align-items:center;justify-content:center;gap:0.8rem">
+    <button class="btn btn-accent btn-face" id="btnRecord" onclick="sendCmd('TOGGLE_RECORDING')" style="width:68px;height:68px;font-size:0.75rem">
+      REC
     </button>
     <span class="rec-status" id="recStatus" style="display:none">REC</span>
   </div>
@@ -360,32 +412,38 @@
     var recBtn = document.getElementById('btnRecord');
     var recStatus = document.getElementById('recStatus');
     if (state.recording) {
-      recBtn.textContent = 'Stop Recording';
-      recBtn.className = 'btn btn-yellow';
+      recBtn.textContent = 'STOP';
+      recBtn.className = 'btn btn-yellow btn-face';
+      recBtn.style.width = '68px'; recBtn.style.height = '68px'; recBtn.style.fontSize = '0.75rem';
       recStatus.style.display = '';
       recStatus.className = 'rec-status active';
     } else {
-      recBtn.textContent = 'Start Recording';
-      recBtn.className = 'btn btn-accent';
+      recBtn.textContent = 'REC';
+      recBtn.className = 'btn btn-accent btn-face';
+      recBtn.style.width = '68px'; recBtn.style.height = '68px'; recBtn.style.fontSize = '0.75rem';
       recStatus.style.display = 'none';
     }
 
     var playBtn = document.getElementById('btnPlay');
     if (state.playing) {
-      playBtn.textContent = 'Playing...';
+      playBtn.innerHTML = '&#9654;';
       playBtn.disabled = true;
+      playBtn.style.opacity = '0.5';
     } else {
-      playBtn.textContent = 'Play';
+      playBtn.textContent = 'PLAY';
       playBtn.disabled = false;
+      playBtn.style.opacity = '';
     }
 
     var loopBtn = document.getElementById('btnLoop');
     if (state.looping) {
-      loopBtn.textContent = 'Loop: ON';
-      loopBtn.className = 'btn btn-blue';
+      loopBtn.innerHTML = 'LOOP<br>ON';
+      loopBtn.className = 'btn btn-blue btn-face';
+      loopBtn.style.fontSize = '0.7rem';
     } else {
-      loopBtn.textContent = 'Loop: OFF';
-      loopBtn.className = 'btn btn-dark';
+      loopBtn.innerHTML = 'LOOP<br>OFF';
+      loopBtn.className = 'btn btn-dark btn-face';
+      loopBtn.style.fontSize = '0.7rem';
     }
 
     var speedBtns = document.getElementById('speedRow').children;
