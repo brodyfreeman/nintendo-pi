@@ -242,21 +242,77 @@
   .btn-pill[data-btn="B"] { background: var(--red); }
   .btn-pill[data-btn="X"] { background: var(--blue); }
   .btn-pill[data-btn="Y"] { background: var(--yellow); color: #222; }
-  .macro-list-grid { display: grid; grid-template-columns: 1fr; gap: 0; }
-  .macro-item {
-    display: flex; align-items: center; gap: 0.5rem;
-    padding: 0.7rem 0; border-bottom: 1px solid rgba(255,255,255,0.05);
+  /* Switch Home Screen macro tiles */
+  .macro-list-grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 0.6rem; padding: 0.2rem 0;
   }
-  .macro-item:last-child { border-bottom: none; }
-  .macro-info { flex: 1; min-width: 0; }
-  .macro-name {
-    font-weight: 700; white-space: nowrap;
-    overflow: hidden; text-overflow: ellipsis;
+  .macro-tile {
+    position: relative; border-radius: var(--radius-sm);
+    background: var(--card); overflow: hidden; cursor: pointer;
+    transition: transform 0.18s cubic-bezier(0.22, 1, 0.36, 1),
+                box-shadow 0.18s ease, border-color 0.18s ease;
+    border: 2px solid rgba(255,255,255,0.06);
+    box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+    -webkit-user-select: none; user-select: none;
   }
-  .macro-meta { font-size: 0.75rem; color: var(--muted); font-weight: 600; }
-  .macro-actions { display: flex; gap: 0.3rem; }
-  .macro-actions .btn { padding: 0.4rem 0.6rem; font-size: 0.78rem; min-height: 36px; border-radius: 10px; }
-  .empty-msg { color: var(--muted); font-size: 0.9rem; font-weight: 600; text-align: center; padding: 1rem; }
+  .macro-tile:active { transform: scale(0.96); }
+  .macro-tile.selected {
+    border-color: var(--joycon-blue);
+    box-shadow: 0 0 0 2px rgba(0,195,227,0.35), 0 4px 16px rgba(0,195,227,0.15);
+  }
+  /* Color accent strip at top of each tile — cycles through face button colors */
+  .macro-tile-accent {
+    height: 4px; width: 100%;
+  }
+  .macro-tile-accent.color-0 { background: var(--green); }
+  .macro-tile-accent.color-1 { background: var(--red); }
+  .macro-tile-accent.color-2 { background: var(--blue); }
+  .macro-tile-accent.color-3 { background: var(--yellow); }
+  .macro-tile-body {
+    padding: 0.65rem 0.6rem 0.5rem;
+  }
+  .macro-tile-slot {
+    font-size: 0.6rem; font-weight: 800; text-transform: uppercase;
+    letter-spacing: 0.1em; color: var(--muted); margin-bottom: 0.2rem;
+  }
+  .macro-tile-name {
+    font-size: 0.85rem; font-weight: 700; line-height: 1.2;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    margin-bottom: 0.35rem;
+  }
+  .macro-tile-meta {
+    font-size: 0.68rem; color: var(--muted); font-weight: 600;
+    display: flex; gap: 0.4rem; align-items: center;
+  }
+  .macro-tile-meta span { white-space: nowrap; }
+  .macro-tile-actions {
+    display: flex; border-top: 1px solid rgba(255,255,255,0.06);
+  }
+  .macro-tile-actions .tile-btn {
+    flex: 1; padding: 0.45rem 0; border: none; cursor: pointer;
+    font-family: 'Nunito', sans-serif; font-size: 0.7rem; font-weight: 700;
+    background: transparent; color: var(--muted);
+    transition: background 0.15s, color 0.15s;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .macro-tile-actions .tile-btn:first-child {
+    border-right: 1px solid rgba(255,255,255,0.06);
+  }
+  .macro-tile-actions .tile-btn:active { background: rgba(255,255,255,0.08); }
+  .macro-tile-actions .tile-btn.tile-btn-del { color: var(--red); }
+  .macro-tile-actions .tile-btn.tile-btn-del:active { background: rgba(230,0,18,0.12); }
+  .empty-msg {
+    color: var(--muted); font-size: 0.9rem; font-weight: 600;
+    text-align: center; padding: 2rem 1rem;
+  }
+  .empty-icon {
+    display: block; font-size: 2.2rem; margin-bottom: 0.5rem;
+    opacity: 0.35; filter: grayscale(0.5);
+  }
+  .empty-hint {
+    font-size: 0.75rem; margin-top: 0.3rem; color: rgba(255,255,255,0.25);
+  }
   .modal-overlay {
     display: none; position: fixed; inset: 0; z-index: 200;
     background: rgba(0,0,0,0.7); align-items: center; justify-content: center;
@@ -373,6 +429,17 @@
       box-shadow: 0 4px 16px rgba(0,0,0,0.25);
       border-color: rgba(255,255,255,0.1);
     }
+    .macro-tile:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(0,0,0,0.3);
+      border-color: rgba(255,255,255,0.15);
+    }
+    .macro-tile.selected:hover {
+      border-color: var(--joycon-blue);
+      box-shadow: 0 0 0 2px rgba(0,195,227,0.45), 0 6px 20px rgba(0,195,227,0.2);
+    }
+    .macro-tile-actions .tile-btn:hover { background: rgba(255,255,255,0.06); color: var(--text); }
+    .macro-tile-actions .tile-btn.tile-btn-del:hover { color: #ff4444; background: rgba(230,0,18,0.08); }
   }
 
   /* Desktop: wider spacing, capped width */
@@ -381,8 +448,7 @@
     .grid-area .section { margin: 0.75rem 0.5rem; padding: 1.25rem; }
     .status-bar { margin: 0 0.5rem; }
     .stick-circle { width: 100px; height: 100px; }
-    .macro-list-grid { grid-template-columns: 1fr 1fr; gap: 0 1.5rem; }
-    .macro-item { padding: 0.8rem 0; }
+    .macro-list-grid { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 0.75rem; }
   }
 </style>
 </head>
@@ -478,6 +544,17 @@
     <div class="modal-btns">
       <button class="btn btn-dark" onclick="closeRename()">Cancel</button>
       <button class="btn btn-blue" onclick="submitRename()">Rename</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="deleteModal">
+  <div class="modal">
+    <h3>Delete Macro</h3>
+    <p id="deleteMsg" style="font-size:0.9rem;color:var(--muted);margin-bottom:1rem;font-weight:600"></p>
+    <div class="modal-btns">
+      <button class="btn btn-dark" onclick="closeDelete()">Cancel</button>
+      <button class="btn btn-red" onclick="confirmDelete()">Delete</button>
     </div>
   </div>
 </div>
@@ -784,10 +861,16 @@
     }
   }
 
+  var TILE_COLORS = ['color-0', 'color-1', 'color-2', 'color-3'];
+
   function renderMacros() {
     var container = document.getElementById('macroList');
     if (!macros || macros.length === 0) {
-      container.innerHTML = '<div class="empty-msg">No macros yet</div>';
+      container.innerHTML = '<div class="empty-msg">'
+        + '<span class="empty-icon">&#127918;</span>'
+        + 'No macros yet'
+        + '<span class="empty-hint">Record your first macro to see it here</span>'
+        + '</div>';
       return;
     }
     var html = '<div class="macro-list-grid">';
@@ -796,15 +879,18 @@
       var dur = m.duration_ms >= 1000
         ? (m.duration_ms / 1000).toFixed(1) + 's'
         : m.duration_ms + 'ms';
-      html += '<div class="macro-item">'
-        + '<div class="macro-info">'
-        + '<div class="macro-name">' + escHtml(m.name) + '</div>'
-        + '<div class="macro-meta">Slot ' + (i + 1) + ' &middot; ' + m.frame_count + ' frames &middot; ' + dur + '</div>'
+      var sel = (state.current_slot === i) ? ' selected' : '';
+      var colorClass = TILE_COLORS[i % TILE_COLORS.length];
+      html += '<div class="macro-tile' + sel + '" onclick="selectSlot(' + i + ')">'
+        + '<div class="macro-tile-accent ' + colorClass + '"></div>'
+        + '<div class="macro-tile-body">'
+        + '<div class="macro-tile-slot">Slot ' + (i + 1) + '</div>'
+        + '<div class="macro-tile-name">' + escHtml(m.name) + '</div>'
+        + '<div class="macro-tile-meta"><span>' + m.frame_count + ' fr</span><span>' + dur + '</span></div>'
         + '</div>'
-        + '<div class="macro-actions">'
-        + '<button class="btn btn-dark" onclick="selectSlot(' + i + ')">Sel</button>'
-        + '<button class="btn btn-dark" onclick="openRename(' + m.id + ',\'' + escAttr(m.name) + '\')">Ren</button>'
-        + '<button class="btn btn-red" onclick="deleteMacro(' + m.id + ',\'' + escAttr(m.name) + '\')">Del</button>'
+        + '<div class="macro-tile-actions">'
+        + '<button class="tile-btn" onclick="event.stopPropagation();openRename(' + m.id + ',\'' + escAttr(m.name) + '\')">Rename</button>'
+        + '<button class="tile-btn tile-btn-del" onclick="event.stopPropagation();deleteMacro(' + m.id + ',\'' + escAttr(m.name) + '\')">Delete</button>'
         + '</div></div>';
     }
     html += '</div>';
@@ -880,11 +966,27 @@
     closeRename();
   };
 
+  var deleteId = null;
+
   window.deleteMacro = function(id, name) {
     sfx.del();
-    if (confirm('Delete macro "' + name + '"?')) {
-      window.sendCmd('DELETE_MACRO', id);
+    deleteId = id;
+    document.getElementById('deleteMsg').textContent = 'Delete "' + name + '"? This can\'t be undone.';
+    document.getElementById('deleteModal').classList.add('show');
+  };
+
+  window.closeDelete = function() {
+    sfx.press();
+    document.getElementById('deleteModal').classList.remove('show');
+    deleteId = null;
+  };
+
+  window.confirmDelete = function() {
+    if (deleteId !== null) {
+      sfx.confirm();
+      window.sendCmd('DELETE_MACRO', deleteId);
     }
+    closeDelete();
   };
 
   document.getElementById('renameInput').addEventListener('keydown', function(e) {
@@ -894,6 +996,10 @@
 
   document.getElementById('renameModal').addEventListener('click', function(e) {
     if (e.target === this) window.closeRename();
+  });
+
+  document.getElementById('deleteModal').addEventListener('click', function(e) {
+    if (e.target === this) window.closeDelete();
   });
 })();
 </script>
