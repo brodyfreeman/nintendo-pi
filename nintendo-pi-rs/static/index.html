@@ -860,6 +860,22 @@
   </div>
   <div class="setting-row">
     <div class="setting-label">
+      <span class="setting-name">Toggle Macro Mode Button</span>
+      <span class="setting-value" id="toggleModeBtnValue">D-pad Down</span>
+    </div>
+    <select class="setting-select" id="toggleModeBtnSelect">
+      <option value="DpadDown">D-pad Down</option>
+      <option value="A">A</option>
+      <option value="B">B</option>
+      <option value="X">X</option>
+      <option value="L">L</option>
+      <option value="R">R</option>
+      <option value="ZL">ZL</option>
+      <option value="ZR">ZR</option>
+    </select>
+  </div>
+  <div class="setting-row">
+    <div class="setting-label">
       <span class="setting-name">Default Playback Speed</span>
       <span class="setting-value" id="speedDefaultValue">1.0x</span>
     </div>
@@ -1270,6 +1286,7 @@
     syncHoldTime();
     syncPlayBtn();
     syncStopBtn();
+    syncToggleModeBtn();
     syncAutoLoop();
     syncSpeedDefault();
     syncStartDelay();
@@ -1676,6 +1693,30 @@
       stopBtnValue.textContent = STOP_BTN_LABELS[val] || val;
       if (document.activeElement !== stopBtnSelect) {
         stopBtnSelect.value = val;
+      }
+    }
+  }
+
+  // === Toggle macro mode button select ===
+  var toggleModeBtnSelect = document.getElementById('toggleModeBtnSelect');
+  var toggleModeBtnValue = document.getElementById('toggleModeBtnValue');
+  var TOGGLE_MODE_BTN_LABELS = {
+    'DpadDown': 'D-pad Down', 'A': 'A', 'B': 'B', 'X': 'X', 'L': 'L', 'R': 'R', 'ZL': 'ZL', 'ZR': 'ZR'
+  };
+
+  toggleModeBtnSelect.addEventListener('change', function() {
+    var val = toggleModeBtnSelect.value;
+    toggleModeBtnValue.textContent = TOGGLE_MODE_BTN_LABELS[val] || val;
+    sfx.nav();
+    sendCmd('SET_TOGGLE_MACRO_MODE_BUTTON', val);
+  });
+
+  function syncToggleModeBtn() {
+    if (state.toggle_macro_mode_button !== undefined) {
+      var val = state.toggle_macro_mode_button;
+      toggleModeBtnValue.textContent = TOGGLE_MODE_BTN_LABELS[val] || val;
+      if (document.activeElement !== toggleModeBtnSelect) {
+        toggleModeBtnSelect.value = val;
       }
     }
   }

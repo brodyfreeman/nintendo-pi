@@ -40,6 +40,7 @@ pub enum MacroCommand {
     SetCalibrationSamples(u32),
     SetPlayMacroButton(String),
     SetStopPlaybackButton(String),
+    SetToggleMacroModeButton(String),
 }
 
 /// Side effects produced by executing a command.
@@ -82,6 +83,7 @@ pub struct MacroController {
     pub calibration_samples: u32,
     pub play_macro_button: crate::input::Button,
     pub stop_playback_button: crate::input::Button,
+    pub toggle_macro_mode_button: crate::input::Button,
     macros_dir: PathBuf,
 }
 
@@ -111,6 +113,7 @@ impl MacroController {
             calibration_samples: 20,
             play_macro_button: crate::input::Button::A,
             stop_playback_button: crate::input::Button::B,
+            toggle_macro_mode_button: crate::combo::DEFAULT_TOGGLE_MACRO_MODE_BUTTON,
             macros_dir,
         }
     }
@@ -142,6 +145,7 @@ impl MacroController {
             MacroCommand::SetCalibrationSamples(n) => self.set_calibration_samples(n),
             MacroCommand::SetPlayMacroButton(s) => self.set_play_macro_button(&s),
             MacroCommand::SetStopPlaybackButton(s) => self.set_stop_playback_button(&s),
+            MacroCommand::SetToggleMacroModeButton(s) => self.set_toggle_macro_mode_button(&s),
         }
     }
 
@@ -424,6 +428,19 @@ impl MacroController {
             self.stop_playback_button = btn;
             info!(
                 "[SETTINGS] Stop playback button set to {}",
+                btn.display_name()
+            );
+        } else {
+            warn!("[SETTINGS] Unknown button name: {name}");
+        }
+        MacroEffect::none()
+    }
+
+    fn set_toggle_macro_mode_button(&mut self, name: &str) -> MacroEffect {
+        if let Some(btn) = crate::input::Button::from_str_name(name) {
+            self.toggle_macro_mode_button = btn;
+            info!(
+                "[SETTINGS] Toggle macro mode button set to {}",
                 btn.display_name()
             );
         } else {

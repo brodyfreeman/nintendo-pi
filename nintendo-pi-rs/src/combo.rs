@@ -65,6 +65,9 @@ pub const DEFAULT_PLAY_MACRO_BUTTON: Button = Button::A;
 /// Default stop playback button.
 pub const DEFAULT_STOP_PLAYBACK_BUTTON: Button = Button::B;
 
+/// Default toggle macro mode button (hold-triggered).
+pub const DEFAULT_TOGGLE_MACRO_MODE_BUTTON: Button = Button::DpadDown;
+
 /// Fixed instant combos (not configurable).
 const FIXED_COMBOS: &[(Button, ComboAction)] = &[
     (Button::DpadLeft, ComboAction::PrevSlot),
@@ -116,7 +119,8 @@ pub struct ComboDetector {
     pub hold_duration: f64,
     pub play_macro_button: Button,
     pub stop_playback_button: Button,
-    dpad_down_start: Option<Instant>,
+    pub toggle_macro_mode_button: Button,
+    hold_button_start: Option<Instant>,
     prev_buttons: ButtonState,
     prev_base_held: bool,
 }
@@ -128,7 +132,8 @@ impl ComboDetector {
             hold_duration: DEFAULT_HOLD_DURATION,
             play_macro_button: DEFAULT_PLAY_MACRO_BUTTON,
             stop_playback_button: DEFAULT_STOP_PLAYBACK_BUTTON,
-            dpad_down_start: None,
+            toggle_macro_mode_button: DEFAULT_TOGGLE_MACRO_MODE_BUTTON,
+            hold_button_start: None,
             prev_buttons: ButtonState::default(),
             prev_base_held: false,
         }
@@ -150,30 +155,34 @@ impl ComboDetector {
             suppressed.add(Button::L3);
             suppressed.add(Button::R3);
 
-            // Check D-pad Down hold for macro mode toggle
-            let dpad_down = buttons.get(Button::DpadDown);
-            if dpad_down {
-                suppressed.add(Button::DpadDown);
-                match self.dpad_down_start {
+            // Check configurable hold button for macro mode toggle
+            let hold_btn_pressed = buttons.get(self.toggle_macro_mode_button);
+            if hold_btn_pressed {
+                suppressed.add(self.toggle_macro_mode_button);
+                match self.hold_button_start {
                     None => {
                         debug!(
-                            "[COMBO] D-pad Down hold started (need {}s for macro mode toggle)",
+                            "[COMBO] {} hold started (need {}s for macro mode toggle)",
+                            self.toggle_macro_mode_button.display_name(),
                             self.hold_duration
                         );
-                        self.dpad_down_start = Some(Instant::now());
+                        self.hold_button_start = Some(Instant::now());
                     }
                     Some(start) => {
                         if start.elapsed().as_secs_f64() >= self.hold_duration {
                             action = ComboAction::ToggleMacroMode;
-                            self.dpad_down_start = None;
+                            self.hold_button_start = None;
                         }
                     }
                 }
             } else {
-                if self.dpad_down_start.is_some() {
-                    debug!("[COMBO] D-pad Down released before hold threshold");
+                if self.hold_button_start.is_some() {
+                    debug!(
+                        "[COMBO] {} released before hold threshold",
+                        self.toggle_macro_mode_button.display_name()
+                    );
                 }
-                self.dpad_down_start = None;
+                self.hold_button_start = None;
             }
 
             // Check fixed instant combos (edge-triggered)
@@ -214,7 +223,7 @@ impl ComboDetector {
 
             // In macro mode, L3+R3 alone toggles recording (rising edge)
             if self.macro_mode && !self.prev_base_held {
-                let any_combo_btn = dpad_down
+                let any_combo_btn = hold_btn_pressed
                     || FIXED_COMBOS.iter().any(|&(btn, _)| buttons.get(btn))
                     || buttons.get(self.play_macro_button)
                     || buttons.get(self.stop_playback_button);
@@ -223,7 +232,7 @@ impl ComboDetector {
                 }
             }
         } else {
-            self.dpad_down_start = None;
+            self.hold_button_start = None;
         }
 
         if action != ComboAction::None {
