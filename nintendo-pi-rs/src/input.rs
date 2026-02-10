@@ -209,10 +209,17 @@ impl ButtonState {
 
 /// Build BT 0x30 report bytes from InputState + calibrated sticks.
 ///
-/// BT button byte layout is different from USB:
-///   BT byte 0 (right): Y=01 X=02 B=04 A=08 R=40 ZR=80
-///   BT byte 1 (shared): MINUS=01 PLUS=02 RSTICK=04 LSTICK=08 HOME=10 CAP=20
-///   BT byte 2 (left):   DD=01 DU=02 DR=04 DL=08 L=40 ZL=80
+/// NXBT-compatible layout (50 bytes):
+///   [0]  = 0xA1 (HID transaction header)
+///   [1]  = 0x30 (standard full input report ID)
+///   [2]  = timer
+///   [3]  = battery/connection info (0x90)
+///   [4]  = button byte 0 (right): Y=01 X=02 B=04 A=08 R=40 ZR=80
+///   [5]  = button byte 1 (shared): MINUS=01 PLUS=02 RSTICK=04 LSTICK=08 HOME=10 CAP=20
+///   [6]  = button byte 2 (left): DD=01 DU=02 DR=04 DL=08 L=40 ZL=80
+///   [7..9]   = left stick (12-bit packed, center = 0x800)
+///   [10..12] = right stick
+///   [13] = vibrator byte
 ///
 /// Stick encoding: 12-bit packed, center = 0x800 (2048), range 0-4095.
 pub fn build_bt_report(
@@ -223,10 +230,10 @@ pub fn build_bt_report(
 ) -> [u8; 50] {
     let mut report = [0u8; 50];
 
-    report[0] = 0xA1; // HID report header
-    report[1] = 0x30; // Standard full report
+    report[0] = 0xA1; // HID transaction header
+    report[1] = 0x30; // Standard full input report
     report[2] = timer;
-    report[3] = 0x8E; // Battery level + connection info
+    report[3] = 0x90; // Battery level (full) + connection info
 
     // --- BT button encoding ---
     let b = &input.buttons;
@@ -279,8 +286,8 @@ pub fn build_bt_report(
     report[11] = ((rx >> 8) & 0x0F) as u8 | (((ry & 0x0F) as u8) << 4);
     report[12] = ((ry >> 4) & 0xFF) as u8;
 
-    // report[13] = vibrator byte (0x00)
-    // report[14..50] = IMU data (zeroed)
+    // Vibrator byte
+    report[13] = 0xB0;
 
     report
 }

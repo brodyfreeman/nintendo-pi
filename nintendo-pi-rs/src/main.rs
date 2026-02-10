@@ -85,20 +85,25 @@ async fn main() -> anyhow::Result<()> {
     tokio::time::sleep(Duration::from_millis(100)).await;
 
     // --- Bluetooth setup (one-time, retry until adapter is ready) ---
+    // Order matters: agent first (for pairing), adapter config, SDP profile,
+    // then device class LAST (D-Bus calls can reset the HCI class).
     let _dbus_conn = loop {
-        match zbus::Connection::system().await {
-            Ok(conn) => {
-                match bt::sdp::configure_adapter(&conn).await {
-                    Ok(()) => match bt::sdp::register_sdp_profile(&conn).await {
-                        Ok(()) => break conn,
-                        Err(e) => warn!("[BT] SDP register failed: {e} — retrying in 3s..."),
-                    },
-                    Err(e) => warn!("[BT] Adapter config failed: {e} — retrying in 3s..."),
-                }
-            }
-            Err(e) => warn!("[BT] D-Bus connection failed: {e} — retrying in 3s..."),
+        match async {
+            let conn = zbus::Connection::system().await?;
+            bt::sdp::register_agent(&conn).await?;
+            bt::sdp::configure_adapter(&conn).await?;
+            bt::sdp::register_sdp_profile(&conn).await?;
+            bt::sdp::set_device_class().await?;
+            anyhow::Ok(conn)
         }
-        tokio::time::sleep(Duration::from_secs(3)).await;
+        .await
+        {
+            Ok(conn) => break conn,
+            Err(e) => {
+                warn!("[BT] Setup failed: {e} — retrying in 3s...");
+                tokio::time::sleep(Duration::from_secs(3)).await;
+            }
+        }
     };
 
     // --- State emitter task (5Hz broadcast when changed) ---
@@ -208,24 +213,27 @@ async fn main() -> anyhow::Result<()> {
                 usb_connected: true, bt_connected: false,
             });
 
-            // Wait for BT connection, but also check if USB processing has ended
+            // Wait for BT connection, but also check if USB has disconnected.
+            // Important: accept_connection() must NOT be cancelled by a timer,
+            // because dropping the future tears down the L2CAP listeners and
+            // prevents the Switch from completing its connection.
+            let accept_fut = bt::emulator::accept_connection();
+            tokio::pin!(accept_fut);
+
             let mut bt_session = loop {
                 tokio::select! {
-                    result = bt::emulator::accept_connection() => {
+                    result = &mut accept_fut => {
                         match result {
                             Ok(session) => break session,
                             Err(e) => {
                                 error!("[BT] Connection error: {e}");
                                 tokio::time::sleep(Duration::from_secs(2)).await;
+                                // Recreate accept future after an error
+                                accept_fut.set(bt::emulator::accept_connection());
                             }
                         }
                     }
                     _ = tokio::time::sleep(Duration::from_secs(2)) => {
-                        // Check if USB processing thread has exited (sender dropped)
-                        // We do this by checking if we can still reserve a permit
-                        // on the channel. If the sender is dropped, recv will return None.
-                        // But we don't want to consume a report here, so just check
-                        // if the handle is finished.
                         if usb_handle.is_finished() {
                             warn!("[USB] Controller disconnected. Waiting for reconnection...");
                             mitm_state.update(StateSnapshot {
@@ -235,6 +243,7 @@ async fn main() -> anyhow::Result<()> {
                             });
                             break 'bt_loop;
                         }
+                        // Don't recreate accept_fut — keep the listeners alive
                     }
                 }
             };
@@ -255,6 +264,7 @@ async fn main() -> anyhow::Result<()> {
                 match report_rx.recv().await {
                     Some(mut report) => {
                         // Overwrite timer byte with the real BT timer
+                        // Timer is at byte [2] (after 0xA1 header and report ID)
                         report[2] = bt_timer;
                         bt_timer = bt_timer.wrapping_add(1);
 
@@ -605,11 +615,11 @@ fn calibrate_stick(
     let x_c = raw.0 as f64 - center.0 as f64;
     let y_c = raw.1 as f64 - center.1 as f64;
     let (x_cal, y_cal) = cal.calibrate(x_c, y_c);
-    // Scale from calibrator output (~[-100,100] at full tilt) to [-100,100]
-    // The calibrator already outputs in percentage terms
+    // Calibrator outputs ~[-2600, 2600] at full tilt — scale to [-100, 100]
+    // matching Python: max(-100, min(100, int(cal * 100 / 2048)))
     (
-        x_cal.clamp(-100.0, 100.0),
-        y_cal.clamp(-100.0, 100.0),
+        (x_cal * 100.0 / 2048.0).clamp(-100.0, 100.0),
+        (y_cal * 100.0 / 2048.0).clamp(-100.0, 100.0),
     )
 }
 

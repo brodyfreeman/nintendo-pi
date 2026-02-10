@@ -8,12 +8,21 @@ via Bluetooth using NXBT.
 Usage:
     sudo python3 mitm.py
 """
+import logging
 import queue
 import sys
 import time
 
 import hid
 import nxbt
+
+# Configure logging
+logging.basicConfig(
+    level=logging.DEBUG,
+    format="%(asctime)s.%(msecs)03d [%(levelname)s] %(message)s",
+    datefmt="%H:%M:%S",
+)
+log = logging.getLogger("mitm")
 
 from combo import ComboAction, ComboDetector
 from enable_procon2 import (
@@ -214,6 +223,8 @@ def main():
         """Push updated macro list to all web clients."""
         _refresh_macro_cache()
         web.socketio.emit("macro_list", list_macros())
+
+    frame_count = 0
 
     print("[MITM] Passthrough active. Press Ctrl+C to exit.")
     print("[MITM] Secret combo: hold L3+R3+D-pad Down for 0.5s to toggle macro mode.\n")
@@ -440,6 +451,17 @@ def main():
             # --- Send to Switch via NXBT ---
             _apply_to_nxbt_packet(packet, parsed, main_cal, c_cal, left_center, right_center)
             nx.set_controller_input(controller_id, packet)
+            frame_count += 1
+
+            # Log stick values every 500 frames (~8s) for debugging
+            if frame_count % 500 == 0:
+                log.debug(
+                    "[MITM] frame=%d lstick=(%d,%d) rstick=(%d,%d) btns=%s",
+                    frame_count,
+                    packet["L_STICK"]["X_VALUE"], packet["L_STICK"]["Y_VALUE"],
+                    packet["R_STICK"]["X_VALUE"], packet["R_STICK"]["Y_VALUE"],
+                    " ".join(k for k, v in parsed["buttons"].items() if v),
+                )
 
             # --- Update web UI state ---
             mitm_state.update(

@@ -30,6 +30,7 @@ clap = { version = "4", features = ["derive"] }
 futures = "0.3"
 # Error handling
 anyhow = "1"
+libc = "0.2.181"
 
 [profile.release]
 opt-level = "z"

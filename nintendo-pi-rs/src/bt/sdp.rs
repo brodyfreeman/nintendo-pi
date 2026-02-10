@@ -9,6 +9,36 @@
 use tracing::{info, warn};
 use zbus::Connection;
 use zbus::names::InterfaceName;
+use zbus::zvariant::ObjectPath;
+
+/// BlueZ pairing agent — auto-accepts all pairing requests.
+///
+/// Required for the Switch to pair with the Pi on first connection.
+/// Without this, BlueZ rejects pairing and the Switch never connects.
+struct BtAgent;
+
+#[zbus::interface(name = "org.bluez.Agent1")]
+impl BtAgent {
+    fn release(&self) {}
+
+    fn request_confirmation(
+        &self,
+        _device: ObjectPath<'_>,
+        _passkey: u32,
+    ) -> zbus::fdo::Result<()> {
+        Ok(())
+    }
+
+    fn request_authorization(&self, _device: ObjectPath<'_>) -> zbus::fdo::Result<()> {
+        Ok(())
+    }
+
+    fn authorize_service(&self, _device: ObjectPath<'_>, _uuid: &str) -> zbus::fdo::Result<()> {
+        Ok(())
+    }
+
+    fn cancel(&self) {}
+}
 
 /// HID SDP service record XML for a Pro Controller.
 /// This tells the Switch that we are a Bluetooth HID gamepad.
@@ -120,11 +150,61 @@ const SDP_RECORD: &str = r#"<?xml version="1.0" encoding="UTF-8" ?>
     </attribute>
 </record>"#;
 
+/// Register a NoInputNoOutput pairing agent with BlueZ.
+///
+/// This auto-accepts all pairing requests, which is required for the Switch
+/// to pair with the Pi on first connection. Without this, BlueZ rejects
+/// pairing and the L2CAP connection never completes.
+pub async fn register_agent(connection: &Connection) -> anyhow::Result<()> {
+    info!("[BT] Registering pairing agent...");
+
+    connection
+        .object_server()
+        .at("/org/bluez/nintendo_pi/agent", BtAgent)
+        .await?;
+
+    let proxy = zbus::Proxy::new(
+        connection,
+        "org.bluez",
+        "/org/bluez",
+        "org.bluez.AgentManager1",
+    )
+    .await?;
+
+    let agent_path =
+        ObjectPath::from_static_str_unchecked("/org/bluez/nintendo_pi/agent");
+
+    let result: Result<(), zbus::Error> = proxy
+        .call("RegisterAgent", &(&agent_path, "NoInputNoOutput"))
+        .await;
+    match result {
+        Ok(_) => {}
+        Err(e) => {
+            let msg = e.to_string();
+            if msg.contains("Already Exists") || msg.contains("AlreadyExists") {
+                warn!("[BT] Agent already registered (OK on restart)");
+            } else {
+                return Err(e.into());
+            }
+        }
+    }
+
+    let _: Result<(), zbus::Error> = proxy
+        .call("RequestDefaultAgent", &(&agent_path,))
+        .await;
+
+    info!("[BT] Pairing agent registered (NoInputNoOutput)");
+    Ok(())
+}
+
 /// Configure the Bluetooth adapter for Pro Controller emulation.
+///
+/// Note: device class is NOT set here — call `set_device_class()` after
+/// all D-Bus operations (including SDP registration) because D-Bus calls
+/// can reset the HCI device class.
 pub async fn configure_adapter(connection: &Connection) -> anyhow::Result<()> {
     info!("[BT] Configuring Bluetooth adapter...");
 
-    // Set adapter alias to "Pro Controller"
     let proxy = zbus::fdo::PropertiesProxy::builder(connection)
         .destination("org.bluez")?
         .path("/org/bluez/hci0")?
@@ -154,13 +234,6 @@ pub async fn configure_adapter(connection: &Connection) -> anyhow::Result<()> {
         .set(adapter_iface.clone(), "Powered", &zbus::zvariant::Value::from(true))
         .await?;
 
-    // Set device class to 0x002508 (gamepad) via bluetoothctl or hciconfig
-    // BlueZ doesn't expose class setting via D-Bus directly, use hciconfig
-    let _ = tokio::process::Command::new("hciconfig")
-        .args(["hci0", "class", "0x002508"])
-        .output()
-        .await;
-
     // Set discoverable timeout to 0 (forever)
     proxy
         .set(
@@ -179,7 +252,45 @@ pub async fn configure_adapter(connection: &Connection) -> anyhow::Result<()> {
         )
         .await?;
 
-    info!("[BT] Adapter configured: discoverable, pairable, class 0x002508");
+    info!("[BT] Adapter configured: discoverable, pairable");
+    Ok(())
+}
+
+/// Set the Bluetooth adapter name and device class.
+///
+/// Must be called AFTER all D-Bus property changes and SDP registration,
+/// as those operations can reset the HCI device class and name.
+/// The D-Bus `Alias` property only affects local display — `hciconfig name`
+/// sets the actual name the Switch sees during BR/EDR inquiry.
+pub async fn set_device_class() -> anyhow::Result<()> {
+    // Let D-Bus operations settle before touching HCI settings
+    tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+
+    // Set the actual BT adapter name (what remote devices see during inquiry)
+    let output = tokio::process::Command::new("hciconfig")
+        .args(["hci0", "name", "Pro Controller"])
+        .output()
+        .await?;
+    if !output.status.success() {
+        anyhow::bail!(
+            "[BT] Failed to set adapter name: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+
+    // Set device class to gamepad — MUST be last, nothing after this
+    let output = tokio::process::Command::new("hciconfig")
+        .args(["hci0", "class", "0x002508"])
+        .output()
+        .await?;
+    if !output.status.success() {
+        anyhow::bail!(
+            "[BT] Failed to set device class: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+
+    info!("[BT] Adapter name='Pro Controller', class=0x002508 (gamepad)");
     Ok(())
 }
 
@@ -214,7 +325,9 @@ pub async fn register_sdp_profile(connection: &Connection) -> anyhow::Result<()>
         Err(e) => {
             // "Already Exists" is OK if we're restarting
             let msg = e.to_string();
-            if msg.contains("Already Exists") || msg.contains("AlreadyExists") {
+            if msg.contains("Already Exists") || msg.contains("AlreadyExists")
+                || msg.contains("UUID already registered") || msg.contains("NotPermitted")
+            {
                 warn!("[BT] SDP profile already registered (OK on restart)");
             } else {
                 return Err(e.into());

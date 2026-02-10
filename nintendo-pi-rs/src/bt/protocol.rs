@@ -12,22 +12,22 @@ pub fn spi_read_response(addr: u32, len: u8) -> Vec<u8> {
             0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
             0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
         ],
-        // Controller color (Pro Controller gray)
+        // Controller color (matches NXBT defaults)
         (0x6050, 0x0D) => vec![
-            0x32, 0x32, 0x32, // body color (dark gray)
-            0xFF, 0xFF, 0xFF, // button color (white)
-            0x32, 0x32, 0x32, // left grip
+            0x82, 0x82, 0x82, // body color
+            0x0F, 0x0F, 0x0F, // button color
+            0xFF, 0xFF, 0xFF, // left grip
             0xFF, 0xFF, 0xFF, // right grip
-            0x03, // ??? (Pro Controller flag?)
+            0xFF, // spacer
         ],
-        // Factory stick calibration
+        // Factory stick calibration (matches NXBT)
         (0x603D, 0x12) => {
             // Left stick cal (9 bytes) + Right stick cal (9 bytes)
             vec![
-                // Left stick: center_x, center_y, x_min, y_min, x_max, y_max (packed 12-bit)
-                0x00, 0x07, 0x70, 0x00, 0x08, 0x80, 0x00, 0x07, 0x70,
+                // Left stick: above_center, center, below_center
+                0xBA, 0xF5, 0x62, 0x6F, 0xC8, 0x77, 0xED, 0x95, 0x5B,
                 // Right stick
-                0x00, 0x07, 0x70, 0x00, 0x08, 0x80, 0x00, 0x07, 0x70,
+                0x16, 0xD8, 0x7D, 0xF2, 0xB5, 0x5F, 0x86, 0x65, 0x5E,
             ]
         }
         // User stick calibration
@@ -44,12 +44,12 @@ pub fn spi_read_response(addr: u32, len: u8) -> Vec<u8> {
             0xD4, 0x14, 0x54, 0x41, 0x15, 0x54,
             0xC7, 0x79, 0x9C, 0x33, 0x36, 0x63,
         ],
-        // IMU factory calibration
+        // IMU factory calibration (matches NXBT)
         (0x6020, 0x18) => vec![
-            0xBE, 0xFF, 0x3E, 0x00, 0xF0, 0x01,
-            0x00, 0x40, 0x00, 0x40, 0x00, 0x40,
-            0xFE, 0xFF, 0xFE, 0xFF, 0x08, 0x00,
-            0xE7, 0x3B, 0xE7, 0x3B, 0xE7, 0x3B,
+            0xD3, 0xFF, 0xD5, 0xFF, 0x55, 0x01, // Acceleration origin
+            0x00, 0x40, 0x00, 0x40, 0x00, 0x40, // Acceleration sensitivity
+            0x19, 0x00, 0xDD, 0xFF, 0xDC, 0xFF, // Gyro origin
+            0x3B, 0x34, 0x3B, 0x34, 0x3B, 0x34, // Gyro sensitivity
         ],
         // IMU user calibration
         (0x8026, 0x1A) => {
@@ -58,8 +58,22 @@ pub fn spi_read_response(addr: u32, len: u8) -> Vec<u8> {
             data[1] = 0xFF;
             data
         }
-        // Factory sensor/stick device parameters
+        // Factory sensor/stick device parameters + stick params 1
         (0x6080, 0x06) => vec![0x50, 0xFD, 0x00, 0x00, 0xC6, 0x0F],
+        // Full 6080 read (sensor params + stick params)
+        (0x6080, 0x18) => vec![
+            0x50, 0xFD, 0x00, 0x00, 0xC6, 0x0F,
+            // Stick parameters (deadzone, range ratio)
+            0x0F, 0x30, 0x61, 0x96, 0x30, 0xF3,
+            0xD4, 0x14, 0x54, 0x41, 0x15, 0x54,
+            0xC7, 0x79, 0x9C, 0x33, 0x36, 0x63,
+        ],
+        // Stick device parameters 2 (same as params 1, per NXBT)
+        (0x6098, 0x12) => vec![
+            0x0F, 0x30, 0x61, 0x96, 0x30, 0xF3,
+            0xD4, 0x14, 0x54, 0x41, 0x15, 0x54,
+            0xC7, 0x79, 0x9C, 0x33, 0x36, 0x63,
+        ],
         // Catch-all: return zeros
         _ => vec![0x00; len as usize],
     }
@@ -67,37 +81,45 @@ pub fn spi_read_response(addr: u32, len: u8) -> Vec<u8> {
 
 /// Build a subcommand reply (0x21 report).
 ///
-/// Format:
-///   [0] = 0x21
-///   [1] = timer
-///   [2..4] = button state (zeros for reply)
-///   [5..8] = left stick (center)
-///   [8..11] = right stick (center)
-///   [11] = vibrator
-///   [12] = ACK byte
-///   [13] = subcommand ID being replied to
-///   [14..] = subcommand-specific data
+/// NXBT-compatible layout (50 bytes):
+///   [0]  = 0xA1 (HID transaction header)
+///   [1]  = 0x21 (subcommand reply report ID)
+///   [2]  = timer
+///   [3]  = battery/connection info (0x90 for Pro Controller)
+///   [4..6]  = button state (zeros for reply)
+///   [7..9]  = left stick (center)
+///   [10..12] = right stick (center)
+///   [13] = vibrator byte
+///   [14] = ACK byte
+///   [15] = subcommand ID being replied to
+///   [16..] = subcommand-specific data
 pub fn build_subcommand_reply(timer: u8, subcmd: u8, ack: u8, data: &[u8]) -> Vec<u8> {
     let mut reply = vec![0u8; 50];
-    reply[0] = 0x21;
-    reply[1] = timer;
+    reply[0] = 0xA1; // HID transaction header
+    reply[1] = 0x21; // Subcommand reply report ID
+    reply[2] = timer;
+    reply[3] = 0x90; // Battery level (full) + connection info
 
-    // Buttons at neutral (zeros)
-    // Left stick at center
-    reply[5] = 0x00;
-    reply[6] = 0x08;
-    reply[7] = 0x80;
-    // Right stick at center
-    reply[8] = 0x00;
-    reply[9] = 0x08;
-    reply[10] = 0x80;
+    // Buttons at neutral (zeros) — [4..6]
 
-    reply[12] = ack;
-    reply[13] = subcmd;
+    // Left stick at center — [7..9]
+    reply[7] = 0x00;
+    reply[8] = 0x08;
+    reply[9] = 0x80;
+    // Right stick at center — [10..12]
+    reply[10] = 0x00;
+    reply[11] = 0x08;
+    reply[12] = 0x80;
+
+    // Vibrator byte
+    reply[13] = 0xB0;
+
+    reply[14] = ack;
+    reply[15] = subcmd;
 
     // Copy subcommand data
-    let copy_len = data.len().min(reply.len() - 14);
-    reply[14..14 + copy_len].copy_from_slice(&data[..copy_len]);
+    let copy_len = data.len().min(reply.len() - 16);
+    reply[16..16 + copy_len].copy_from_slice(&data[..copy_len]);
 
     reply
 }
@@ -111,7 +133,7 @@ pub fn handle_subcommand(subcmd_id: u8, subcmd_data: &[u8]) -> (u8, Vec<u8>) {
         // 0x02: Request device info
         0x02 => {
             let data = vec![
-                0x03, 0x48, // FW version
+                0x03, 0x8B, // FW version (matches NXBT)
                 0x03, // Pro Controller
                 0x02, // Unknown
                 // MAC address (fake)
@@ -157,7 +179,10 @@ pub fn handle_subcommand(subcmd_id: u8, subcmd_data: &[u8]) -> (u8, Vec<u8>) {
         }
 
         // 0x21: Set NFC/IR MCU configuration
-        0x21 => (0xA0, vec![0x01, 0x00, 0xFF, 0x00, 0x03, 0x00, 0x05, 0x01]),
+        0x21 => (0xA0, vec![0x01, 0x00, 0xFF, 0x00, 0x08, 0x00, 0x1B, 0x01]),
+
+        // 0x22: Set NFC/IR state
+        0x22 => (0x80, vec![]),
 
         // 0x30: Set player lights
         0x30 => (0x80, vec![]),
@@ -172,7 +197,7 @@ pub fn handle_subcommand(subcmd_id: u8, subcmd_data: &[u8]) -> (u8, Vec<u8>) {
         0x41 => (0x80, vec![]),
 
         // 0x48: Enable vibration
-        0x48 => (0x80, vec![]),
+        0x48 => (0x82, vec![]),
 
         // Unknown subcommand: generic ACK
         _ => {
