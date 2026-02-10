@@ -367,6 +367,7 @@ fn usb_processing_loop(
             combo.macro_mode = ctrl.macro_mode;
             combo.hold_duration = ctrl.combo_hold_time;
             combo.play_macro_button = ctrl.play_macro_button;
+            combo.stop_playback_button = ctrl.stop_playback_button;
             // Sync stick deadzone to calibrators
             main_cal.deadzone = ctrl.stick_deadzone;
             c_cal.deadzone = ctrl.stick_deadzone;
@@ -538,5 +539,6 @@ fn update_state(
         ui_update_interval_ms: ctrl.ui_update_interval_ms,
         calibration_samples: ctrl.calibration_samples,
         play_macro_button: ctrl.play_macro_button.display_name().to_string(),
+        stop_playback_button: ctrl.stop_playback_button.display_name().to_string(),
     });
 }

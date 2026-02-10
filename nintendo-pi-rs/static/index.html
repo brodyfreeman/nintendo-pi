@@ -845,6 +845,21 @@
   </div>
   <div class="setting-row">
     <div class="setting-label">
+      <span class="setting-name">Stop Playback Button</span>
+      <span class="setting-value" id="stopBtnValue">B</span>
+    </div>
+    <select class="setting-select" id="stopBtnSelect">
+      <option value="B">B</option>
+      <option value="A">A</option>
+      <option value="X">X</option>
+      <option value="L">L</option>
+      <option value="R">R</option>
+      <option value="ZL">ZL</option>
+      <option value="ZR">ZR</option>
+    </select>
+  </div>
+  <div class="setting-row">
+    <div class="setting-label">
       <span class="setting-name">Default Playback Speed</span>
       <span class="setting-value" id="speedDefaultValue">1.0x</span>
     </div>
@@ -1254,6 +1269,7 @@
     syncDeadzone();
     syncHoldTime();
     syncPlayBtn();
+    syncStopBtn();
     syncAutoLoop();
     syncSpeedDefault();
     syncStartDelay();
@@ -1636,6 +1652,30 @@
       playBtnValue.textContent = PLAY_BTN_LABELS[val] || val;
       if (document.activeElement !== playBtnSelect) {
         playBtnSelect.value = val;
+      }
+    }
+  }
+
+  // === Stop playback button select ===
+  var stopBtnSelect = document.getElementById('stopBtnSelect');
+  var stopBtnValue = document.getElementById('stopBtnValue');
+  var STOP_BTN_LABELS = {
+    'B': 'B', 'A': 'A', 'X': 'X', 'L': 'L', 'R': 'R', 'ZL': 'ZL', 'ZR': 'ZR'
+  };
+
+  stopBtnSelect.addEventListener('change', function() {
+    var val = stopBtnSelect.value;
+    stopBtnValue.textContent = STOP_BTN_LABELS[val] || val;
+    sfx.nav();
+    sendCmd('SET_STOP_PLAYBACK_BUTTON', val);
+  });
+
+  function syncStopBtn() {
+    if (state.stop_playback_button !== undefined) {
+      var val = state.stop_playback_button;
+      stopBtnValue.textContent = STOP_BTN_LABELS[val] || val;
+      if (document.activeElement !== stopBtnSelect) {
+        stopBtnSelect.value = val;
       }
     }
   }

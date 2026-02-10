@@ -31,6 +31,7 @@ pub enum WebCommand {
     SetUiUpdateInterval(u64),
     SetCalibrationSamples(u32),
     SetPlayMacroButton(String),
+    SetStopPlaybackButton(String),
 }
 
 impl From<WebCommand> for crate::macro_engine::controller::MacroCommand {
@@ -59,6 +60,7 @@ impl From<WebCommand> for crate::macro_engine::controller::MacroCommand {
             WebCommand::SetUiUpdateInterval(ms) => Self::SetUiUpdateInterval(ms),
             WebCommand::SetCalibrationSamples(n) => Self::SetCalibrationSamples(n),
             WebCommand::SetPlayMacroButton(s) => Self::SetPlayMacroButton(s),
+            WebCommand::SetStopPlaybackButton(s) => Self::SetStopPlaybackButton(s),
         }
     }
 }
@@ -145,6 +147,7 @@ pub struct StateSnapshot {
     pub ui_update_interval_ms: u64,
     pub calibration_samples: u32,
     pub play_macro_button: String,
+    pub stop_playback_button: String,
 }
 
 impl Default for StateSnapshot {
@@ -176,6 +179,9 @@ impl Default for StateSnapshot {
             ui_update_interval_ms: 200,
             calibration_samples: 20,
             play_macro_button: crate::combo::DEFAULT_PLAY_MACRO_BUTTON
+                .display_name()
+                .to_string(),
+            stop_playback_button: crate::combo::DEFAULT_STOP_PLAYBACK_BUTTON
                 .display_name()
                 .to_string(),
         }

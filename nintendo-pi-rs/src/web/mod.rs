@@ -220,6 +220,11 @@ fn parse_web_command(val: &serde_json::Value, _macros_dir: &std::path::Path) -> 
             debug!("[WEB] Set play macro button: {s}");
             Some(WebCommand::SetPlayMacroButton(s))
         }
+        "SET_STOP_PLAYBACK_BUTTON" => {
+            let s = val.get("data")?.as_str()?.to_string();
+            debug!("[WEB] Set stop playback button: {s}");
+            Some(WebCommand::SetStopPlaybackButton(s))
+        }
         _ => {
             warn!("[WEB] Unknown command: {cmd}");
             None
