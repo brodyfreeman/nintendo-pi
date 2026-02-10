@@ -376,6 +376,7 @@ fn usb_processing_loop(
             combo.toggle_recording_button = ctrl.toggle_recording_button;
             combo.base_combo_button_1 = ctrl.base_combo_button_1;
             combo.base_combo_button_2 = ctrl.base_combo_button_2;
+            combo.toggle_macro_mode_trigger = ctrl.toggle_macro_mode_trigger;
             // Sync stick deadzone to calibrators
             main_cal.deadzone = ctrl.stick_deadzone;
             c_cal.deadzone = ctrl.stick_deadzone;
@@ -556,5 +557,6 @@ fn update_state(
         toggle_recording_button: ctrl.toggle_recording_button.display_name().to_string(),
         base_combo_button_1: ctrl.base_combo_button_1.display_name().to_string(),
         base_combo_button_2: ctrl.base_combo_button_2.display_name().to_string(),
+        toggle_macro_mode_trigger: ctrl.toggle_macro_mode_trigger.as_str().to_string(),
     });
 }

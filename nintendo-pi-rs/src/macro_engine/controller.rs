@@ -48,6 +48,7 @@ pub enum MacroCommand {
     SetToggleRecordingButton(String),
     SetBaseComboButton1(String),
     SetBaseComboButton2(String),
+    SetToggleMacroModeTrigger(String),
 }
 
 /// Side effects produced by executing a command.
@@ -98,6 +99,7 @@ pub struct MacroController {
     pub toggle_recording_button: crate::input::Button,
     pub base_combo_button_1: crate::input::Button,
     pub base_combo_button_2: crate::input::Button,
+    pub toggle_macro_mode_trigger: crate::combo::TriggerMode,
     macros_dir: PathBuf,
 }
 
@@ -135,6 +137,7 @@ impl MacroController {
             toggle_recording_button: crate::combo::DEFAULT_TOGGLE_RECORDING_BUTTON,
             base_combo_button_1: crate::combo::DEFAULT_BASE_COMBO_BUTTON_1,
             base_combo_button_2: crate::combo::DEFAULT_BASE_COMBO_BUTTON_2,
+            toggle_macro_mode_trigger: crate::combo::DEFAULT_TOGGLE_MACRO_MODE_TRIGGER,
             macros_dir,
         }
     }
@@ -174,6 +177,7 @@ impl MacroController {
             MacroCommand::SetToggleRecordingButton(s) => self.set_toggle_recording_button(&s),
             MacroCommand::SetBaseComboButton1(s) => self.set_base_combo_button_1(&s),
             MacroCommand::SetBaseComboButton2(s) => self.set_base_combo_button_2(&s),
+            MacroCommand::SetToggleMacroModeTrigger(s) => self.set_toggle_macro_mode_trigger(&s),
         }
     }
 
@@ -558,6 +562,19 @@ impl MacroController {
             );
         } else {
             warn!("[SETTINGS] Unknown button name: {name}");
+        }
+        MacroEffect::none()
+    }
+
+    fn set_toggle_macro_mode_trigger(&mut self, name: &str) -> MacroEffect {
+        if let Some(mode) = crate::combo::TriggerMode::from_str_name(name) {
+            self.toggle_macro_mode_trigger = mode;
+            info!(
+                "[SETTINGS] Toggle macro mode trigger set to {}",
+                mode.as_str()
+            );
+        } else {
+            warn!("[SETTINGS] Unknown trigger mode: {name}");
         }
         MacroEffect::none()
     }

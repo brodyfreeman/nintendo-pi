@@ -904,6 +904,16 @@
   </div>
   <div class="setting-row">
     <div class="setting-label">
+      <span class="setting-name">Macro Mode Trigger</span>
+      <span class="setting-value" id="triggerModeValue">Hold</span>
+    </div>
+    <select class="setting-select" id="triggerModeSelect">
+      <option value="hold">Hold (default)</option>
+      <option value="edge">Instant Press</option>
+    </select>
+  </div>
+  <div class="setting-row">
+    <div class="setting-label">
       <span class="setting-name">Toggle Loop Button</span>
       <span class="setting-value" id="toggleLoopBtnValue">Y</span>
     </div>
@@ -1402,6 +1412,7 @@
     syncPlayBtn();
     syncStopBtn();
     syncToggleModeBtn();
+    syncTriggerMode();
     syncToggleLoopBtn();
     syncCycleSpeedBtn();
     syncPrevSlotBtn();
@@ -1882,6 +1893,30 @@
       toggleModeBtnValue.textContent = TOGGLE_MODE_BTN_LABELS[val] || val;
       if (document.activeElement !== toggleModeBtnSelect) {
         toggleModeBtnSelect.value = val;
+      }
+    }
+  }
+
+  // === Macro mode trigger mode select ===
+  var triggerModeSelect = document.getElementById('triggerModeSelect');
+  var triggerModeValue = document.getElementById('triggerModeValue');
+  var TRIGGER_MODE_LABELS = {
+    'hold': 'Hold', 'edge': 'Instant Press'
+  };
+
+  triggerModeSelect.addEventListener('change', function() {
+    var val = triggerModeSelect.value;
+    triggerModeValue.textContent = TRIGGER_MODE_LABELS[val] || val;
+    sfx.nav();
+    sendCmd('SET_TOGGLE_MACRO_MODE_TRIGGER', val);
+  });
+
+  function syncTriggerMode() {
+    if (state.toggle_macro_mode_trigger !== undefined) {
+      var val = state.toggle_macro_mode_trigger;
+      triggerModeValue.textContent = TRIGGER_MODE_LABELS[val] || val;
+      if (document.activeElement !== triggerModeSelect) {
+        triggerModeSelect.value = val;
       }
     }
   }

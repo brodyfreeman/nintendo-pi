@@ -265,6 +265,11 @@ fn parse_web_command(val: &serde_json::Value, _macros_dir: &std::path::Path) -> 
             debug!("[WEB] Set base combo button 2: {s}");
             Some(WebCommand::SetBaseComboButton2(s))
         }
+        "SET_TOGGLE_MACRO_MODE_TRIGGER" => {
+            let s = val.get("data")?.as_str()?.to_string();
+            debug!("[WEB] Set toggle macro mode trigger: {s}");
+            Some(WebCommand::SetToggleMacroModeTrigger(s))
+        }
         _ => {
             warn!("[WEB] Unknown command: {cmd}");
             None

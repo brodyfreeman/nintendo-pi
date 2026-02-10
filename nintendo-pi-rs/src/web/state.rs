@@ -40,6 +40,7 @@ pub enum WebCommand {
     SetToggleRecordingButton(String),
     SetBaseComboButton1(String),
     SetBaseComboButton2(String),
+    SetToggleMacroModeTrigger(String),
 }
 
 impl From<WebCommand> for crate::macro_engine::controller::MacroCommand {
@@ -77,6 +78,7 @@ impl From<WebCommand> for crate::macro_engine::controller::MacroCommand {
             WebCommand::SetToggleRecordingButton(s) => Self::SetToggleRecordingButton(s),
             WebCommand::SetBaseComboButton1(s) => Self::SetBaseComboButton1(s),
             WebCommand::SetBaseComboButton2(s) => Self::SetBaseComboButton2(s),
+            WebCommand::SetToggleMacroModeTrigger(s) => Self::SetToggleMacroModeTrigger(s),
         }
     }
 }
@@ -172,6 +174,7 @@ pub struct StateSnapshot {
     pub toggle_recording_button: String,
     pub base_combo_button_1: String,
     pub base_combo_button_2: String,
+    pub toggle_macro_mode_trigger: String,
 }
 
 impl Default for StateSnapshot {
@@ -231,6 +234,9 @@ impl Default for StateSnapshot {
                 .to_string(),
             base_combo_button_2: crate::combo::DEFAULT_BASE_COMBO_BUTTON_2
                 .display_name()
+                .to_string(),
+            toggle_macro_mode_trigger: crate::combo::DEFAULT_TOGGLE_MACRO_MODE_TRIGGER
+                .as_str()
                 .to_string(),
         }
     }

@@ -9,6 +9,32 @@ use tracing::{debug, info};
 
 use crate::input::{Button, ButtonState};
 
+/// Whether the toggle-macro-mode combo is hold-triggered or edge-triggered.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TriggerMode {
+    /// Must hold the button for `hold_duration` seconds (default).
+    Hold,
+    /// Instant press (rising edge), like all other combos.
+    Edge,
+}
+
+impl TriggerMode {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            TriggerMode::Hold => "hold",
+            TriggerMode::Edge => "edge",
+        }
+    }
+
+    pub fn from_str_name(s: &str) -> Option<Self> {
+        match s.to_ascii_lowercase().as_str() {
+            "hold" => Some(TriggerMode::Hold),
+            "edge" => Some(TriggerMode::Edge),
+            _ => None,
+        }
+    }
+}
+
 /// Action triggered by a combo.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ComboAction {
@@ -89,6 +115,9 @@ pub const DEFAULT_BASE_COMBO_BUTTON_1: Button = Button::L3;
 /// Default base combo button 2.
 pub const DEFAULT_BASE_COMBO_BUTTON_2: Button = Button::R3;
 
+/// Default trigger mode for toggle macro mode combo.
+pub const DEFAULT_TOGGLE_MACRO_MODE_TRIGGER: TriggerMode = TriggerMode::Hold;
+
 /// Set of buttons to suppress (smallvec would be overkill, just use a fixed array).
 #[derive(Debug, Clone, Default)]
 pub struct SuppressedButtons {
@@ -140,6 +169,7 @@ pub struct ComboDetector {
     pub toggle_recording_button: Button,
     pub base_combo_button_1: Button,
     pub base_combo_button_2: Button,
+    pub toggle_macro_mode_trigger: TriggerMode,
     hold_button_start: Option<Instant>,
     prev_buttons: ButtonState,
     prev_base_held: bool,
@@ -160,6 +190,7 @@ impl ComboDetector {
             toggle_recording_button: DEFAULT_TOGGLE_RECORDING_BUTTON,
             base_combo_button_1: DEFAULT_BASE_COMBO_BUTTON_1,
             base_combo_button_2: DEFAULT_BASE_COMBO_BUTTON_2,
+            toggle_macro_mode_trigger: DEFAULT_TOGGLE_MACRO_MODE_TRIGGER,
             hold_button_start: None,
             prev_buttons: ButtonState::default(),
             prev_base_held: false,
@@ -187,34 +218,47 @@ impl ComboDetector {
             suppressed.add(self.base_combo_button_1);
             suppressed.add(self.base_combo_button_2);
 
-            // Check configurable hold button for macro mode toggle
-            let hold_btn_pressed = buttons.get(self.toggle_macro_mode_button);
-            if hold_btn_pressed {
-                suppressed.add(self.toggle_macro_mode_button);
-                match self.hold_button_start {
-                    None => {
-                        debug!(
-                            "[COMBO] {} hold started (need {}s for macro mode toggle)",
-                            self.toggle_macro_mode_button.display_name(),
-                            self.hold_duration
-                        );
-                        self.hold_button_start = Some(Instant::now());
-                    }
-                    Some(start) => {
-                        if start.elapsed().as_secs_f64() >= self.hold_duration {
-                            action = ComboAction::ToggleMacroMode;
-                            self.hold_button_start = None;
+            // Check configurable button for macro mode toggle
+            let toggle_btn_pressed = buttons.get(self.toggle_macro_mode_button);
+            match self.toggle_macro_mode_trigger {
+                TriggerMode::Hold => {
+                    if toggle_btn_pressed {
+                        suppressed.add(self.toggle_macro_mode_button);
+                        match self.hold_button_start {
+                            None => {
+                                debug!(
+                                    "[COMBO] {} hold started (need {}s for macro mode toggle)",
+                                    self.toggle_macro_mode_button.display_name(),
+                                    self.hold_duration
+                                );
+                                self.hold_button_start = Some(Instant::now());
+                            }
+                            Some(start) => {
+                                if start.elapsed().as_secs_f64() >= self.hold_duration {
+                                    action = ComboAction::ToggleMacroMode;
+                                    self.hold_button_start = None;
+                                }
+                            }
                         }
+                    } else {
+                        if self.hold_button_start.is_some() {
+                            debug!(
+                                "[COMBO] {} released before hold threshold",
+                                self.toggle_macro_mode_button.display_name()
+                            );
+                        }
+                        self.hold_button_start = None;
                     }
                 }
-            } else {
-                if self.hold_button_start.is_some() {
-                    debug!(
-                        "[COMBO] {} released before hold threshold",
-                        self.toggle_macro_mode_button.display_name()
-                    );
+                TriggerMode::Edge => {
+                    let was_pressed = self.prev_buttons.get(self.toggle_macro_mode_button);
+                    if toggle_btn_pressed {
+                        suppressed.add(self.toggle_macro_mode_button);
+                    }
+                    if toggle_btn_pressed && !was_pressed {
+                        action = ComboAction::ToggleMacroMode;
+                    }
                 }
-                self.hold_button_start = None;
             }
 
             // Check configurable prev slot button (edge-triggered)
@@ -457,6 +501,38 @@ mod tests {
         // Press briefly
         cd.update(&buttons_with(&[Button::L3, Button::R3, Button::DpadDown]));
         std::thread::sleep(std::time::Duration::from_millis(100));
+        let (action, _) = cd.update(&buttons_with(&[Button::L3, Button::R3, Button::DpadDown]));
+        assert_eq!(action, ComboAction::None);
+    }
+
+    #[test]
+    fn test_edge_trigger_mode_instant_toggle() {
+        let mut cd = ComboDetector::new();
+        cd.toggle_macro_mode_trigger = TriggerMode::Edge;
+
+        // First frame: L3+R3 (no combo button)
+        cd.update(&buttons_with(&[Button::L3, Button::R3]));
+
+        // Second frame: L3+R3+DpadDown rising edge → instant ToggleMacroMode
+        let (action, sup) = cd.update(&buttons_with(&[Button::L3, Button::R3, Button::DpadDown]));
+        assert_eq!(action, ComboAction::ToggleMacroMode);
+        assert!(sup.buttons[..sup.count]
+            .iter()
+            .any(|b| *b == Some(Button::DpadDown)));
+    }
+
+    #[test]
+    fn test_edge_trigger_mode_no_retrigger_on_hold() {
+        let mut cd = ComboDetector::new();
+        cd.toggle_macro_mode_trigger = TriggerMode::Edge;
+
+        cd.update(&buttons_with(&[Button::L3, Button::R3]));
+
+        // First press: triggers
+        let (action, _) = cd.update(&buttons_with(&[Button::L3, Button::R3, Button::DpadDown]));
+        assert_eq!(action, ComboAction::ToggleMacroMode);
+
+        // Held: doesn't retrigger
         let (action, _) = cd.update(&buttons_with(&[Button::L3, Button::R3, Button::DpadDown]));
         assert_eq!(action, ComboAction::None);
     }
