@@ -350,6 +350,16 @@
     max-height: 60px; opacity: 1; margin-top: 0.5rem;
   }
 
+  /* === Controls-card playback progress (visible near transport) === */
+  .controls-playback-progress {
+    max-height: 0; overflow: hidden; opacity: 0;
+    transition: max-height 0.4s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.3s ease, margin 0.3s ease;
+    margin: 0;
+  }
+  .controls-playback-progress.show {
+    max-height: 50px; opacity: 1; margin: 0.5rem 0 0.2rem;
+  }
+
   /* === Unified Controls Section === */
   .controls-section.recording-active {
     border-color: rgba(230,0,18,0.3);
@@ -605,29 +615,7 @@
 <div class="grid-area">
 
 <div class="section controls-section" id="controlsSection">
-  <!-- Mode & Recording row -->
-  <div class="mode-rec-bar">
-    <div class="control-group">
-      <span class="control-label">Macro Mode</span>
-      <div class="control-inline">
-        <span class="toggle-status off" id="macroModeStatus">OFF</span>
-        <button class="switch-toggle" id="btnMacroMode" onclick="sendCmd('TOGGLE_MACRO_MODE')">
-          <span class="knob"></span>
-        </button>
-      </div>
-    </div>
-    <div class="controls-divider"></div>
-    <div class="control-group">
-      <button class="btn btn-accent btn-face rec-btn-compact" id="btnRecord" onclick="sendCmd('TOGGLE_RECORDING')">
-        REC
-      </button>
-      <span class="rec-status" id="recStatus" style="display:none">REC</span>
-    </div>
-  </div>
-
-  <div class="controls-separator"></div>
-
-  <!-- Slot navigation + transport controls -->
+  <!-- Transport: slot nav + playback (primary actions, top of card) -->
   <div class="transport-area">
     <div class="slot-nav-row">
       <button class="btn dpad-btn dpad-sm" onclick="sendCmd('PREV_SLOT')">&larr;</button>
@@ -644,6 +632,12 @@
     </div>
   </div>
 
+  <!-- Playback progress (visible during playback, right near the transport) -->
+  <div class="controls-playback-progress" id="controlsPlaybackProgress">
+    <div class="progress-bar-outer"><div class="progress-bar-inner" id="controlsProgress"></div></div>
+    <div class="progress-label" id="controlsProgressLabel">0 / 0</div>
+  </div>
+
   <!-- Speed controls (collapsible on mobile) -->
   <div class="speed-toggle" id="speedToggle" onclick="toggleSpeed()">
     <span class="speed-toggle-label">Speed</span>
@@ -656,6 +650,28 @@
       <button class="btn btn-dark active" onclick="setSpeed(1)">1x</button>
       <button class="btn btn-dark" onclick="setSpeed(2)">2x</button>
       <button class="btn btn-dark" onclick="setSpeed(4)">4x</button>
+    </div>
+  </div>
+
+  <div class="controls-separator"></div>
+
+  <!-- Mode & Recording (secondary actions, bottom of card) -->
+  <div class="mode-rec-bar">
+    <div class="control-group">
+      <span class="control-label">Macro Mode</span>
+      <div class="control-inline">
+        <span class="toggle-status off" id="macroModeStatus">OFF</span>
+        <button class="switch-toggle" id="btnMacroMode" onclick="sendCmd('TOGGLE_MACRO_MODE')">
+          <span class="knob"></span>
+        </button>
+      </div>
+    </div>
+    <div class="controls-divider"></div>
+    <div class="control-group">
+      <button class="btn btn-accent btn-face rec-btn-compact" id="btnRecord" onclick="sendCmd('TOGGLE_RECORDING')">
+        REC
+      </button>
+      <span class="rec-status" id="recStatus" style="display:none">REC</span>
     </div>
   </div>
 </div>
@@ -1027,15 +1043,28 @@
     var speedVal = document.getElementById('speedValue');
     if (speedVal) speedVal.textContent = state.playback_speed + 'x';
 
-    // Playback progress bar (in controller section)
+    // Playback progress bars (both in controls card and controller section)
+    var isPlaying = state.playing && state.playback_frame_count > 0;
+    var pct = isPlaying && state.playback_frame_count > 0
+      ? (state.playback_frame / state.playback_frame_count * 100) : 0;
+    var progressLabel = state.playback_frame + ' / ' + state.playback_frame_count;
+
+    // Controls card progress (primary — always visible without scrolling)
+    var ctrlsProgress = document.getElementById('controlsPlaybackProgress');
+    if (isPlaying) {
+      ctrlsProgress.classList.add('show');
+      document.getElementById('controlsProgress').style.width = pct + '%';
+      document.getElementById('controlsProgressLabel').textContent = progressLabel;
+    } else {
+      ctrlsProgress.classList.remove('show');
+    }
+
+    // Controller viz progress (secondary — in controller section)
     var progressWrap = document.getElementById('ctrlPlaybackProgress');
     if (state.playing && state.playback_input) {
       progressWrap.classList.add('show');
-      var pct = state.playback_frame_count > 0
-        ? (state.playback_frame / state.playback_frame_count * 100) : 0;
       document.getElementById('vizProgress').style.width = pct + '%';
-      document.getElementById('vizProgressLabel').textContent =
-        state.playback_frame + ' / ' + state.playback_frame_count;
+      document.getElementById('vizProgressLabel').textContent = progressLabel;
     } else {
       progressWrap.classList.remove('show');
     }
