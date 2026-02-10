@@ -412,8 +412,8 @@ fn usb_processing_loop(
                     Some(&parsed),
                 );
                 continue;
-            } else {
-                // Playback finished
+            } else if !ctrl.player.playing {
+                // Playback finished (player set playing=false internally)
                 let effect = ctrl.execute(MacroCommand::StopPlayback);
                 apply_effect(
                     effect,
@@ -423,6 +423,8 @@ fn usb_processing_loop(
                 );
                 info!("[MACRO] Playback finished.");
             }
+            // else: still playing but no frame ready yet (before first timestamp),
+            // fall through to normal input processing
         }
 
         // --- Parse live input ---
