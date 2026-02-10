@@ -120,15 +120,15 @@ pub async fn initialize_controller() -> anyhow::Result<()> {
         .find(|i| i.interface_number() == USB_INTERFACE)
         .ok_or_else(|| anyhow::anyhow!("Interface {USB_INTERFACE} not found"))?;
 
-    let mut ep_out = None;
-    let mut ep_in = None;
-    for ep in iface_desc.endpoints() {
-        match ep.direction() {
-            nusb::transfer::Direction::Out => ep_out = Some(ep.address()),
-            nusb::transfer::Direction::In => ep_in = Some(ep.address()),
-        }
-    }
-    let ep_out = ep_out.ok_or_else(|| anyhow::anyhow!("No bulk OUT endpoint found"))?;
+    let find_ep = |dir| {
+        iface_desc
+            .endpoints()
+            .find(|ep| ep.direction() == dir)
+            .map(|ep| ep.address())
+    };
+    let ep_out = find_ep(nusb::transfer::Direction::Out)
+        .ok_or_else(|| anyhow::anyhow!("No bulk OUT endpoint found"))?;
+    let ep_in = find_ep(nusb::transfer::Direction::In);
 
     info!(
         "[USB] Device connected. Sending initialization sequence ({} commands)...",

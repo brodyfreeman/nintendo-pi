@@ -328,43 +328,22 @@ pub async fn run_pairing(session: &mut BtSession) -> anyhow::Result<()> {
 
             progress.received_first_message = true;
 
-            let Some((report_type, subcmd_offset)) = parse_report_header(data) else {
-                continue;
-            };
+            if let Some((subcmd_id, subcmd_data)) = extract_subcommand(data) {
+                let (ack, reply_data) = protocol::handle_subcommand(subcmd_id, subcmd_data);
+                let reply = protocol::build_subcommand_reply(timer, subcmd_id, ack, &reply_data);
+                timer = timer.wrapping_add(1);
 
-            match report_type {
-                // Subcommand with rumble data
-                0x01 | 0x11 => {
-                    if n > subcmd_offset {
-                        let subcmd_id = data[subcmd_offset];
-                        let subcmd_data = if n > subcmd_offset + 1 {
-                            &data[subcmd_offset + 1..]
-                        } else {
-                            &[]
-                        };
+                info!("[BT] Pairing: subcmd 0x{subcmd_id:02X} -> ACK 0x{ack:02X}");
+                session.interrupt.write_all(&reply).await?;
 
-                        let (ack, reply_data) = protocol::handle_subcommand(subcmd_id, subcmd_data);
-                        let reply =
-                            protocol::build_subcommand_reply(timer, subcmd_id, ack, &reply_data);
-                        timer = timer.wrapping_add(1);
+                progress.track(subcmd_id);
 
-                        info!("[BT] Pairing: subcmd 0x{subcmd_id:02X} -> ACK 0x{ack:02X}");
-                        session.interrupt.write_all(&reply).await?;
-
-                        progress.track(subcmd_id);
-
-                        if progress.is_complete() {
-                            info!("[BT] Pairing complete! (vibration enabled + player lights set)");
-                            return Ok(());
-                        }
-
-                        continue; // Already sent a reply, skip the default report below
-                    }
+                if progress.is_complete() {
+                    info!("[BT] Pairing complete! (vibration enabled + player lights set)");
+                    return Ok(());
                 }
 
-                _ => {
-                    debug!("[BT] Pairing: unknown report type 0x{report_type:02X}");
-                }
+                continue; // Already sent a reply, skip the default report below
             }
         }
 
@@ -380,28 +359,15 @@ pub async fn run_pairing(session: &mut BtSession) -> anyhow::Result<()> {
 /// Build an empty 0x30 input report for pairing (NXBT-compatible).
 fn build_empty_input_report(timer: u8, include_state: bool) -> [u8; 50] {
     let mut report = [0u8; 50];
-    report[0] = 0xA1; // HID transaction header
-    report[1] = 0x30; // Standard full input report
+    report[0] = 0xA1;
+    report[1] = 0x30;
     report[2] = timer;
-
     if include_state {
         report[3] = 0x90; // Battery level (full) + connection info
-
-        // Buttons at neutral (zeros) — [4..6]
-
-        // Left stick at center — NXBT uses [0x6F, 0xC8, 0x77]
-        report[7] = 0x6F;
-        report[8] = 0xC8;
-        report[9] = 0x77;
-        // Right stick at center — NXBT uses [0x16, 0xD8, 0x7D]
-        report[10] = 0x16;
-        report[11] = 0xD8;
-        report[12] = 0x7D;
-
-        // Vibrator byte
-        report[13] = 0xB0;
+        report[7..10].copy_from_slice(&[0x6F, 0xC8, 0x77]); // Left stick center (NXBT)
+        report[10..13].copy_from_slice(&[0x16, 0xD8, 0x7D]); // Right stick center (NXBT)
+        report[13] = 0xB0; // Vibrator byte
     }
-
     report
 }
 
@@ -427,7 +393,7 @@ pub async fn poll_control(session: &mut BtSession, timer: &mut u8) -> anyhow::Re
                 Ok(n) => {
                     let data = &itr_buf[..n];
                     debug!("[BT] Interrupt recv ({n} bytes): {:02X?}", &data[..n.min(20)]);
-                    handle_incoming_subcommand(session, data, n, timer).await;
+                    handle_incoming_subcommand(session, data, timer).await;
                 }
                 Err(e) => {
                     if e.kind() == std::io::ErrorKind::ConnectionReset {
@@ -455,25 +421,21 @@ fn parse_report_header(data: &[u8]) -> Option<(u8, usize)> {
     }
 }
 
-/// Handle an incoming subcommand during normal operation.
-/// Handles both 0xA2-prefixed (NXBT-style) and raw report data.
-async fn handle_incoming_subcommand(
-    session: &mut BtSession,
-    data: &[u8],
-    n: usize,
-    timer: &mut u8,
-) {
-    let Some((report_type, subcmd_offset)) = parse_report_header(data) else {
-        return;
-    };
-
-    if (report_type == 0x01 || report_type == 0x11) && n > subcmd_offset {
+/// Extract subcommand ID and payload from a report, if present.
+fn extract_subcommand(data: &[u8]) -> Option<(u8, &[u8])> {
+    let (report_type, subcmd_offset) = parse_report_header(data)?;
+    if (report_type == 0x01 || report_type == 0x11) && data.len() > subcmd_offset {
         let subcmd_id = data[subcmd_offset];
-        let subcmd_data = if n > subcmd_offset + 1 {
-            &data[subcmd_offset + 1..]
-        } else {
-            &[]
-        };
+        let subcmd_data = data.get(subcmd_offset + 1..).unwrap_or(&[]);
+        Some((subcmd_id, subcmd_data))
+    } else {
+        None
+    }
+}
+
+/// Handle an incoming subcommand during normal operation.
+async fn handle_incoming_subcommand(session: &mut BtSession, data: &[u8], timer: &mut u8) {
+    if let Some((subcmd_id, subcmd_data)) = extract_subcommand(data) {
         let (ack, reply_data) = protocol::handle_subcommand(subcmd_id, subcmd_data);
         let reply = protocol::build_subcommand_reply(*timer, subcmd_id, ack, &reply_data);
         *timer = timer.wrapping_add(1);

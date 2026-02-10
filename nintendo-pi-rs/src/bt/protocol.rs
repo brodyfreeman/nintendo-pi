@@ -29,14 +29,8 @@ pub fn spi_read_response(addr: u32, len: u8) -> Vec<u8> {
                 0x16, 0xD8, 0x7D, 0xF2, 0xB5, 0x5F, 0x86, 0x65, 0x5E,
             ]
         }
-        // User stick calibration
-        (0x8010, 0x16) => {
-            // Magic bytes indicating no user calibration
-            let mut data = vec![0xFF; 0x16];
-            data[0] = 0xFF;
-            data[1] = 0xFF;
-            data
-        }
+        // User stick calibration (all 0xFF = no user calibration)
+        (0x8010, 0x16) => vec![0xFF; 0x16],
         // Stick parameters (deadzone, range ratio)
         (0x6086, 0x12) => vec![
             0x0F, 0x30, 0x61, 0x96, 0x30, 0xF3, 0xD4, 0x14, 0x54, 0x41, 0x15, 0x54, 0xC7, 0x79,
@@ -49,13 +43,8 @@ pub fn spi_read_response(addr: u32, len: u8) -> Vec<u8> {
             0x19, 0x00, 0xDD, 0xFF, 0xDC, 0xFF, // Gyro origin
             0x3B, 0x34, 0x3B, 0x34, 0x3B, 0x34, // Gyro sensitivity
         ],
-        // IMU user calibration
-        (0x8026, 0x1A) => {
-            let mut data = vec![0xFF; 0x1A];
-            data[0] = 0xFF;
-            data[1] = 0xFF;
-            data
-        }
+        // IMU user calibration (all 0xFF = no user calibration)
+        (0x8026, 0x1A) => vec![0xFF; 0x1A],
         // Factory sensor/stick device parameters + stick params 1
         (0x6080, 0x06) => vec![0x50, 0xFD, 0x00, 0x00, 0xC6, 0x0F],
         // Full 6080 read (sensor params + stick params)
@@ -76,44 +65,21 @@ pub fn spi_read_response(addr: u32, len: u8) -> Vec<u8> {
 }
 
 /// Build a subcommand reply (0x21 report).
-///
-/// NXBT-compatible layout (50 bytes):
-///   [0]  = 0xA1 (HID transaction header)
-///   [1]  = 0x21 (subcommand reply report ID)
-///   [2]  = timer
-///   [3]  = battery/connection info (0x90 for Pro Controller)
-///   [4..6]  = button state (zeros for reply)
-///   [7..9]  = left stick (center)
-///   [10..12] = right stick (center)
-///   [13] = vibrator byte
-///   [14] = ACK byte
-///   [15] = subcommand ID being replied to
-///   [16..] = subcommand-specific data
-pub fn build_subcommand_reply(timer: u8, subcmd: u8, ack: u8, data: &[u8]) -> Vec<u8> {
-    let mut reply = vec![0u8; 50];
+pub fn build_subcommand_reply(timer: u8, subcmd: u8, ack: u8, data: &[u8]) -> [u8; 50] {
+    let mut reply = [0u8; 50];
     reply[0] = 0xA1; // HID transaction header
     reply[1] = 0x21; // Subcommand reply report ID
     reply[2] = timer;
-    reply[3] = 0x90; // Battery level (full) + connection info
+    reply[3] = 0x90; // Battery + connection info
 
-    // Buttons at neutral (zeros) — [4..6]
-
-    // Left stick at center — [7..9]
-    reply[7] = 0x00;
-    reply[8] = 0x08;
-    reply[9] = 0x80;
-    // Right stick at center — [10..12]
-    reply[10] = 0x00;
-    reply[11] = 0x08;
-    reply[12] = 0x80;
-
-    // Vibrator byte
-    reply[13] = 0xB0;
+    // Stick centers (0x800 packed as 12-bit); buttons at [4..6] are zero (neutral)
+    reply[7..10].copy_from_slice(&[0x00, 0x08, 0x80]);
+    reply[10..13].copy_from_slice(&[0x00, 0x08, 0x80]);
+    reply[13] = 0xB0; // Vibrator byte
 
     reply[14] = ack;
     reply[15] = subcmd;
 
-    // Copy subcommand data
     let copy_len = data.len().min(reply.len() - 16);
     reply[16..16 + copy_len].copy_from_slice(&data[..copy_len]);
 
@@ -150,22 +116,10 @@ pub fn handle_subcommand(subcmd_id: u8, subcmd_data: &[u8]) -> (u8, Vec<u8>) {
 
         // 0x10: SPI flash read
         0x10 => {
-            if subcmd_data.len() >= 5 {
-                let addr = u32::from_le_bytes([
-                    subcmd_data[0],
-                    subcmd_data[1],
-                    subcmd_data[2],
-                    subcmd_data[3],
-                ]);
-                let length = subcmd_data[4];
-
-                let mut reply_data = vec![
-                    subcmd_data[0],
-                    subcmd_data[1],
-                    subcmd_data[2],
-                    subcmd_data[3],
-                    length,
-                ];
+            if let Some(header) = subcmd_data.get(..5) {
+                let addr = u32::from_le_bytes(header[..4].try_into().unwrap());
+                let length = header[4];
+                let mut reply_data = header.to_vec();
                 reply_data.extend_from_slice(&spi_read_response(addr, length));
                 (0x90, reply_data)
             } else {
