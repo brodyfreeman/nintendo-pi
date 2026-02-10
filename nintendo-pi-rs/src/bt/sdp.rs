@@ -295,6 +295,8 @@ pub async fn set_device_class() -> anyhow::Result<()> {
 }
 
 /// Register the HID SDP profile with BlueZ.
+///
+/// Unregisters any existing profile first to handle restarts cleanly.
 pub async fn register_sdp_profile(connection: &Connection) -> anyhow::Result<()> {
     info!("[BT] Registering HID SDP profile...");
 
@@ -306,15 +308,20 @@ pub async fn register_sdp_profile(connection: &Connection) -> anyhow::Result<()>
     )
     .await?;
 
+    let obj_path = zbus::zvariant::ObjectPath::from_static_str_unchecked("/org/bluez/nintendo_pi");
+    let uuid = "00001124-0000-1000-8000-00805f9b34fb";
+
+    // Unregister first to handle restarts cleanly (ignore errors)
+    let _: Result<(), zbus::Error> = proxy
+        .call("UnregisterProfile", &(&obj_path,))
+        .await;
+
     let mut options = std::collections::HashMap::new();
     options.insert("Role", zbus::zvariant::Value::from("server"));
     options.insert("RequireAuthentication", zbus::zvariant::Value::from(false));
     options.insert("RequireAuthorization", zbus::zvariant::Value::from(false));
     options.insert("AutoConnect", zbus::zvariant::Value::from(true));
     options.insert("ServiceRecord", zbus::zvariant::Value::from(SDP_RECORD));
-
-    let obj_path = zbus::zvariant::ObjectPath::from_static_str_unchecked("/org/bluez/nintendo_pi");
-    let uuid = "00001124-0000-1000-8000-00805f9b34fb";
 
     let result: Result<(), zbus::Error> = proxy
         .call("RegisterProfile", &(obj_path, uuid, options))
@@ -323,15 +330,7 @@ pub async fn register_sdp_profile(connection: &Connection) -> anyhow::Result<()>
     match result {
         Ok(_) => info!("[BT] SDP profile registered successfully"),
         Err(e) => {
-            // "Already Exists" is OK if we're restarting
-            let msg = e.to_string();
-            if msg.contains("Already Exists") || msg.contains("AlreadyExists")
-                || msg.contains("UUID already registered") || msg.contains("NotPermitted")
-            {
-                warn!("[BT] SDP profile already registered (OK on restart)");
-            } else {
-                return Err(e.into());
-            }
+            return Err(e.into());
         }
     }
 

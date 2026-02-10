@@ -209,8 +209,10 @@ async fn async_accept(listener_fd: RawFd) -> io::Result<RawFd> {
 
 /// Accept a connection from the Switch on both L2CAP channels.
 ///
-/// Binds listeners, then blocks until both channels are connected.
-/// Accepts interrupt channel first (like NXBT does).
+/// Binds listeners, then accepts both channels concurrently.
+/// The BT HID spec requires control (PSM 17) before interrupt (PSM 19),
+/// but the Switch may connect them in either order, so we accept both
+/// concurrently to avoid deadlocking on a sequential accept.
 pub async fn accept_connection() -> anyhow::Result<BtSession> {
     info!("[BT] Starting L2CAP listeners on PSM {PSM_CONTROL} (control) and {PSM_INTERRUPT} (interrupt)...");
 
@@ -220,18 +222,20 @@ pub async fn accept_connection() -> anyhow::Result<BtSession> {
     info!("[BT] Waiting for Switch to connect...");
     info!("[BT] >> Open 'Change Grip/Order' on the Switch <<");
 
-    // Accept interrupt first, then control (matches NXBT)
-    let itr_fd = async_accept(itr_listener).await?;
-    info!("[BT] Interrupt channel connected");
+    // Accept both channels concurrently — the Switch may connect them in either order
+    let (ctrl_result, itr_result) = tokio::join!(
+        async_accept(ctrl_listener),
+        async_accept(itr_listener),
+    );
 
-    // Close interrupt listener now that we have a connection
+    // Close listeners regardless of result
+    unsafe { libc::close(ctrl_listener); }
     unsafe { libc::close(itr_listener); }
 
-    let ctrl_fd = async_accept(ctrl_listener).await?;
+    let ctrl_fd = ctrl_result?;
     info!("[BT] Control channel connected");
-
-    // Close control listener
-    unsafe { libc::close(ctrl_listener); }
+    let itr_fd = itr_result?;
+    info!("[BT] Interrupt channel connected");
 
     let control = L2capSocket::from_raw_fd(ctrl_fd)?;
     let interrupt = L2capSocket::from_raw_fd(itr_fd)?;
