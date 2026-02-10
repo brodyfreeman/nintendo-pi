@@ -40,7 +40,10 @@ pub struct MacroEffect {
 
 impl MacroEffect {
     fn none() -> Self {
-        Self { led: None, broadcast_macros: false }
+        Self {
+            led: None,
+            broadcast_macros: false,
+        }
     }
 }
 
@@ -95,7 +98,11 @@ impl MacroController {
 
     /// LED pattern for the current mode (macro mode vs normal).
     pub fn mode_led(&self) -> &'static [u8; 16] {
-        if self.macro_mode { &led::LED_MACRO_MODE } else { &led::LED_NORMAL }
+        if self.macro_mode {
+            &led::LED_MACRO_MODE
+        } else {
+            &led::LED_NORMAL
+        }
     }
 
     fn refresh_cache(&mut self) {
@@ -113,7 +120,10 @@ impl MacroController {
                 "[MACRO] Macro mode ON. {} macro(s). Slot: {}",
                 self.cached_slot_count, self.current_slot
             );
-            MacroEffect { led: Some(&led::LED_MACRO_MODE), broadcast_macros: false }
+            MacroEffect {
+                led: Some(&led::LED_MACRO_MODE),
+                broadcast_macros: false,
+            }
         } else {
             let mut broadcast = false;
             if self.recorder.recording {
@@ -122,7 +132,10 @@ impl MacroController {
                 broadcast = true;
             }
             info!("[MACRO] Macro mode OFF.");
-            MacroEffect { led: Some(&led::LED_NORMAL), broadcast_macros: broadcast }
+            MacroEffect {
+                led: Some(&led::LED_NORMAL),
+                broadcast_macros: broadcast,
+            }
         }
     }
 
@@ -131,10 +144,16 @@ impl MacroController {
             self.recorder.stop();
             self.recorder.save(&self.macros_dir, None);
             self.refresh_cache();
-            MacroEffect { led: Some(&led::LED_MACRO_MODE), broadcast_macros: true }
+            MacroEffect {
+                led: Some(&led::LED_MACRO_MODE),
+                broadcast_macros: true,
+            }
         } else {
             self.recorder.start();
-            MacroEffect { led: Some(&led::LED_RECORDING), broadcast_macros: false }
+            MacroEffect {
+                led: Some(&led::LED_RECORDING),
+                broadcast_macros: false,
+            }
         }
     }
 
@@ -172,8 +191,14 @@ impl MacroController {
         if let Some(macro_id) = storage::get_macro_id_by_slot(&self.macros_dir, self.current_slot) {
             if self.player.load(&self.macros_dir, macro_id) {
                 self.player.start(false);
-                info!("[MACRO] Playing macro {} (slot {}).", macro_id, self.current_slot);
-                return MacroEffect { led: Some(&led::LED_PLAYBACK), broadcast_macros: false };
+                info!(
+                    "[MACRO] Playing macro {} (slot {}).",
+                    macro_id, self.current_slot
+                );
+                return MacroEffect {
+                    led: Some(&led::LED_PLAYBACK),
+                    broadcast_macros: false,
+                };
             }
         }
         MacroEffect::none()
@@ -182,7 +207,10 @@ impl MacroController {
     fn stop_playback(&mut self) -> MacroEffect {
         if self.player.playing {
             self.player.stop();
-            MacroEffect { led: Some(self.mode_led()), broadcast_macros: false }
+            MacroEffect {
+                led: Some(self.mode_led()),
+                broadcast_macros: false,
+            }
         } else {
             MacroEffect::none()
         }
@@ -191,7 +219,10 @@ impl MacroController {
     fn rename_macro(&mut self, id: u32, name: &str) -> MacroEffect {
         if storage::rename_macro(&self.macros_dir, id, name) {
             self.refresh_cache();
-            MacroEffect { led: None, broadcast_macros: true }
+            MacroEffect {
+                led: None,
+                broadcast_macros: true,
+            }
         } else {
             MacroEffect::none()
         }
@@ -207,7 +238,10 @@ impl MacroController {
                 self.current_slot = new_count - 1;
             }
             self.refresh_cache();
-            MacroEffect { led: None, broadcast_macros: true }
+            MacroEffect {
+                led: None,
+                broadcast_macros: true,
+            }
         } else {
             MacroEffect::none()
         }
@@ -232,12 +266,18 @@ mod tests {
 
         let effect = ctrl.execute(MacroCommand::ToggleMacroMode);
         assert!(ctrl.macro_mode);
-        assert_eq!(effect.led.unwrap() as *const _, &led::LED_MACRO_MODE as *const _);
+        assert_eq!(
+            effect.led.unwrap() as *const _,
+            &led::LED_MACRO_MODE as *const _
+        );
         assert!(!effect.broadcast_macros);
 
         let effect = ctrl.execute(MacroCommand::ToggleMacroMode);
         assert!(!ctrl.macro_mode);
-        assert_eq!(effect.led.unwrap() as *const _, &led::LED_NORMAL as *const _);
+        assert_eq!(
+            effect.led.unwrap() as *const _,
+            &led::LED_NORMAL as *const _
+        );
     }
 
     #[test]
@@ -296,13 +336,19 @@ mod tests {
         // Start recording
         let effect = ctrl.execute(MacroCommand::ToggleRecording);
         assert!(ctrl.recorder.recording);
-        assert_eq!(effect.led.unwrap() as *const _, &led::LED_RECORDING as *const _);
+        assert_eq!(
+            effect.led.unwrap() as *const _,
+            &led::LED_RECORDING as *const _
+        );
         assert!(!effect.broadcast_macros);
 
         // Stop recording
         let effect = ctrl.execute(MacroCommand::ToggleRecording);
         assert!(!ctrl.recorder.recording);
-        assert_eq!(effect.led.unwrap() as *const _, &led::LED_MACRO_MODE as *const _);
+        assert_eq!(
+            effect.led.unwrap() as *const _,
+            &led::LED_MACRO_MODE as *const _
+        );
         assert!(effect.broadcast_macros);
     }
 

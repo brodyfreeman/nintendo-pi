@@ -132,7 +132,10 @@ mod tests {
         // Magnitudes should be in the same ballpark (within 15% of each other)
         // since real calibration radii aren't perfectly symmetric
         let ratio = x1.abs() / x2.abs();
-        assert!(ratio > 0.8 && ratio < 1.2, "Magnitude ratio {ratio} too far from 1.0");
+        assert!(
+            ratio > 0.8 && ratio < 1.2,
+            "Magnitude ratio {ratio} too far from 1.0"
+        );
     }
 
     #[test]

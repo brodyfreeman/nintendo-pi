@@ -46,7 +46,10 @@ impl MacroRecorder {
         self.recording = false;
         let frame_count = self.frames.len();
         let duration_us = self.frames.last().map(|(ts, _)| *ts).unwrap_or(0);
-        info!("[MACRO] Recording stopped: {frame_count} frames, {}ms", duration_us / 1000);
+        info!(
+            "[MACRO] Recording stopped: {frame_count} frames, {}ms",
+            duration_us / 1000
+        );
         (frame_count, duration_us)
     }
 

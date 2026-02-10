@@ -51,7 +51,9 @@ impl AsRawFd for RawFdWrapper {
 
 impl Drop for RawFdWrapper {
     fn drop(&mut self) {
-        unsafe { libc::close(self.0); }
+        unsafe {
+            libc::close(self.0);
+        }
     }
 }
 
@@ -77,7 +79,11 @@ impl L2capSocket {
                 let n = unsafe {
                     libc::recv(inner.as_raw_fd(), buf.as_mut_ptr() as *mut _, buf.len(), 0)
                 };
-                if n < 0 { Err(io::Error::last_os_error()) } else { Ok(n as usize) }
+                if n < 0 {
+                    Err(io::Error::last_os_error())
+                } else {
+                    Ok(n as usize)
+                }
             }) {
                 Ok(result) => return result,
                 Err(_would_block) => continue,
@@ -98,7 +104,11 @@ impl L2capSocket {
                         0,
                     )
                 };
-                if n < 0 { Err(io::Error::last_os_error()) } else { Ok(n as usize) }
+                if n < 0 {
+                    Err(io::Error::last_os_error())
+                } else {
+                    Ok(n as usize)
+                }
             }) {
                 Ok(Ok(n)) => written += n,
                 Ok(Err(e)) => return Err(e),
@@ -111,15 +121,14 @@ impl L2capSocket {
 
 /// A connected BT session with the Switch.
 pub struct BtSession {
-    control: L2capSocket,
+    /// Held open to keep the L2CAP control channel alive (PSM 17).
+    _control: L2capSocket,
     interrupt: L2capSocket,
 }
 
 /// Create and bind a raw L2CAP listener socket.
 fn bind_l2cap(psm: u16) -> io::Result<RawFd> {
-    let fd = unsafe {
-        libc::socket(AF_BLUETOOTH, libc::SOCK_SEQPACKET, BTPROTO_L2CAP)
-    };
+    let fd = unsafe { libc::socket(AF_BLUETOOTH, libc::SOCK_SEQPACKET, BTPROTO_L2CAP) };
     if fd < 0 {
         return Err(io::Error::last_os_error());
     }
@@ -141,7 +150,9 @@ fn bind_l2cap(psm: u16) -> io::Result<RawFd> {
     };
     if ret < 0 {
         let err = io::Error::last_os_error();
-        unsafe { libc::close(fd); }
+        unsafe {
+            libc::close(fd);
+        }
         if err.kind() == io::ErrorKind::AddrInUse {
             return Err(io::Error::new(
                 io::ErrorKind::AddrInUse,
@@ -158,7 +169,9 @@ fn bind_l2cap(psm: u16) -> io::Result<RawFd> {
     let ret = unsafe { libc::listen(fd, 1) };
     if ret < 0 {
         let err = io::Error::last_os_error();
-        unsafe { libc::close(fd); }
+        unsafe {
+            libc::close(fd);
+        }
         return Err(err);
     }
 
@@ -174,10 +187,7 @@ async fn async_accept(listener_fd: RawFd) -> io::Result<RawFd> {
     }
     unsafe { libc::fcntl(listener_fd, libc::F_SETFL, flags | libc::O_NONBLOCK) };
 
-    let async_fd = AsyncFd::with_interest(
-        RawFdWrapper(listener_fd),
-        Interest::READABLE,
-    )?;
+    let async_fd = AsyncFd::with_interest(RawFdWrapper(listener_fd), Interest::READABLE)?;
 
     loop {
         let mut guard = async_fd.readable().await?;
@@ -223,14 +233,16 @@ pub async fn accept_connection() -> anyhow::Result<BtSession> {
     info!("[BT] >> Open 'Change Grip/Order' on the Switch <<");
 
     // Accept both channels concurrently — the Switch may connect them in either order
-    let (ctrl_result, itr_result) = tokio::join!(
-        async_accept(ctrl_listener),
-        async_accept(itr_listener),
-    );
+    let (ctrl_result, itr_result) =
+        tokio::join!(async_accept(ctrl_listener), async_accept(itr_listener),);
 
     // Close listeners regardless of result
-    unsafe { libc::close(ctrl_listener); }
-    unsafe { libc::close(itr_listener); }
+    unsafe {
+        libc::close(ctrl_listener);
+    }
+    unsafe {
+        libc::close(itr_listener);
+    }
 
     let ctrl_fd = ctrl_result?;
     info!("[BT] Control channel connected");
@@ -240,7 +252,35 @@ pub async fn accept_connection() -> anyhow::Result<BtSession> {
     let control = L2capSocket::from_raw_fd(ctrl_fd)?;
     let interrupt = L2capSocket::from_raw_fd(itr_fd)?;
 
-    Ok(BtSession { control, interrupt })
+    Ok(BtSession {
+        _control: control,
+        interrupt,
+    })
+}
+
+/// Tracks which pairing subcommands the Switch has sent.
+#[derive(Default)]
+struct PairingProgress {
+    device_info_queried: bool,
+    vibration_enabled: bool,
+    player_set: bool,
+    received_first_message: bool,
+}
+
+impl PairingProgress {
+    fn is_complete(&self) -> bool {
+        self.vibration_enabled && self.player_set
+    }
+
+    /// Update progress based on the subcommand ID just handled.
+    fn track(&mut self, subcmd_id: u8) {
+        match subcmd_id {
+            0x02 => self.device_info_queried = true,
+            0x48 => self.vibration_enabled = true,
+            0x30 => self.player_set = true,
+            _ => {}
+        }
+    }
 }
 
 /// Run the pairing handshake on the interrupt channel (matches NXBT approach).
@@ -255,13 +295,10 @@ pub async fn run_pairing(session: &mut BtSession) -> anyhow::Result<()> {
 
     let mut timer: u8 = 0;
     let mut itr_buf = [0u8; 512];
-    let mut vibration_enabled = false;
-    let mut player_set = false;
-    let mut device_info_queried = false;
-    let mut received_first_message = false;
+    let mut progress = PairingProgress::default();
 
     // Send an initial empty report to prompt the Switch (like NXBT)
-    let initial_report = build_empty_input_report(timer, device_info_queried);
+    let initial_report = build_empty_input_report(timer, progress.device_info_queried);
     session.interrupt.write_all(&initial_report).await?;
     timer = timer.wrapping_add(1);
 
@@ -280,7 +317,7 @@ pub async fn run_pairing(session: &mut BtSession) -> anyhow::Result<()> {
                     }
                 }
             }
-            _ = tokio::time::sleep(Duration::from_millis(if received_first_message { 66 } else { 1000 })) => {
+            _ = tokio::time::sleep(Duration::from_millis(if progress.received_first_message { 66 } else { 1000 })) => {
                 None
             }
         };
@@ -289,18 +326,9 @@ pub async fn run_pairing(session: &mut BtSession) -> anyhow::Result<()> {
             let data = &itr_buf[..n];
             debug!("[BT] Pairing recv ({n} bytes): {:02X?}", &data[..n.min(30)]);
 
-            if !received_first_message {
-                received_first_message = true;
-            }
+            progress.received_first_message = true;
 
-            // Parse incoming data — handle both with and without 0xA2 prefix
-            let (report_type, subcmd_offset) = if n > 0 && data[0] == 0xA2 {
-                // NXBT-style: 0xA2 prefix, subcommand at data[11]
-                if n >= 2 { (data[1], 11usize) } else { continue; }
-            } else if n > 0 {
-                // Direct report type (no HID header)
-                (data[0], 10usize)
-            } else {
+            let Some((report_type, subcmd_offset)) = parse_report_header(data) else {
                 continue;
             };
 
@@ -309,26 +337,23 @@ pub async fn run_pairing(session: &mut BtSession) -> anyhow::Result<()> {
                 0x01 | 0x11 => {
                     if n > subcmd_offset {
                         let subcmd_id = data[subcmd_offset];
-                        let subcmd_data = if n > subcmd_offset + 1 { &data[subcmd_offset + 1..] } else { &[] };
+                        let subcmd_data = if n > subcmd_offset + 1 {
+                            &data[subcmd_offset + 1..]
+                        } else {
+                            &[]
+                        };
 
                         let (ack, reply_data) = protocol::handle_subcommand(subcmd_id, subcmd_data);
-                        let reply = protocol::build_subcommand_reply(timer, subcmd_id, ack, &reply_data);
+                        let reply =
+                            protocol::build_subcommand_reply(timer, subcmd_id, ack, &reply_data);
                         timer = timer.wrapping_add(1);
 
                         info!("[BT] Pairing: subcmd 0x{subcmd_id:02X} -> ACK 0x{ack:02X}");
                         session.interrupt.write_all(&reply).await?;
 
-                        // Track pairing progress
-                        if subcmd_id == 0x02 {
-                            device_info_queried = true;
-                        } else if subcmd_id == 0x48 {
-                            vibration_enabled = true;
-                        } else if subcmd_id == 0x30 {
-                            player_set = true;
-                        }
+                        progress.track(subcmd_id);
 
-                        // Check if pairing is complete (like NXBT)
-                        if vibration_enabled && player_set {
+                        if progress.is_complete() {
                             info!("[BT] Pairing complete! (vibration enabled + player lights set)");
                             return Ok(());
                         }
@@ -344,7 +369,7 @@ pub async fn run_pairing(session: &mut BtSession) -> anyhow::Result<()> {
         }
 
         // Send a standard input report every cycle (like NXBT)
-        let report = build_empty_input_report(timer, device_info_queried);
+        let report = build_empty_input_report(timer, progress.device_info_queried);
         timer = timer.wrapping_add(1);
         if let Err(e) = session.interrupt.write_all(&report).await {
             debug!("[BT] Pairing send error: {e}");
@@ -421,23 +446,34 @@ pub async fn poll_control(session: &mut BtSession, timer: &mut u8) -> anyhow::Re
     Ok(false)
 }
 
+/// Parse report type and subcommand offset, handling optional 0xA2 prefix.
+fn parse_report_header(data: &[u8]) -> Option<(u8, usize)> {
+    match data {
+        [0xA2, report_type, ..] => Some((*report_type, 11)),
+        [report_type, ..] => Some((*report_type, 10)),
+        [] => None,
+    }
+}
+
 /// Handle an incoming subcommand during normal operation.
 /// Handles both 0xA2-prefixed (NXBT-style) and raw report data.
-async fn handle_incoming_subcommand(session: &mut BtSession, data: &[u8], n: usize, timer: &mut u8) {
-    if data.is_empty() {
+async fn handle_incoming_subcommand(
+    session: &mut BtSession,
+    data: &[u8],
+    n: usize,
+    timer: &mut u8,
+) {
+    let Some((report_type, subcmd_offset)) = parse_report_header(data) else {
         return;
-    }
-
-    // Determine report type and subcmd offset, handling optional 0xA2 prefix
-    let (report_type, subcmd_offset) = if data[0] == 0xA2 && n >= 2 {
-        (data[1], 11usize)
-    } else {
-        (data[0], 10usize)
     };
 
     if (report_type == 0x01 || report_type == 0x11) && n > subcmd_offset {
         let subcmd_id = data[subcmd_offset];
-        let subcmd_data = if n > subcmd_offset + 1 { &data[subcmd_offset + 1..] } else { &[] };
+        let subcmd_data = if n > subcmd_offset + 1 {
+            &data[subcmd_offset + 1..]
+        } else {
+            &[]
+        };
         let (ack, reply_data) = protocol::handle_subcommand(subcmd_id, subcmd_data);
         let reply = protocol::build_subcommand_reply(*timer, subcmd_id, ack, &reply_data);
         *timer = timer.wrapping_add(1);

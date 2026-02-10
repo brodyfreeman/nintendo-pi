@@ -37,11 +37,6 @@ pub struct MacroEntry {
     pub created: String,
 }
 
-/// Get the macros directory path.
-pub fn macros_dir(base: &Path) -> PathBuf {
-    base.to_path_buf()
-}
-
 fn index_path(macros_dir: &Path) -> PathBuf {
     macros_dir.join("index.json")
 }
@@ -164,22 +159,21 @@ pub fn rename_macro(macros_dir: &Path, macro_id: u32, new_name: &str) -> bool {
 }
 
 pub fn delete_macro(macros_dir: &Path, macro_id: u32) -> bool {
-    let index = load_index(macros_dir);
-    let mut deleted = false;
-    let mut new_index = Vec::new();
-    for entry in &index {
+    let mut index = load_index(macros_dir);
+    let orig_len = index.len();
+
+    index.retain(|entry| {
         if entry.id == macro_id {
-            let filepath = macros_dir.join(&entry.filename);
-            if filepath.exists() {
-                let _ = fs::remove_file(&filepath);
-            }
-            deleted = true;
+            let _ = fs::remove_file(macros_dir.join(&entry.filename));
+            false
         } else {
-            new_index.push(entry.clone());
+            true
         }
-    }
+    });
+
+    let deleted = index.len() < orig_len;
     if deleted {
-        save_index(macros_dir, &new_index);
+        save_index(macros_dir, &index);
     }
     deleted
 }

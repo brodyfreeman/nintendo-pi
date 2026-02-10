@@ -45,20 +45,14 @@ impl SuppressedButtons {
         }
     }
 
-    pub fn contains(&self, btn: Button) -> bool {
-        self.buttons[..self.count].iter().any(|b| *b == Some(btn))
-    }
-
     pub fn is_empty(&self) -> bool {
         self.count == 0
     }
 
     /// Filter button state: set suppressed buttons to false.
     pub fn filter_buttons(&self, buttons: &mut ButtonState) {
-        for b in &self.buttons[..self.count] {
-            if let Some(btn) = b {
-                buttons.set(*btn, false);
-            }
+        for btn in self.buttons[..self.count].iter().flatten() {
+            buttons.set(*btn, false);
         }
     }
 
@@ -66,11 +60,9 @@ impl SuppressedButtons {
     /// Button bytes are at report[3..6] (payload offset 0x2).
     pub fn filter_raw_report(&self, report: &mut [u8; 64]) {
         const BTN_BASE: usize = 3;
-        for b in &self.buttons[..self.count] {
-            if let Some(btn) = b {
-                let (byte_idx, mask) = btn.position();
-                report[BTN_BASE + byte_idx] &= !mask;
-            }
+        for btn in self.buttons[..self.count].iter().flatten() {
+            let (byte_idx, mask) = btn.position();
+            report[BTN_BASE + byte_idx] &= !mask;
         }
     }
 }

@@ -129,16 +129,7 @@ impl MacroPlayer {
                 break;
             }
 
-            let ts_us = u64::from_le_bytes([
-                mmap[offset],
-                mmap[offset + 1],
-                mmap[offset + 2],
-                mmap[offset + 3],
-                mmap[offset + 4],
-                mmap[offset + 5],
-                mmap[offset + 6],
-                mmap[offset + 7],
-            ]);
+            let ts_us = u64::from_le_bytes(mmap[offset..offset + 8].try_into().unwrap());
 
             if ts_us <= elapsed_us {
                 let report_offset = offset + 8;
@@ -169,11 +160,6 @@ impl MacroPlayer {
     fn close_mmap(&mut self) {
         self.mmap = None;
         self._file = None;
-    }
-
-    pub fn close(&mut self) {
-        self.stop();
-        self.close_mmap();
     }
 }
 

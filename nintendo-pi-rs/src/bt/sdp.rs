@@ -7,9 +7,9 @@
 //! - Set the adapter to be discoverable and pairable
 
 use tracing::{info, warn};
-use zbus::Connection;
 use zbus::names::InterfaceName;
 use zbus::zvariant::ObjectPath;
+use zbus::Connection;
 
 /// BlueZ pairing agent — auto-accepts all pairing requests.
 ///
@@ -171,8 +171,7 @@ pub async fn register_agent(connection: &Connection) -> anyhow::Result<()> {
     )
     .await?;
 
-    let agent_path =
-        ObjectPath::from_static_str_unchecked("/org/bluez/nintendo_pi/agent");
+    let agent_path = ObjectPath::from_static_str_unchecked("/org/bluez/nintendo_pi/agent");
 
     let result: Result<(), zbus::Error> = proxy
         .call("RegisterAgent", &(&agent_path, "NoInputNoOutput"))
@@ -189,9 +188,7 @@ pub async fn register_agent(connection: &Connection) -> anyhow::Result<()> {
         }
     }
 
-    let _: Result<(), zbus::Error> = proxy
-        .call("RequestDefaultAgent", &(&agent_path,))
-        .await;
+    let _: Result<(), zbus::Error> = proxy.call("RequestDefaultAgent", &(&agent_path,)).await;
 
     info!("[BT] Pairing agent registered (NoInputNoOutput)");
     Ok(())
@@ -215,23 +212,39 @@ pub async fn configure_adapter(connection: &Connection) -> anyhow::Result<()> {
 
     // Set alias
     proxy
-        .set(adapter_iface.clone(), "Alias", &zbus::zvariant::Value::from("Pro Controller"))
+        .set(
+            adapter_iface.clone(),
+            "Alias",
+            &zbus::zvariant::Value::from("Pro Controller"),
+        )
         .await?;
     info!("[BT] Adapter alias set to 'Pro Controller'");
 
     // Set discoverable
     proxy
-        .set(adapter_iface.clone(), "Discoverable", &zbus::zvariant::Value::from(true))
+        .set(
+            adapter_iface.clone(),
+            "Discoverable",
+            &zbus::zvariant::Value::from(true),
+        )
         .await?;
 
     // Set pairable
     proxy
-        .set(adapter_iface.clone(), "Pairable", &zbus::zvariant::Value::from(true))
+        .set(
+            adapter_iface.clone(),
+            "Pairable",
+            &zbus::zvariant::Value::from(true),
+        )
         .await?;
 
     // Set powered
     proxy
-        .set(adapter_iface.clone(), "Powered", &zbus::zvariant::Value::from(true))
+        .set(
+            adapter_iface.clone(),
+            "Powered",
+            &zbus::zvariant::Value::from(true),
+        )
         .await?;
 
     // Set discoverable timeout to 0 (forever)
@@ -312,9 +325,7 @@ pub async fn register_sdp_profile(connection: &Connection) -> anyhow::Result<()>
     let uuid = "00001124-0000-1000-8000-00805f9b34fb";
 
     // Unregister first to handle restarts cleanly (ignore errors)
-    let _: Result<(), zbus::Error> = proxy
-        .call("UnregisterProfile", &(&obj_path,))
-        .await;
+    let _: Result<(), zbus::Error> = proxy.call("UnregisterProfile", &(&obj_path,)).await;
 
     let mut options = std::collections::HashMap::new();
     options.insert("Role", zbus::zvariant::Value::from("server"));

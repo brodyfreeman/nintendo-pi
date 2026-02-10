@@ -32,7 +32,10 @@ pub fn spawn_reader(channel_cap: usize) -> mpsc::Receiver<HidReport> {
 }
 
 fn reader_loop(tx: &mpsc::SyncSender<HidReport>) -> anyhow::Result<()> {
-    info!("[HID] Opening HID device {:04X}:{:04X}...", VENDOR_ID, PRODUCT_ID);
+    info!(
+        "[HID] Opening HID device {:04X}:{:04X}...",
+        VENDOR_ID, PRODUCT_ID
+    );
 
     let api = hidapi::HidApi::new()?;
 
@@ -47,7 +50,9 @@ fn reader_loop(tx: &mpsc::SyncSender<HidReport>) -> anyhow::Result<()> {
                 }
                 Err(e) => {
                     if attempt == 10 {
-                        return Err(anyhow::anyhow!("Could not open HID device after 10 attempts: {e}"));
+                        return Err(anyhow::anyhow!(
+                            "Could not open HID device after 10 attempts: {e}"
+                        ));
                     }
                     warn!("[HID] Attempt {attempt}/10 failed: {e}, retrying...");
                     std::thread::sleep(Duration::from_millis(500));

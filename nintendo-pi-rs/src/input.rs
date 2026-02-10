@@ -15,16 +15,10 @@
 #[derive(Clone, Debug, Default)]
 pub struct InputState {
     pub buttons: ButtonState,
-    /// Raw 3 button bytes from the USB report (for combo filtering).
-    pub buttons_raw: [u8; 3],
     /// Left stick raw 12-bit values.
     pub left_stick_raw: (u16, u16),
     /// Right stick raw 12-bit values.
     pub right_stick_raw: (u16, u16),
-    /// Left trigger (0-255 after remap).
-    pub left_trigger: u8,
-    /// Right trigger (0-255 after remap).
-    pub right_trigger: u8,
 }
 
 /// All button states packed as 3 bytes (USB HID bit layout).
@@ -44,23 +38,12 @@ fn unpack_12bit_triplet(data: &[u8]) -> (u16, u16) {
     (a, b)
 }
 
-/// Remap trigger value from raw range [36..240] to [0..255].
-fn remap_trigger_value(value: u8) -> u8 {
-    const MIN_IN: u16 = 36;
-    const MAX_IN: u16 = 240;
-    let clamped = (value as u16).clamp(MIN_IN, MAX_IN);
-    let percentage = (clamped - MIN_IN) as f32 / (MAX_IN - MIN_IN) as f32;
-    (percentage * 255.0) as u8
-}
-
 /// Parse a 64-byte USB HID report into an InputState.
 pub fn parse_hid_report(report: &[u8; 64]) -> InputState {
     // payload starts at report[1]
     let buttons_bytes = &report[3..6]; // payload[0x2..0x5]
     let stick1 = &report[6..9]; // payload[0x5..0x8]
     let stick2 = &report[9..12]; // payload[0x8..0xB]
-    let left_trigger_raw = report[13]; // payload[0x0C]
-    let right_trigger_raw = report[14]; // payload[0x0D]
 
     let buttons = ButtonState::from_bytes([buttons_bytes[0], buttons_bytes[1], buttons_bytes[2]]);
 
@@ -69,11 +52,8 @@ pub fn parse_hid_report(report: &[u8; 64]) -> InputState {
 
     InputState {
         buttons,
-        buttons_raw: [buttons_bytes[0], buttons_bytes[1], buttons_bytes[2]],
         left_stick_raw: (lx, ly),
         right_stick_raw: (rx, ry),
-        left_trigger: remap_trigger_value(left_trigger_raw),
-        right_trigger: remap_trigger_value(right_trigger_raw),
     }
 }
 
@@ -184,6 +164,15 @@ fn encode_bt_buttons(buttons: &ButtonState) -> [u8; 3] {
     bt
 }
 
+/// Pack a calibrated stick (x, y in ~[-100, 100]) into 3 bytes of 12-bit packed format.
+fn pack_stick_12bit(out: &mut [u8], cal: (f64, f64)) {
+    let x = ((cal.0 * 2048.0 / 100.0) + 2048.0).clamp(0.0, 4095.0) as u16;
+    let y = ((cal.1 * 2048.0 / 100.0) + 2048.0).clamp(0.0, 4095.0) as u16;
+    out[0] = (x & 0xFF) as u8;
+    out[1] = ((x >> 8) & 0x0F) as u8 | (((y & 0x0F) as u8) << 4);
+    out[2] = ((y >> 4) & 0xFF) as u8;
+}
+
 /// Build BT 0x30 report bytes from InputState + calibrated sticks.
 ///
 /// NXBT-compatible layout (50 bytes):
@@ -221,21 +210,8 @@ pub fn build_bt_report(
 
     // --- Stick encoding ---
     // Calibrated values are in range ~[-100, 100], map to 12-bit [0, 4095] with center 2048
-    let lx = ((left_cal.0 * 2048.0 / 100.0) + 2048.0).clamp(0.0, 4095.0) as u16;
-    let ly = ((left_cal.1 * 2048.0 / 100.0) + 2048.0).clamp(0.0, 4095.0) as u16;
-
-    // Pack left stick: bytes 7-9
-    report[7] = (lx & 0xFF) as u8;
-    report[8] = ((lx >> 8) & 0x0F) as u8 | (((ly & 0x0F) as u8) << 4);
-    report[9] = ((ly >> 4) & 0xFF) as u8;
-
-    let rx = ((right_cal.0 * 2048.0 / 100.0) + 2048.0).clamp(0.0, 4095.0) as u16;
-    let ry = ((right_cal.1 * 2048.0 / 100.0) + 2048.0).clamp(0.0, 4095.0) as u16;
-
-    // Pack right stick: bytes 10-12
-    report[10] = (rx & 0xFF) as u8;
-    report[11] = ((rx >> 8) & 0x0F) as u8 | (((ry & 0x0F) as u8) << 4);
-    report[12] = ((ry >> 4) & 0xFF) as u8;
+    pack_stick_12bit(&mut report[7..10], left_cal);
+    pack_stick_12bit(&mut report[10..13], right_cal);
 
     // Vibrator byte
     report[13] = 0xB0;
@@ -248,7 +224,7 @@ mod tests {
     use super::*;
 
     /// Build a minimal 64-byte report with specified button bytes and stick data.
-    fn make_report(btn: [u8; 3], stick1: [u8; 3], stick2: [u8; 3], lt: u8, rt: u8) -> [u8; 64] {
+    fn make_report(btn: [u8; 3], stick1: [u8; 3], stick2: [u8; 3]) -> [u8; 64] {
         let mut r = [0u8; 64];
         r[3] = btn[0];
         r[4] = btn[1];
@@ -259,14 +235,12 @@ mod tests {
         r[9] = stick2[0];
         r[10] = stick2[1];
         r[11] = stick2[2];
-        r[13] = lt;
-        r[14] = rt;
         r
     }
 
     #[test]
     fn test_parse_no_buttons() {
-        let report = make_report([0, 0, 0], [0, 0, 0], [0, 0, 0], 36, 36);
+        let report = make_report([0, 0, 0], [0, 0, 0], [0, 0, 0]);
         let state = parse_hid_report(&report);
         assert_eq!(state.buttons, ButtonState::default());
     }
@@ -274,38 +248,38 @@ mod tests {
     #[test]
     fn test_parse_individual_buttons() {
         // B = byte0 bit0
-        let r = make_report([0x01, 0, 0], [0; 3], [0; 3], 36, 36);
+        let r = make_report([0x01, 0, 0], [0; 3], [0; 3]);
         assert!(parse_hid_report(&r).buttons.get(Button::B));
 
         // A = byte0 bit1
-        let r = make_report([0x02, 0, 0], [0; 3], [0; 3], 36, 36);
+        let r = make_report([0x02, 0, 0], [0; 3], [0; 3]);
         assert!(parse_hid_report(&r).buttons.get(Button::A));
 
         // R3 = byte0 bit7
-        let r = make_report([0x80, 0, 0], [0; 3], [0; 3], 36, 36);
+        let r = make_report([0x80, 0, 0], [0; 3], [0; 3]);
         assert!(parse_hid_report(&r).buttons.get(Button::R3));
 
         // DpadDown = byte1 bit0
-        let r = make_report([0, 0x01, 0], [0; 3], [0; 3], 36, 36);
+        let r = make_report([0, 0x01, 0], [0; 3], [0; 3]);
         assert!(parse_hid_report(&r).buttons.get(Button::DpadDown));
 
         // L3 = byte1 bit7
-        let r = make_report([0, 0x80, 0], [0; 3], [0; 3], 36, 36);
+        let r = make_report([0, 0x80, 0], [0; 3], [0; 3]);
         assert!(parse_hid_report(&r).buttons.get(Button::L3));
 
         // Home = byte2 bit0
-        let r = make_report([0, 0, 0x01], [0; 3], [0; 3], 36, 36);
+        let r = make_report([0, 0, 0x01], [0; 3], [0; 3]);
         assert!(parse_hid_report(&r).buttons.get(Button::Home));
 
         // Capture = byte2 bit1
-        let r = make_report([0, 0, 0x02], [0; 3], [0; 3], 36, 36);
+        let r = make_report([0, 0, 0x02], [0; 3], [0; 3]);
         assert!(parse_hid_report(&r).buttons.get(Button::Capture));
     }
 
     #[test]
     fn test_parse_multiple_buttons() {
         // A + B + L3 + R3
-        let r = make_report([0x03 | 0x80, 0x80, 0], [0; 3], [0; 3], 36, 36);
+        let r = make_report([0x03 | 0x80, 0x80, 0], [0; 3], [0; 3]);
         let s = parse_hid_report(&r);
         assert!(s.buttons.get(Button::A));
         assert!(s.buttons.get(Button::B));
@@ -323,7 +297,7 @@ mod tests {
         // Y=0x800: data[1] high nibble = 0x0, data[2] = 0x80
         // data[1] = 0x08 (low=8, high=0)
         let stick = [0x00, 0x08, 0x80];
-        let r = make_report([0; 3], stick, [0; 3], 36, 36);
+        let r = make_report([0; 3], stick, [0; 3]);
         let s = parse_hid_report(&r);
         assert_eq!(s.left_stick_raw, (0x800, 0x800));
     }
@@ -331,23 +305,12 @@ mod tests {
     #[test]
     fn test_unpack_12bit_extremes() {
         // X=0, Y=0
-        let r = make_report([0; 3], [0, 0, 0], [0; 3], 36, 36);
+        let r = make_report([0; 3], [0, 0, 0], [0; 3]);
         assert_eq!(parse_hid_report(&r).left_stick_raw, (0, 0));
 
         // X=0xFFF (4095), Y=0xFFF
-        let r = make_report([0; 3], [0xFF, 0xFF, 0xFF], [0; 3], 36, 36);
+        let r = make_report([0; 3], [0xFF, 0xFF, 0xFF], [0; 3]);
         assert_eq!(parse_hid_report(&r).left_stick_raw, (0xFFF, 0xFFF));
-    }
-
-    #[test]
-    fn test_remap_trigger_boundaries() {
-        assert_eq!(remap_trigger_value(36), 0); // min input
-        assert_eq!(remap_trigger_value(240), 255); // max input
-        assert_eq!(remap_trigger_value(0), 0); // below min clamps
-        assert_eq!(remap_trigger_value(255), 255); // above max clamps
-
-        // Midpoint: (138 - 36) / (240 - 36) = 102/204 = 0.5 → 127
-        assert_eq!(remap_trigger_value(138), 127);
     }
 
     #[test]
@@ -379,7 +342,7 @@ mod tests {
             let mut btn_bytes = [0u8; 3];
             btn_bytes[byte_idx] = mask;
 
-            let r = make_report(btn_bytes, [0; 3], [0; 3], 36, 36);
+            let r = make_report(btn_bytes, [0; 3], [0; 3]);
             let state = parse_hid_report(&r);
             assert!(
                 state.buttons.get(btn),

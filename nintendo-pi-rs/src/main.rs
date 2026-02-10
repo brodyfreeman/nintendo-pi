@@ -29,7 +29,10 @@ use macro_engine::storage;
 use web::state::{MitmState, StateSnapshot, WebCommand};
 
 #[derive(Parser)]
-#[command(name = "nintendo-pi", about = "MITM bridge: USB controller -> BT Pro Controller")]
+#[command(
+    name = "nintendo-pi",
+    about = "MITM bridge: USB controller -> BT Pro Controller"
+)]
 struct Args {
     /// Macros directory path
     #[arg(long, default_value = "/root/macros")]
@@ -77,7 +80,15 @@ async fn main() -> anyhow::Result<()> {
     let web_port = args.port;
     let web_cmd_tx = cmd_tx;
     tokio::spawn(async move {
-        if let Err(e) = web::start_server(web_port, web_state, web_cmd_tx, web_broadcast, web_macros_dir).await {
+        if let Err(e) = web::start_server(
+            web_port,
+            web_state,
+            web_cmd_tx,
+            web_broadcast,
+            web_macros_dir,
+        )
+        .await
+        {
             error!("[WEB] Server error: {e}");
         }
     });
@@ -135,9 +146,14 @@ async fn main() -> anyhow::Result<()> {
 
         // --- Phase 0: USB Init (retry until controller is plugged in) ---
         mitm_state.update(StateSnapshot {
-            macro_mode: false, recording: false, playing: false,
-            current_slot: 0, slot_count: 0, current_macro_name: None,
-            usb_connected: false, bt_connected: false,
+            macro_mode: false,
+            recording: false,
+            playing: false,
+            current_slot: 0,
+            slot_count: 0,
+            current_macro_name: None,
+            usb_connected: false,
+            bt_connected: false,
         });
         loop {
             match usb::init::initialize_controller().await {
@@ -150,9 +166,14 @@ async fn main() -> anyhow::Result<()> {
         }
         // USB controller found — update state
         mitm_state.update(StateSnapshot {
-            macro_mode: false, recording: false, playing: false,
-            current_slot: 0, slot_count: 0, current_macro_name: None,
-            usb_connected: true, bt_connected: false,
+            macro_mode: false,
+            recording: false,
+            playing: false,
+            current_slot: 0,
+            slot_count: 0,
+            current_macro_name: None,
+            usb_connected: true,
+            bt_connected: false,
         });
 
         // Wait for HID device to appear after init
@@ -209,9 +230,14 @@ async fn main() -> anyhow::Result<()> {
             info!("[BT] Waiting for Switch to connect...");
             bt_connected.store(false, Ordering::Relaxed);
             mitm_state.update(StateSnapshot {
-                macro_mode: false, recording: false, playing: false,
-                current_slot: 0, slot_count: 0, current_macro_name: None,
-                usb_connected: true, bt_connected: false,
+                macro_mode: false,
+                recording: false,
+                playing: false,
+                current_slot: 0,
+                slot_count: 0,
+                current_macro_name: None,
+                usb_connected: true,
+                bt_connected: false,
             });
 
             // Wait for BT connection, but also check if USB has disconnected.
@@ -269,7 +295,9 @@ async fn main() -> anyhow::Result<()> {
                         report[2] = bt_timer;
                         bt_timer = bt_timer.wrapping_add(1);
 
-                        if let Err(e) = bt::emulator::send_input_report(&mut bt_session, &report).await {
+                        if let Err(e) =
+                            bt::emulator::send_input_report(&mut bt_session, &report).await
+                        {
                             warn!("[BT] Send error: {e}");
                             break; // BT disconnected
                         }
@@ -296,9 +324,14 @@ async fn main() -> anyhow::Result<()> {
         // USB processing thread ended — get cmd_rx back for the next USB cycle
         bt_connected.store(false, Ordering::Relaxed);
         mitm_state.update(StateSnapshot {
-            macro_mode: false, recording: false, playing: false,
-            current_slot: 0, slot_count: 0, current_macro_name: None,
-            usb_connected: false, bt_connected: false,
+            macro_mode: false,
+            recording: false,
+            playing: false,
+            current_slot: 0,
+            slot_count: 0,
+            current_macro_name: None,
+            usb_connected: false,
+            bt_connected: false,
         });
         cmd_rx = usb_handle.await?;
     }
@@ -367,7 +400,12 @@ fn usb_processing_loop(
             let effect = ctrl.execute(macro_cmd);
             // Keep combo detector in sync with controller's macro_mode
             combo.macro_mode = ctrl.macro_mode;
-            apply_effect(effect, &state_broadcast, ctrl.macros_dir(), &broadcast_macros);
+            apply_effect(
+                effect,
+                &state_broadcast,
+                ctrl.macros_dir(),
+                &broadcast_macros,
+            );
         }
 
         // --- Read HID report (non-blocking from channel) ---
@@ -404,7 +442,12 @@ fn usb_processing_loop(
                 let (action, _) = combo.update(&live_parsed.buttons);
                 if action == ComboAction::StopPlayback {
                     let effect = ctrl.execute(MacroCommand::StopPlayback);
-                    apply_effect(effect, &state_broadcast, ctrl.macros_dir(), &broadcast_macros);
+                    apply_effect(
+                        effect,
+                        &state_broadcast,
+                        ctrl.macros_dir(),
+                        &broadcast_macros,
+                    );
                 }
 
                 update_state(&mitm_state, &ctrl, bt_connected.load(Ordering::Relaxed));
@@ -412,7 +455,12 @@ fn usb_processing_loop(
             } else {
                 // Playback finished
                 let effect = ctrl.execute(MacroCommand::StopPlayback);
-                apply_effect(effect, &state_broadcast, ctrl.macros_dir(), &broadcast_macros);
+                apply_effect(
+                    effect,
+                    &state_broadcast,
+                    ctrl.macros_dir(),
+                    &broadcast_macros,
+                );
                 info!("[MACRO] Playback finished.");
             }
         }
@@ -437,7 +485,12 @@ fn usb_processing_loop(
             if let Some(cmd) = macro_cmd {
                 let effect = ctrl.execute(cmd);
                 combo.macro_mode = ctrl.macro_mode;
-                apply_effect(effect, &state_broadcast, ctrl.macros_dir(), &broadcast_macros);
+                apply_effect(
+                    effect,
+                    &state_broadcast,
+                    ctrl.macros_dir(),
+                    &broadcast_macros,
+                );
             }
         }
 
@@ -464,11 +517,7 @@ fn usb_processing_loop(
     }
 }
 
-fn calibrate_stick(
-    cal: &StickCalibrator,
-    raw: (u16, u16),
-    center: (u16, u16),
-) -> (f64, f64) {
+fn calibrate_stick(cal: &StickCalibrator, raw: (u16, u16), center: (u16, u16)) -> (f64, f64) {
     let x_c = raw.0 as f64 - center.0 as f64;
     let y_c = raw.1 as f64 - center.1 as f64;
     let (x_cal, y_cal) = cal.calibrate(x_c, y_c);
@@ -480,11 +529,7 @@ fn calibrate_stick(
     )
 }
 
-fn update_state(
-    mitm_state: &MitmState,
-    ctrl: &MacroController,
-    bt_connected: bool,
-) {
+fn update_state(mitm_state: &MitmState, ctrl: &MacroController, bt_connected: bool) {
     mitm_state.update(StateSnapshot {
         macro_mode: ctrl.macro_mode,
         recording: ctrl.recorder.recording,

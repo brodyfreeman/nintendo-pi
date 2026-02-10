@@ -3,13 +3,13 @@ pub mod state;
 use std::sync::Arc;
 
 use axum::{
-    Router,
     extract::{
-        State,
         ws::{Message, WebSocket, WebSocketUpgrade},
+        State,
     },
     response::{Html, IntoResponse, Json},
     routing::get,
+    Router,
 };
 use futures::{SinkExt, StreamExt};
 use tokio::sync::{broadcast, mpsc};
@@ -73,10 +73,7 @@ async fn api_macros(State(state): State<Arc<WebState>>) -> Json<Vec<MacroEntry>>
 }
 
 /// WebSocket handler for real-time state updates and commands.
-async fn ws_handler(
-    ws: WebSocketUpgrade,
-    State(state): State<Arc<WebState>>,
-) -> impl IntoResponse {
+async fn ws_handler(ws: WebSocketUpgrade, State(state): State<Arc<WebState>>) -> impl IntoResponse {
     ws.on_upgrade(move |socket| handle_ws(socket, state))
 }
 
@@ -112,20 +109,18 @@ async fn handle_ws(socket: WebSocket, state: Arc<WebState>) {
     // Task to receive commands from the WebSocket
     while let Some(msg) = receiver.next().await {
         match msg {
-            Ok(Message::Text(text)) => {
-                match serde_json::from_str::<serde_json::Value>(&text) {
-                    Ok(val) => {
-                        if let Some(cmd) = parse_web_command(&val, &macros_dir) {
-                            if let Err(e) = cmd_tx.send(cmd).await {
-                                error!("[WEB] Failed to send command: {e}");
-                            }
+            Ok(Message::Text(text)) => match serde_json::from_str::<serde_json::Value>(&text) {
+                Ok(val) => {
+                    if let Some(cmd) = parse_web_command(&val, &macros_dir) {
+                        if let Err(e) = cmd_tx.send(cmd).await {
+                            error!("[WEB] Failed to send command: {e}");
                         }
                     }
-                    Err(e) => {
-                        warn!("[WEB] Invalid JSON from WebSocket: {e}");
-                    }
                 }
-            }
+                Err(e) => {
+                    warn!("[WEB] Invalid JSON from WebSocket: {e}");
+                }
+            },
             Ok(Message::Close(_)) => break,
             Err(e) => {
                 debug!("[WEB] WebSocket error: {e}");
