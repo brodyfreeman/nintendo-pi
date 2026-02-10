@@ -34,6 +34,7 @@ pub enum MacroCommand {
     SetPlaybackSpeedDefault(f64),
     SetPlaybackStartDelay(f64),
     SetLoopRestartDelay(f64),
+    SetRecordingTrimEnd(f64),
 }
 
 /// Side effects produced by executing a command.
@@ -70,6 +71,7 @@ pub struct MacroController {
     pub playback_speed_default: f64,
     pub playback_start_delay: f64,
     pub loop_restart_delay: f64,
+    pub recording_trim_end: f64,
     macros_dir: PathBuf,
 }
 
@@ -93,6 +95,7 @@ impl MacroController {
             playback_speed_default: 1.0,
             playback_start_delay: 0.0,
             loop_restart_delay: 0.0,
+            recording_trim_end: 0.0,
             macros_dir,
         }
     }
@@ -118,6 +121,7 @@ impl MacroController {
             MacroCommand::SetPlaybackSpeedDefault(s) => self.set_playback_speed_default(s),
             MacroCommand::SetPlaybackStartDelay(d) => self.set_playback_start_delay(d),
             MacroCommand::SetLoopRestartDelay(d) => self.set_loop_restart_delay(d),
+            MacroCommand::SetRecordingTrimEnd(d) => self.set_recording_trim_end(d),
         }
     }
 
@@ -157,7 +161,7 @@ impl MacroController {
         } else {
             let mut broadcast = false;
             if self.recorder.recording {
-                let (frame_count, duration_us) = self.recorder.stop();
+                let (frame_count, duration_us) = self.recorder.stop(self.recording_trim_end);
                 if let Some(id) = self.recorder.save(&self.macros_dir, None) {
                     info!(
                         "[MACRO] Auto-saved recording as macro {id} ({frame_count} frames, {}ms)",
@@ -176,7 +180,7 @@ impl MacroController {
 
     fn toggle_recording(&mut self) -> MacroEffect {
         if self.recorder.recording {
-            let (frame_count, duration_us) = self.recorder.stop();
+            let (frame_count, duration_us) = self.recorder.stop(self.recording_trim_end);
             if let Some(id) = self.recorder.save(&self.macros_dir, None) {
                 info!(
                     "[MACRO] Recording saved as macro {id} ({frame_count} frames, {}ms)",
@@ -345,6 +349,15 @@ impl MacroController {
         info!(
             "[SETTINGS] Loop restart delay set to {:.1}s",
             self.loop_restart_delay
+        );
+        MacroEffect::none()
+    }
+
+    fn set_recording_trim_end(&mut self, delay: f64) -> MacroEffect {
+        self.recording_trim_end = delay.clamp(0.0, 2.0);
+        info!(
+            "[SETTINGS] Recording trim end set to {:.1}s",
+            self.recording_trim_end
         );
         MacroEffect::none()
     }

@@ -26,6 +26,7 @@ pub enum WebCommand {
     SetPlaybackSpeedDefault(f64),
     SetPlaybackStartDelay(f64),
     SetLoopRestartDelay(f64),
+    SetRecordingTrimEnd(f64),
 }
 
 impl From<WebCommand> for crate::macro_engine::controller::MacroCommand {
@@ -49,6 +50,7 @@ impl From<WebCommand> for crate::macro_engine::controller::MacroCommand {
             WebCommand::SetPlaybackSpeedDefault(s) => Self::SetPlaybackSpeedDefault(s),
             WebCommand::SetPlaybackStartDelay(d) => Self::SetPlaybackStartDelay(d),
             WebCommand::SetLoopRestartDelay(d) => Self::SetLoopRestartDelay(d),
+            WebCommand::SetRecordingTrimEnd(d) => Self::SetRecordingTrimEnd(d),
         }
     }
 }
@@ -129,6 +131,7 @@ pub struct StateSnapshot {
     pub playback_speed_default: f64,
     pub playback_start_delay: f64,
     pub loop_restart_delay: f64,
+    pub recording_trim_end: f64,
 }
 
 impl Default for StateSnapshot {
@@ -154,6 +157,7 @@ impl Default for StateSnapshot {
             playback_speed_default: 1.0,
             playback_start_delay: 0.0,
             loop_restart_delay: 0.0,
+            recording_trim_end: 0.0,
         }
     }
 }

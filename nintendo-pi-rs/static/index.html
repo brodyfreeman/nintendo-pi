@@ -862,6 +862,17 @@
       <span>5s (max)</span>
     </div>
   </div>
+  <div class="setting-row">
+    <div class="setting-label">
+      <span class="setting-name">Recording Trim End</span>
+      <span class="setting-value" id="trimEndValue">0.0s</span>
+    </div>
+    <input type="range" class="setting-slider" id="trimEndSlider" min="0" max="2" step="0.1" value="0">
+    <div class="setting-range-labels">
+      <span>0s (none)</span>
+      <span>2s (max)</span>
+    </div>
+  </div>
 </div>
 
 <div class="section grid-span-full">
@@ -1182,6 +1193,7 @@
     syncSpeedDefault();
     syncStartDelay();
     syncLoopDelay();
+    syncTrimEnd();
 
     // Update controller visualization
     updateController();
@@ -1629,6 +1641,31 @@
       loopDelayValue.textContent = val.toFixed(1) + 's';
       if (document.activeElement !== loopDelaySlider) {
         loopDelaySlider.value = val;
+      }
+    }
+  }
+
+  // === Recording trim end slider ===
+  var trimEndSlider = document.getElementById('trimEndSlider');
+  var trimEndValue = document.getElementById('trimEndValue');
+
+  trimEndSlider.addEventListener('input', function() {
+    var val = parseFloat(trimEndSlider.value);
+    trimEndValue.textContent = val.toFixed(1) + 's';
+  });
+
+  trimEndSlider.addEventListener('change', function() {
+    var val = parseFloat(trimEndSlider.value);
+    sfx.nav();
+    sendCmd('SET_RECORDING_TRIM_END', val);
+  });
+
+  function syncTrimEnd() {
+    if (state.recording_trim_end !== undefined) {
+      var val = state.recording_trim_end;
+      trimEndValue.textContent = val.toFixed(1) + 's';
+      if (document.activeElement !== trimEndSlider) {
+        trimEndSlider.value = val;
       }
     }
   }

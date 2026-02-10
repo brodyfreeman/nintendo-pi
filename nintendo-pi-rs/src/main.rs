@@ -521,5 +521,6 @@ fn update_state(
         playback_speed_default: ctrl.playback_speed_default,
         playback_start_delay: ctrl.playback_start_delay,
         loop_restart_delay: ctrl.loop_restart_delay,
+        recording_trim_end: ctrl.recording_trim_end,
     });
 }

@@ -51,8 +51,23 @@ impl MacroRecorder {
     }
 
     /// Stop recording. Returns (frame_count, duration_us).
-    pub fn stop(&mut self) -> (usize, u64) {
+    pub fn stop(&mut self, trim_end_secs: f64) -> (usize, u64) {
         self.recording = false;
+        let trim_us = (trim_end_secs.max(0.0) * 1_000_000.0) as u64;
+        if trim_us > 0 {
+            if let Some(&(last_ts, _)) = self.frames.last() {
+                let cutoff = last_ts.saturating_sub(trim_us);
+                let orig = self.frames.len();
+                self.frames.retain(|&(ts, _)| ts <= cutoff);
+                let trimmed = orig - self.frames.len();
+                if trimmed > 0 {
+                    info!(
+                        "[MACRO] Trimmed {trimmed} frames ({:.1}s) from end",
+                        trim_end_secs
+                    );
+                }
+            }
+        }
         let frame_count = self.frames.len();
         let duration_us = self.frames.last().map(|(ts, _)| *ts).unwrap_or(0);
         info!(
