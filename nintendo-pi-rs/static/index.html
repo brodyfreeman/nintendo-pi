@@ -178,6 +178,7 @@
     letter-spacing: 0.08em;
   }
   .rec-status.active { background: var(--red); animation: pulse 1s infinite; }
+  .rec-status.countdown { background: var(--yellow); color: #000; animation: pulse 0.5s infinite; }
   @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.5; } }
   .progress-bar-outer {
     width: 100%; height: 6px; background: rgba(255,255,255,0.08);
@@ -873,6 +874,17 @@
       <span>2s (max)</span>
     </div>
   </div>
+  <div class="setting-row">
+    <div class="setting-label">
+      <span class="setting-name">Recording Start Delay</span>
+      <span class="setting-value" id="recDelayValue">0.0s</span>
+    </div>
+    <input type="range" class="setting-slider" id="recDelaySlider" min="0" max="5" step="0.5" value="0">
+    <div class="setting-range-labels">
+      <span>0s (instant)</span>
+      <span>5s (max)</span>
+    </div>
+  </div>
 </div>
 
 <div class="section grid-span-full">
@@ -1119,7 +1131,13 @@
       recBtn.textContent = 'STOP';
       recBtn.className = 'btn btn-yellow btn-face rec-btn-compact recording';
       recStatus.style.display = '';
-      recStatus.className = 'rec-status active';
+      if (state.recording_countdown) {
+        recStatus.textContent = 'WAIT';
+        recStatus.className = 'rec-status countdown';
+      } else {
+        recStatus.textContent = 'REC';
+        recStatus.className = 'rec-status active';
+      }
       modeRecSection.classList.add('recording-active');
     } else {
       recBtn.textContent = 'REC';
@@ -1194,6 +1212,7 @@
     syncStartDelay();
     syncLoopDelay();
     syncTrimEnd();
+    syncRecDelay();
 
     // Update controller visualization
     updateController();
@@ -1666,6 +1685,31 @@
       trimEndValue.textContent = val.toFixed(1) + 's';
       if (document.activeElement !== trimEndSlider) {
         trimEndSlider.value = val;
+      }
+    }
+  }
+
+  // === Recording start delay slider ===
+  var recDelaySlider = document.getElementById('recDelaySlider');
+  var recDelayValue = document.getElementById('recDelayValue');
+
+  recDelaySlider.addEventListener('input', function() {
+    var val = parseFloat(recDelaySlider.value);
+    recDelayValue.textContent = val.toFixed(1) + 's';
+  });
+
+  recDelaySlider.addEventListener('change', function() {
+    var val = parseFloat(recDelaySlider.value);
+    sfx.nav();
+    sendCmd('SET_RECORDING_START_DELAY', val);
+  });
+
+  function syncRecDelay() {
+    if (state.recording_start_delay !== undefined) {
+      var val = state.recording_start_delay;
+      recDelayValue.textContent = val.toFixed(1) + 's';
+      if (document.activeElement !== recDelaySlider) {
+        recDelaySlider.value = val;
       }
     }
   }

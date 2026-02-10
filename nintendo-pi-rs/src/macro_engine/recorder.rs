@@ -11,6 +11,7 @@ pub struct MacroRecorder {
     pub recording: bool,
     frames: Vec<(u64, [u8; 64])>,
     start: Option<Instant>,
+    delay_until: Option<Instant>,
 }
 
 impl MacroRecorder {
@@ -19,20 +20,51 @@ impl MacroRecorder {
             recording: false,
             frames: Vec::new(),
             start: None,
+            delay_until: None,
         }
     }
 
-    pub fn start(&mut self) {
+    pub fn start_with_delay(&mut self, delay_secs: f64) {
         self.frames.clear();
-        self.start = Some(Instant::now());
         self.recording = true;
-        info!("[MACRO] Recording started");
+        let delay_us = (delay_secs.max(0.0) * 1_000_000.0) as u64;
+        if delay_us > 0 {
+            self.delay_until = Some(Instant::now() + std::time::Duration::from_micros(delay_us));
+            self.start = None;
+            info!("[MACRO] Recording starting in {delay_secs:.1}s");
+        } else {
+            self.delay_until = None;
+            self.start = Some(Instant::now());
+            info!("[MACRO] Recording started");
+        }
+    }
+
+    #[cfg(test)]
+    pub fn start(&mut self) {
+        self.start_with_delay(0.0);
+    }
+
+    /// Whether the recorder is in countdown (delay not yet elapsed).
+    pub fn in_countdown(&self) -> bool {
+        self.delay_until
+            .map(|t| Instant::now() < t)
+            .unwrap_or(false)
     }
 
     /// Add a 64-byte raw HID report to the recording.
     pub fn add_frame(&mut self, raw_report: &[u8; 64]) {
         if !self.recording {
             return;
+        }
+        // Check if still in countdown
+        if let Some(deadline) = self.delay_until {
+            if Instant::now() < deadline {
+                return; // Still waiting
+            }
+            // Countdown finished — begin actual recording
+            self.delay_until = None;
+            self.start = Some(Instant::now());
+            info!("[MACRO] Recording started (after delay)");
         }
         let elapsed_us = self
             .start

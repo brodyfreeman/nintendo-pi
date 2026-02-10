@@ -503,6 +503,7 @@ fn update_state(
     mitm_state.update(StateSnapshot {
         macro_mode: ctrl.macro_mode,
         recording: ctrl.recorder.recording,
+        recording_countdown: ctrl.recorder.in_countdown(),
         playing: ctrl.player.playing,
         current_slot: ctrl.current_slot,
         slot_count: ctrl.cached_slot_count,
@@ -522,5 +523,6 @@ fn update_state(
         playback_start_delay: ctrl.playback_start_delay,
         loop_restart_delay: ctrl.loop_restart_delay,
         recording_trim_end: ctrl.recording_trim_end,
+        recording_start_delay: ctrl.recording_start_delay,
     });
 }

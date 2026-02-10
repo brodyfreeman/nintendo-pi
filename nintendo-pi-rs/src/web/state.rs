@@ -27,6 +27,7 @@ pub enum WebCommand {
     SetPlaybackStartDelay(f64),
     SetLoopRestartDelay(f64),
     SetRecordingTrimEnd(f64),
+    SetRecordingStartDelay(f64),
 }
 
 impl From<WebCommand> for crate::macro_engine::controller::MacroCommand {
@@ -51,6 +52,7 @@ impl From<WebCommand> for crate::macro_engine::controller::MacroCommand {
             WebCommand::SetPlaybackStartDelay(d) => Self::SetPlaybackStartDelay(d),
             WebCommand::SetLoopRestartDelay(d) => Self::SetLoopRestartDelay(d),
             WebCommand::SetRecordingTrimEnd(d) => Self::SetRecordingTrimEnd(d),
+            WebCommand::SetRecordingStartDelay(d) => Self::SetRecordingStartDelay(d),
         }
     }
 }
@@ -113,6 +115,7 @@ impl PlaybackInput {
 pub struct StateSnapshot {
     pub macro_mode: bool,
     pub recording: bool,
+    pub recording_countdown: bool,
     pub playing: bool,
     pub current_slot: usize,
     pub slot_count: usize,
@@ -132,6 +135,7 @@ pub struct StateSnapshot {
     pub playback_start_delay: f64,
     pub loop_restart_delay: f64,
     pub recording_trim_end: f64,
+    pub recording_start_delay: f64,
 }
 
 impl Default for StateSnapshot {
@@ -139,6 +143,7 @@ impl Default for StateSnapshot {
         Self {
             macro_mode: false,
             recording: false,
+            recording_countdown: false,
             playing: false,
             current_slot: 0,
             slot_count: 0,
@@ -158,6 +163,7 @@ impl Default for StateSnapshot {
             playback_start_delay: 0.0,
             loop_restart_delay: 0.0,
             recording_trim_end: 0.0,
+            recording_start_delay: 0.0,
         }
     }
 }

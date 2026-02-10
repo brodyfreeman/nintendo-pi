@@ -35,6 +35,7 @@ pub enum MacroCommand {
     SetPlaybackStartDelay(f64),
     SetLoopRestartDelay(f64),
     SetRecordingTrimEnd(f64),
+    SetRecordingStartDelay(f64),
 }
 
 /// Side effects produced by executing a command.
@@ -72,6 +73,7 @@ pub struct MacroController {
     pub playback_start_delay: f64,
     pub loop_restart_delay: f64,
     pub recording_trim_end: f64,
+    pub recording_start_delay: f64,
     macros_dir: PathBuf,
 }
 
@@ -96,6 +98,7 @@ impl MacroController {
             playback_start_delay: 0.0,
             loop_restart_delay: 0.0,
             recording_trim_end: 0.0,
+            recording_start_delay: 0.0,
             macros_dir,
         }
     }
@@ -122,6 +125,7 @@ impl MacroController {
             MacroCommand::SetPlaybackStartDelay(d) => self.set_playback_start_delay(d),
             MacroCommand::SetLoopRestartDelay(d) => self.set_loop_restart_delay(d),
             MacroCommand::SetRecordingTrimEnd(d) => self.set_recording_trim_end(d),
+            MacroCommand::SetRecordingStartDelay(d) => self.set_recording_start_delay(d),
         }
     }
 
@@ -197,7 +201,7 @@ impl MacroController {
                 broadcast_macros: true,
             }
         } else {
-            self.recorder.start();
+            self.recorder.start_with_delay(self.recording_start_delay);
             MacroEffect {
                 led: Some(&led::LED_RECORDING),
                 broadcast_macros: false,
@@ -358,6 +362,15 @@ impl MacroController {
         info!(
             "[SETTINGS] Recording trim end set to {:.1}s",
             self.recording_trim_end
+        );
+        MacroEffect::none()
+    }
+
+    fn set_recording_start_delay(&mut self, delay: f64) -> MacroEffect {
+        self.recording_start_delay = delay.clamp(0.0, 5.0);
+        info!(
+            "[SETTINGS] Recording start delay set to {:.1}s",
+            self.recording_start_delay
         );
         MacroEffect::none()
     }
