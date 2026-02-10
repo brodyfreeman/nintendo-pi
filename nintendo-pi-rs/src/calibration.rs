@@ -8,8 +8,11 @@ use tracing::{debug, trace, warn};
 #[derive(Clone)]
 pub struct StickCalibrator {
     radii: [f64; 32],
-    deadzone: f64,
+    pub deadzone: f64,
 }
+
+/// Default stick deadzone.
+pub const DEFAULT_DEADZONE: f64 = 10.0;
 
 /// Hardcoded calibration data for main (left) stick.
 pub const MAIN_STICK_CAL: &str = "61.28 59.10 59.32 61.42 64.61 60.89 58.93 58.86 57.96 54.91 53.94 55.08 58.76 55.50 52.94 53.47 56.88 54.62 54.06 55.79 59.53 58.33 56.91 58.23 60.40 61.90 61.76 63.32 68.50 63.34 61.14 60.96";

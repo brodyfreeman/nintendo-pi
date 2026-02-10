@@ -28,6 +28,7 @@ pub enum MacroCommand {
     CycleSpeed,
     SetPlaybackSpeed(f64),
     ToggleLoop,
+    SetStickDeadzone(f64),
 }
 
 /// Side effects produced by executing a command.
@@ -58,6 +59,7 @@ pub struct MacroController {
     pub current_slot: usize,
     pub cached_slot_count: usize,
     pub cached_macro_name: Option<String>,
+    pub stick_deadzone: f64,
     macros_dir: PathBuf,
 }
 
@@ -75,6 +77,7 @@ impl MacroController {
             current_slot: 0,
             cached_slot_count: slot_count,
             cached_macro_name: macro_name,
+            stick_deadzone: crate::calibration::DEFAULT_DEADZONE,
             macros_dir,
         }
     }
@@ -94,6 +97,7 @@ impl MacroController {
             MacroCommand::CycleSpeed => self.cycle_speed(),
             MacroCommand::SetPlaybackSpeed(speed) => self.set_playback_speed(speed),
             MacroCommand::ToggleLoop => self.toggle_loop(),
+            MacroCommand::SetStickDeadzone(dz) => self.set_stick_deadzone(dz),
         }
     }
 
@@ -260,6 +264,15 @@ impl MacroController {
         info!(
             "[MACRO] Loop mode: {}",
             if self.player.looping { "ON" } else { "OFF" }
+        );
+        MacroEffect::none()
+    }
+
+    fn set_stick_deadzone(&mut self, dz: f64) -> MacroEffect {
+        self.stick_deadzone = dz.clamp(0.0, 50.0);
+        info!(
+            "[SETTINGS] Stick deadzone set to {:.1}",
+            self.stick_deadzone
         );
         MacroEffect::none()
     }

@@ -319,8 +319,8 @@ fn usb_processing_loop(
     state_broadcast: broadcast::Sender<String>,
     bt_connected: Arc<AtomicBool>,
     macros_dir: PathBuf,
-    main_cal: StickCalibrator,
-    c_cal: StickCalibrator,
+    mut main_cal: StickCalibrator,
+    mut c_cal: StickCalibrator,
     left_center: (u16, u16),
     right_center: (u16, u16),
 ) -> mpsc::Receiver<WebCommand> {
@@ -357,6 +357,9 @@ fn usb_processing_loop(
             let effect = ctrl.execute(web_cmd.into());
             // Keep combo detector in sync with controller's macro_mode
             combo.macro_mode = ctrl.macro_mode;
+            // Sync stick deadzone to calibrators
+            main_cal.deadzone = ctrl.stick_deadzone;
+            c_cal.deadzone = ctrl.stick_deadzone;
             apply_effect(
                 effect,
                 &state_broadcast,
@@ -511,5 +514,6 @@ fn update_state(
         playback_frame_count: ctrl.player.frame_count(),
         playback_input: playback_input.map(PlaybackInput::from_input_state),
         live_input: live_input.map(PlaybackInput::from_input_state),
+        stick_deadzone: ctrl.stick_deadzone,
     });
 }

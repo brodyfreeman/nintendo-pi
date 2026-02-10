@@ -165,6 +165,11 @@ fn parse_web_command(val: &serde_json::Value, _macros_dir: &std::path::Path) -> 
             debug!("[WEB] Set playback speed: {speed}x");
             Some(WebCommand::SetPlaybackSpeed(speed))
         }
+        "SET_STICK_DEADZONE" => {
+            let dz = val.get("data")?.as_f64()?;
+            debug!("[WEB] Set stick deadzone: {dz}");
+            Some(WebCommand::SetStickDeadzone(dz))
+        }
         _ => {
             warn!("[WEB] Unknown command: {cmd}");
             None
