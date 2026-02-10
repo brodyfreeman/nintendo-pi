@@ -26,7 +26,7 @@ use combo::{ComboAction, ComboDetector};
 use input::{build_bt_report, parse_hid_report};
 use macro_engine::controller::{MacroCommand, MacroController};
 use macro_engine::storage;
-use web::state::{MitmState, StateSnapshot, WebCommand};
+use web::state::{MitmState, PlaybackInput, StateSnapshot, WebCommand};
 
 #[derive(Parser)]
 #[command(
@@ -405,7 +405,12 @@ fn usb_processing_loop(
                     );
                 }
 
-                update_state(&mitm_state, &ctrl, bt_connected.load(Ordering::Relaxed));
+                update_state(
+                    &mitm_state,
+                    &ctrl,
+                    bt_connected.load(Ordering::Relaxed),
+                    Some(&parsed),
+                );
                 continue;
             } else {
                 // Playback finished
@@ -457,7 +462,12 @@ fn usb_processing_loop(
         let _ = report_tx.try_send(bt_report);
 
         // --- Update web UI state ---
-        update_state(&mitm_state, &ctrl, bt_connected.load(Ordering::Relaxed));
+        update_state(
+            &mitm_state,
+            &ctrl,
+            bt_connected.load(Ordering::Relaxed),
+            None,
+        );
     }
 }
 
@@ -473,7 +483,12 @@ fn calibrate_stick(cal: &StickCalibrator, raw: (u16, u16), center: (u16, u16)) -
     )
 }
 
-fn update_state(mitm_state: &MitmState, ctrl: &MacroController, bt_connected: bool) {
+fn update_state(
+    mitm_state: &MitmState,
+    ctrl: &MacroController,
+    bt_connected: bool,
+    playback_input: Option<&input::InputState>,
+) {
     mitm_state.update(StateSnapshot {
         macro_mode: ctrl.macro_mode,
         recording: ctrl.recorder.recording,
@@ -485,5 +500,8 @@ fn update_state(mitm_state: &MitmState, ctrl: &MacroController, bt_connected: bo
         bt_connected,
         playback_speed: ctrl.player.speed,
         looping: ctrl.player.looping,
+        playback_frame: ctrl.player.frame_index(),
+        playback_frame_count: ctrl.player.frame_count(),
+        playback_input: playback_input.map(PlaybackInput::from_input_state),
     });
 }

@@ -178,6 +178,14 @@ impl MacroPlayer {
         self.last_report
     }
 
+    pub fn frame_index(&self) -> usize {
+        self.frame_index
+    }
+
+    pub fn frame_count(&self) -> usize {
+        self.frame_count
+    }
+
     fn close_mmap(&mut self) {
         self.mmap = None;
         self._file = None;

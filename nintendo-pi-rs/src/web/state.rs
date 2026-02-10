@@ -4,6 +4,8 @@ use std::sync::Mutex;
 
 use serde::Serialize;
 
+use crate::input::{Button, InputState};
+
 /// Commands the web UI can send to the MITM main loop.
 #[derive(Debug, Clone)]
 pub enum WebCommand {
@@ -40,6 +42,59 @@ impl From<WebCommand> for crate::macro_engine::controller::MacroCommand {
     }
 }
 
+const ALL_BUTTONS: [(Button, &str); 18] = [
+    (Button::A, "A"),
+    (Button::B, "B"),
+    (Button::X, "X"),
+    (Button::Y, "Y"),
+    (Button::L, "L"),
+    (Button::R, "R"),
+    (Button::ZL, "ZL"),
+    (Button::ZR, "ZR"),
+    (Button::Plus, "+"),
+    (Button::Minus, "-"),
+    (Button::L3, "L3"),
+    (Button::R3, "R3"),
+    (Button::DpadUp, "Up"),
+    (Button::DpadDown, "Down"),
+    (Button::DpadLeft, "Left"),
+    (Button::DpadRight, "Right"),
+    (Button::Home, "Home"),
+    (Button::Capture, "Cap"),
+];
+
+/// Current playback input state for visualization.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct PlaybackInput {
+    pub buttons: Vec<&'static str>,
+    pub left_stick: (f64, f64),
+    pub right_stick: (f64, f64),
+}
+
+impl PlaybackInput {
+    pub fn from_input_state(input: &InputState) -> Self {
+        let buttons = ALL_BUTTONS
+            .iter()
+            .filter(|(btn, _)| input.buttons.get(*btn))
+            .map(|(_, name)| *name)
+            .collect();
+
+        let normalize = |raw: u16| ((raw as f64 - 2048.0) / 2048.0).clamp(-1.0, 1.0);
+
+        Self {
+            buttons,
+            left_stick: (
+                normalize(input.left_stick_raw.0),
+                normalize(input.left_stick_raw.1),
+            ),
+            right_stick: (
+                normalize(input.right_stick_raw.0),
+                normalize(input.right_stick_raw.1),
+            ),
+        }
+    }
+}
+
 /// Thread/task-safe MITM state snapshot for the web UI.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct StateSnapshot {
@@ -53,6 +108,9 @@ pub struct StateSnapshot {
     pub bt_connected: bool,
     pub playback_speed: f64,
     pub looping: bool,
+    pub playback_frame: usize,
+    pub playback_frame_count: usize,
+    pub playback_input: Option<PlaybackInput>,
 }
 
 impl Default for StateSnapshot {
@@ -68,6 +126,9 @@ impl Default for StateSnapshot {
             bt_connected: false,
             playback_speed: 1.0,
             looping: false,
+            playback_frame: 0,
+            playback_frame_count: 0,
+            playback_input: None,
         }
     }
 }

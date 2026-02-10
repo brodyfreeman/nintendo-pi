@@ -91,6 +91,39 @@
   }
   .rec-status.active { background: var(--red); animation: pulse 1s infinite; }
   @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.5; } }
+  .viz-section { display: none; }
+  .viz-section.show { display: block; }
+  .progress-bar-outer {
+    width: 100%; height: 6px; background: rgba(255,255,255,0.1);
+    border-radius: 3px; overflow: hidden; margin-bottom: 0.3rem;
+  }
+  .progress-bar-inner {
+    height: 100%; background: var(--blue); border-radius: 3px;
+    transition: width 0.15s linear; width: 0%;
+  }
+  .progress-label { font-size: 0.7rem; color: var(--muted); text-align: center; margin-bottom: 0.6rem; }
+  .sticks-row { display: flex; gap: 1rem; justify-content: center; margin-bottom: 0.6rem; }
+  .stick-container { text-align: center; }
+  .stick-label { font-size: 0.7rem; color: var(--muted); margin-bottom: 0.25rem; }
+  .stick-circle {
+    width: 80px; height: 80px; border-radius: 50%; position: relative;
+    background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.15);
+  }
+  .stick-dot {
+    width: 12px; height: 12px; border-radius: 50%; background: var(--muted);
+    position: absolute; transform: translate(-50%, -50%);
+    transition: left 0.1s linear, top 0.1s linear, background 0.1s;
+    left: 50%; top: 50%;
+  }
+  .stick-dot.active { background: var(--green); }
+  .btn-pills {
+    display: flex; flex-wrap: wrap; gap: 0.3rem; justify-content: center;
+    min-height: 1.6rem;
+  }
+  .btn-pill {
+    display: inline-block; padding: 0.15rem 0.5rem; border-radius: 6px;
+    font-size: 0.75rem; font-weight: 600; background: var(--accent); color: #fff;
+  }
   .macro-item {
     display: flex; align-items: center; gap: 0.5rem;
     padding: 0.7rem 0; border-bottom: 1px solid rgba(255,255,255,0.05);
@@ -167,6 +200,23 @@
     <button class="btn btn-dark" onclick="setSpeed(2)">2x</button>
     <button class="btn btn-dark" onclick="setSpeed(4)">4x</button>
   </div>
+</div>
+
+<div class="section viz-section" id="vizSection">
+  <div class="section-title">Playback</div>
+  <div class="progress-bar-outer"><div class="progress-bar-inner" id="vizProgress"></div></div>
+  <div class="progress-label" id="vizProgressLabel">0 / 0</div>
+  <div class="sticks-row">
+    <div class="stick-container">
+      <div class="stick-label">L</div>
+      <div class="stick-circle"><div class="stick-dot" id="vizLeftDot"></div></div>
+    </div>
+    <div class="stick-container">
+      <div class="stick-label">R</div>
+      <div class="stick-circle"><div class="stick-dot" id="vizRightDot"></div></div>
+    </div>
+  </div>
+  <div class="btn-pills" id="vizButtons"></div>
 </div>
 
 <div class="section">
@@ -296,6 +346,37 @@
     for (var i = 0; i < speedBtns.length; i++) {
       speedBtns[i].className = state.playback_speed === speeds[i]
         ? 'btn btn-dark active' : 'btn btn-dark';
+    }
+
+    // Playback visualization
+    var vizEl = document.getElementById('vizSection');
+    if (state.playing && state.playback_input) {
+      vizEl.classList.add('show');
+      var pct = state.playback_frame_count > 0
+        ? (state.playback_frame / state.playback_frame_count * 100) : 0;
+      document.getElementById('vizProgress').style.width = pct + '%';
+      document.getElementById('vizProgressLabel').textContent =
+        state.playback_frame + ' / ' + state.playback_frame_count;
+
+      var ls = state.playback_input.left_stick;
+      var rs = state.playback_input.right_stick;
+      var leftDot = document.getElementById('vizLeftDot');
+      var rightDot = document.getElementById('vizRightDot');
+      leftDot.style.left = ((ls[0] + 1) * 50) + '%';
+      leftDot.style.top = ((-ls[1] + 1) * 50) + '%';
+      leftDot.className = 'stick-dot' + (Math.abs(ls[0]) > 0.05 || Math.abs(ls[1]) > 0.05 ? ' active' : '');
+      rightDot.style.left = ((rs[0] + 1) * 50) + '%';
+      rightDot.style.top = ((-rs[1] + 1) * 50) + '%';
+      rightDot.className = 'stick-dot' + (Math.abs(rs[0]) > 0.05 || Math.abs(rs[1]) > 0.05 ? ' active' : '');
+
+      var btns = state.playback_input.buttons;
+      var html = '';
+      for (var j = 0; j < btns.length; j++) {
+        html += '<span class="btn-pill">' + btns[j] + '</span>';
+      }
+      document.getElementById('vizButtons').innerHTML = html;
+    } else {
+      vizEl.classList.remove('show');
     }
   }
 
