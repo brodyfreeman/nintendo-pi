@@ -28,6 +28,7 @@ pub enum WebCommand {
     SetLoopRestartDelay(f64),
     SetRecordingTrimEnd(f64),
     SetRecordingStartDelay(f64),
+    SetUiUpdateInterval(u64),
 }
 
 impl From<WebCommand> for crate::macro_engine::controller::MacroCommand {
@@ -53,6 +54,7 @@ impl From<WebCommand> for crate::macro_engine::controller::MacroCommand {
             WebCommand::SetLoopRestartDelay(d) => Self::SetLoopRestartDelay(d),
             WebCommand::SetRecordingTrimEnd(d) => Self::SetRecordingTrimEnd(d),
             WebCommand::SetRecordingStartDelay(d) => Self::SetRecordingStartDelay(d),
+            WebCommand::SetUiUpdateInterval(ms) => Self::SetUiUpdateInterval(ms),
         }
     }
 }
@@ -136,6 +138,7 @@ pub struct StateSnapshot {
     pub loop_restart_delay: f64,
     pub recording_trim_end: f64,
     pub recording_start_delay: f64,
+    pub ui_update_interval_ms: u64,
 }
 
 impl Default for StateSnapshot {
@@ -164,6 +167,7 @@ impl Default for StateSnapshot {
             loop_restart_delay: 0.0,
             recording_trim_end: 0.0,
             recording_start_delay: 0.0,
+            ui_update_interval_ms: 200,
         }
     }
 }

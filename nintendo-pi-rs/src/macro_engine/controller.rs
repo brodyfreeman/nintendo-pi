@@ -36,6 +36,7 @@ pub enum MacroCommand {
     SetLoopRestartDelay(f64),
     SetRecordingTrimEnd(f64),
     SetRecordingStartDelay(f64),
+    SetUiUpdateInterval(u64),
 }
 
 /// Side effects produced by executing a command.
@@ -74,6 +75,7 @@ pub struct MacroController {
     pub loop_restart_delay: f64,
     pub recording_trim_end: f64,
     pub recording_start_delay: f64,
+    pub ui_update_interval_ms: u64,
     macros_dir: PathBuf,
 }
 
@@ -99,6 +101,7 @@ impl MacroController {
             loop_restart_delay: 0.0,
             recording_trim_end: 0.0,
             recording_start_delay: 0.0,
+            ui_update_interval_ms: 200,
             macros_dir,
         }
     }
@@ -126,6 +129,7 @@ impl MacroController {
             MacroCommand::SetLoopRestartDelay(d) => self.set_loop_restart_delay(d),
             MacroCommand::SetRecordingTrimEnd(d) => self.set_recording_trim_end(d),
             MacroCommand::SetRecordingStartDelay(d) => self.set_recording_start_delay(d),
+            MacroCommand::SetUiUpdateInterval(ms) => self.set_ui_update_interval(ms),
         }
     }
 
@@ -371,6 +375,15 @@ impl MacroController {
         info!(
             "[SETTINGS] Recording start delay set to {:.1}s",
             self.recording_start_delay
+        );
+        MacroEffect::none()
+    }
+
+    fn set_ui_update_interval(&mut self, ms: u64) -> MacroEffect {
+        self.ui_update_interval_ms = ms.clamp(50, 500);
+        info!(
+            "[SETTINGS] UI update interval set to {}ms",
+            self.ui_update_interval_ms
         );
         MacroEffect::none()
     }

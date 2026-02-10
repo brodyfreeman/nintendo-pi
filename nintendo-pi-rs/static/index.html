@@ -885,6 +885,17 @@
       <span>5s (max)</span>
     </div>
   </div>
+  <div class="setting-row">
+    <div class="setting-label">
+      <span class="setting-name">UI Update Rate</span>
+      <span class="setting-value" id="uiIntervalValue">200ms</span>
+    </div>
+    <input type="range" class="setting-slider" id="uiIntervalSlider" min="50" max="500" step="50" value="200">
+    <div class="setting-range-labels">
+      <span>50ms (fast)</span>
+      <span>500ms (slow)</span>
+    </div>
+  </div>
 </div>
 
 <div class="section grid-span-full">
@@ -1213,6 +1224,7 @@
     syncLoopDelay();
     syncTrimEnd();
     syncRecDelay();
+    syncUiInterval();
 
     // Update controller visualization
     updateController();
@@ -1710,6 +1722,31 @@
       recDelayValue.textContent = val.toFixed(1) + 's';
       if (document.activeElement !== recDelaySlider) {
         recDelaySlider.value = val;
+      }
+    }
+  }
+
+  // === UI update interval slider ===
+  var uiIntervalSlider = document.getElementById('uiIntervalSlider');
+  var uiIntervalValue = document.getElementById('uiIntervalValue');
+
+  uiIntervalSlider.addEventListener('input', function() {
+    var val = parseInt(uiIntervalSlider.value);
+    uiIntervalValue.textContent = val + 'ms';
+  });
+
+  uiIntervalSlider.addEventListener('change', function() {
+    var val = parseInt(uiIntervalSlider.value);
+    sfx.nav();
+    sendCmd('SET_UI_UPDATE_INTERVAL', val);
+  });
+
+  function syncUiInterval() {
+    if (state.ui_update_interval_ms !== undefined) {
+      var val = state.ui_update_interval_ms;
+      uiIntervalValue.textContent = val + 'ms';
+      if (document.activeElement !== uiIntervalSlider) {
+        uiIntervalSlider.value = val;
       }
     }
   }

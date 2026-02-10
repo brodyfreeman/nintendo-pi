@@ -205,6 +205,11 @@ fn parse_web_command(val: &serde_json::Value, _macros_dir: &std::path::Path) -> 
             debug!("[WEB] Set recording start delay: {d}s");
             Some(WebCommand::SetRecordingStartDelay(d))
         }
+        "SET_UI_UPDATE_INTERVAL" => {
+            let ms = val.get("data")?.as_u64()?;
+            debug!("[WEB] Set UI update interval: {ms}ms");
+            Some(WebCommand::SetUiUpdateInterval(ms))
+        }
         _ => {
             warn!("[WEB] Unknown command: {cmd}");
             None

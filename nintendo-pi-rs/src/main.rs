@@ -127,12 +127,13 @@ async fn main() -> anyhow::Result<()> {
                 break; // sender dropped
             }
             let snapshot = state_rx.borrow_and_update().clone();
+            let interval_ms = snapshot.ui_update_interval_ms;
             let msg = serde_json::json!({
                 "type": "state_update",
                 "state": snapshot,
             });
             let _ = emitter_broadcast.send(msg.to_string());
-            tokio::time::sleep(Duration::from_millis(200)).await;
+            tokio::time::sleep(Duration::from_millis(interval_ms)).await;
         }
     });
 
@@ -524,5 +525,6 @@ fn update_state(
         loop_restart_delay: ctrl.loop_restart_delay,
         recording_trim_end: ctrl.recording_trim_end,
         recording_start_delay: ctrl.recording_start_delay,
+        ui_update_interval_ms: ctrl.ui_update_interval_ms,
     });
 }
