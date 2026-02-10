@@ -33,6 +33,7 @@ pub enum MacroCommand {
     SetAutoLoopDefault(bool),
     SetPlaybackSpeedDefault(f64),
     SetPlaybackStartDelay(f64),
+    SetLoopRestartDelay(f64),
 }
 
 /// Side effects produced by executing a command.
@@ -68,6 +69,7 @@ pub struct MacroController {
     pub auto_loop_default: bool,
     pub playback_speed_default: f64,
     pub playback_start_delay: f64,
+    pub loop_restart_delay: f64,
     macros_dir: PathBuf,
 }
 
@@ -90,6 +92,7 @@ impl MacroController {
             auto_loop_default: false,
             playback_speed_default: 1.0,
             playback_start_delay: 0.0,
+            loop_restart_delay: 0.0,
             macros_dir,
         }
     }
@@ -114,6 +117,7 @@ impl MacroController {
             MacroCommand::SetAutoLoopDefault(v) => self.set_auto_loop_default(v),
             MacroCommand::SetPlaybackSpeedDefault(s) => self.set_playback_speed_default(s),
             MacroCommand::SetPlaybackStartDelay(d) => self.set_playback_start_delay(d),
+            MacroCommand::SetLoopRestartDelay(d) => self.set_loop_restart_delay(d),
         }
     }
 
@@ -238,6 +242,7 @@ impl MacroController {
             if self.player.load(&self.macros_dir, macro_id) {
                 let should_loop = self.player.looping || self.auto_loop_default;
                 self.player.set_speed(self.playback_speed_default);
+                self.player.loop_restart_delay = self.loop_restart_delay;
                 self.player
                     .start_with_delay(should_loop, self.playback_start_delay);
                 info!(
@@ -330,6 +335,16 @@ impl MacroController {
         info!(
             "[SETTINGS] Playback start delay set to {:.1}s",
             self.playback_start_delay
+        );
+        MacroEffect::none()
+    }
+
+    fn set_loop_restart_delay(&mut self, delay: f64) -> MacroEffect {
+        self.loop_restart_delay = delay.clamp(0.0, 5.0);
+        self.player.loop_restart_delay = self.loop_restart_delay;
+        info!(
+            "[SETTINGS] Loop restart delay set to {:.1}s",
+            self.loop_restart_delay
         );
         MacroEffect::none()
     }

@@ -851,6 +851,17 @@
       <span>5s (max)</span>
     </div>
   </div>
+  <div class="setting-row">
+    <div class="setting-label">
+      <span class="setting-name">Loop Restart Delay</span>
+      <span class="setting-value" id="loopDelayValue">0.0s</span>
+    </div>
+    <input type="range" class="setting-slider" id="loopDelaySlider" min="0" max="5" step="0.5" value="0">
+    <div class="setting-range-labels">
+      <span>0s (instant)</span>
+      <span>5s (max)</span>
+    </div>
+  </div>
 </div>
 
 <div class="section grid-span-full">
@@ -1170,6 +1181,7 @@
     syncAutoLoop();
     syncSpeedDefault();
     syncStartDelay();
+    syncLoopDelay();
 
     // Update controller visualization
     updateController();
@@ -1592,6 +1604,31 @@
       startDelayValue.textContent = val.toFixed(1) + 's';
       if (document.activeElement !== startDelaySlider) {
         startDelaySlider.value = val;
+      }
+    }
+  }
+
+  // === Loop restart delay slider ===
+  var loopDelaySlider = document.getElementById('loopDelaySlider');
+  var loopDelayValue = document.getElementById('loopDelayValue');
+
+  loopDelaySlider.addEventListener('input', function() {
+    var val = parseFloat(loopDelaySlider.value);
+    loopDelayValue.textContent = val.toFixed(1) + 's';
+  });
+
+  loopDelaySlider.addEventListener('change', function() {
+    var val = parseFloat(loopDelaySlider.value);
+    sfx.nav();
+    sendCmd('SET_LOOP_RESTART_DELAY', val);
+  });
+
+  function syncLoopDelay() {
+    if (state.loop_restart_delay !== undefined) {
+      var val = state.loop_restart_delay;
+      loopDelayValue.textContent = val.toFixed(1) + 's';
+      if (document.activeElement !== loopDelaySlider) {
+        loopDelaySlider.value = val;
       }
     }
   }

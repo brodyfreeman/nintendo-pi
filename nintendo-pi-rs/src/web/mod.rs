@@ -190,6 +190,11 @@ fn parse_web_command(val: &serde_json::Value, _macros_dir: &std::path::Path) -> 
             debug!("[WEB] Set playback start delay: {d}s");
             Some(WebCommand::SetPlaybackStartDelay(d))
         }
+        "SET_LOOP_RESTART_DELAY" => {
+            let d = val.get("data")?.as_f64()?;
+            debug!("[WEB] Set loop restart delay: {d}s");
+            Some(WebCommand::SetLoopRestartDelay(d))
+        }
         _ => {
             warn!("[WEB] Unknown command: {cmd}");
             None

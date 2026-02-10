@@ -16,6 +16,7 @@ pub struct MacroPlayer {
     pub playing: bool,
     pub looping: bool,
     pub speed: f64,
+    pub loop_restart_delay: f64,
     mmap: Option<Mmap>,
     _file: Option<File>,
     frame_count: usize,
@@ -31,6 +32,7 @@ impl MacroPlayer {
             playing: false,
             looping: false,
             speed: 1.0,
+            loop_restart_delay: 0.0,
             mmap: None,
             _file: None,
             frame_count: 0,
@@ -180,10 +182,11 @@ impl MacroPlayer {
             if self.looping {
                 self.frame_index = 0;
                 self.start = Some(Instant::now());
-                self.delay_us = 0; // No delay on loop restarts
+                self.delay_us = (self.loop_restart_delay.max(0.0) * 1_000_000.0) as u64;
                 debug!(
-                    "[MACRO] Playback loop restarted ({} frames)",
-                    self.frame_count
+                    "[MACRO] Playback loop restarted ({} frames, delay={}ms)",
+                    self.frame_count,
+                    self.delay_us / 1000,
                 );
             } else {
                 self.playing = false;
