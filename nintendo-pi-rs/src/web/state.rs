@@ -37,6 +37,7 @@ pub enum WebCommand {
     SetCycleSpeedButton(String),
     SetPrevSlotButton(String),
     SetNextSlotButton(String),
+    SetToggleRecordingButton(String),
 }
 
 impl From<WebCommand> for crate::macro_engine::controller::MacroCommand {
@@ -71,6 +72,7 @@ impl From<WebCommand> for crate::macro_engine::controller::MacroCommand {
             WebCommand::SetCycleSpeedButton(s) => Self::SetCycleSpeedButton(s),
             WebCommand::SetPrevSlotButton(s) => Self::SetPrevSlotButton(s),
             WebCommand::SetNextSlotButton(s) => Self::SetNextSlotButton(s),
+            WebCommand::SetToggleRecordingButton(s) => Self::SetToggleRecordingButton(s),
         }
     }
 }
@@ -163,6 +165,7 @@ pub struct StateSnapshot {
     pub cycle_speed_button: String,
     pub prev_slot_button: String,
     pub next_slot_button: String,
+    pub toggle_recording_button: String,
 }
 
 impl Default for StateSnapshot {
@@ -212,6 +215,9 @@ impl Default for StateSnapshot {
                 .display_name()
                 .to_string(),
             next_slot_button: crate::combo::DEFAULT_NEXT_SLOT_BUTTON
+                .display_name()
+                .to_string(),
+            toggle_recording_button: crate::combo::DEFAULT_TOGGLE_RECORDING_BUTTON
                 .display_name()
                 .to_string(),
         }

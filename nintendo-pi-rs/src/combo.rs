@@ -80,6 +80,9 @@ pub const DEFAULT_PREV_SLOT_BUTTON: Button = Button::DpadLeft;
 /// Default next slot button.
 pub const DEFAULT_NEXT_SLOT_BUTTON: Button = Button::DpadRight;
 
+/// Default toggle recording button.
+pub const DEFAULT_TOGGLE_RECORDING_BUTTON: Button = Button::Minus;
+
 /// Set of buttons to suppress (smallvec would be overkill, just use a fixed array).
 #[derive(Debug, Clone, Default)]
 pub struct SuppressedButtons {
@@ -128,6 +131,7 @@ pub struct ComboDetector {
     pub cycle_speed_button: Button,
     pub prev_slot_button: Button,
     pub next_slot_button: Button,
+    pub toggle_recording_button: Button,
     hold_button_start: Option<Instant>,
     prev_buttons: ButtonState,
     prev_base_held: bool,
@@ -145,6 +149,7 @@ impl ComboDetector {
             cycle_speed_button: DEFAULT_CYCLE_SPEED_BUTTON,
             prev_slot_button: DEFAULT_PREV_SLOT_BUTTON,
             next_slot_button: DEFAULT_NEXT_SLOT_BUTTON,
+            toggle_recording_button: DEFAULT_TOGGLE_RECORDING_BUTTON,
             hold_button_start: None,
             prev_buttons: ButtonState::default(),
             prev_base_held: false,
@@ -269,16 +274,14 @@ impl ComboDetector {
                 }
             }
 
-            // In macro mode, L3+R3 alone toggles recording (rising edge)
-            if self.macro_mode && !self.prev_base_held {
-                let any_combo_btn = hold_btn_pressed
-                    || buttons.get(self.prev_slot_button)
-                    || buttons.get(self.next_slot_button)
-                    || buttons.get(self.play_macro_button)
-                    || buttons.get(self.stop_playback_button)
-                    || buttons.get(self.toggle_loop_button)
-                    || buttons.get(self.cycle_speed_button);
-                if !any_combo_btn {
+            // Check configurable toggle recording button (edge-triggered, macro mode only)
+            if self.macro_mode {
+                let pressed = buttons.get(self.toggle_recording_button);
+                let was_pressed = self.prev_buttons.get(self.toggle_recording_button);
+                if pressed {
+                    suppressed.add(self.toggle_recording_button);
+                }
+                if pressed && !was_pressed {
                     action = ComboAction::ToggleRecording;
                 }
             }
@@ -395,9 +398,15 @@ mod tests {
         let mut cd = ComboDetector::new();
         cd.macro_mode = true;
 
-        // L3+R3 rising edge in macro mode → ToggleRecording
-        let (action, _) = cd.update(&buttons_with(&[Button::L3, Button::R3]));
+        // L3+R3 first (no combo button)
+        cd.update(&buttons_with(&[Button::L3, Button::R3]));
+
+        // L3+R3+Minus rising edge in macro mode → ToggleRecording
+        let (action, sup) = cd.update(&buttons_with(&[Button::L3, Button::R3, Button::Minus]));
         assert_eq!(action, ComboAction::ToggleRecording);
+        assert!(sup.buttons[..sup.count]
+            .iter()
+            .any(|b| *b == Some(Button::Minus)));
     }
 
     #[test]
@@ -405,8 +414,10 @@ mod tests {
         let mut cd = ComboDetector::new();
         assert!(!cd.macro_mode);
 
-        // L3+R3 rising edge without macro mode → no recording
-        let (action, _) = cd.update(&buttons_with(&[Button::L3, Button::R3]));
+        cd.update(&buttons_with(&[Button::L3, Button::R3]));
+
+        // L3+R3+Minus without macro mode → no recording (button suppressed but no action)
+        let (action, _) = cd.update(&buttons_with(&[Button::L3, Button::R3, Button::Minus]));
         assert_eq!(action, ComboAction::None);
     }
 

@@ -943,6 +943,24 @@
   </div>
   <div class="setting-row">
     <div class="setting-label">
+      <span class="setting-name">Toggle Recording Button</span>
+      <span class="setting-value" id="toggleRecBtnValue">-</span>
+    </div>
+    <select class="setting-select" id="toggleRecBtnSelect">
+      <option value="Minus">-</option>
+      <option value="Plus">+</option>
+      <option value="A">A</option>
+      <option value="B">B</option>
+      <option value="X">X</option>
+      <option value="Y">Y</option>
+      <option value="L">L</option>
+      <option value="R">R</option>
+      <option value="ZL">ZL</option>
+      <option value="ZR">ZR</option>
+    </select>
+  </div>
+  <div class="setting-row">
+    <div class="setting-label">
       <span class="setting-name">Default Playback Speed</span>
       <span class="setting-value" id="speedDefaultValue">1.0x</span>
     </div>
@@ -1358,6 +1376,7 @@
     syncCycleSpeedBtn();
     syncPrevSlotBtn();
     syncNextSlotBtn();
+    syncToggleRecBtn();
     syncAutoLoop();
     syncSpeedDefault();
     syncStartDelay();
@@ -1884,6 +1903,30 @@
       nextSlotBtnValue.textContent = NEXT_SLOT_BTN_LABELS[val] || val;
       if (document.activeElement !== nextSlotBtnSelect) {
         nextSlotBtnSelect.value = val;
+      }
+    }
+  }
+
+  // === Toggle recording button select ===
+  var toggleRecBtnSelect = document.getElementById('toggleRecBtnSelect');
+  var toggleRecBtnValue = document.getElementById('toggleRecBtnValue');
+  var TOGGLE_REC_BTN_LABELS = {
+    'Minus': '-', 'Plus': '+', 'A': 'A', 'B': 'B', 'X': 'X', 'Y': 'Y', 'L': 'L', 'R': 'R', 'ZL': 'ZL', 'ZR': 'ZR'
+  };
+
+  toggleRecBtnSelect.addEventListener('change', function() {
+    var val = toggleRecBtnSelect.value;
+    toggleRecBtnValue.textContent = TOGGLE_REC_BTN_LABELS[val] || val;
+    sfx.nav();
+    sendCmd('SET_TOGGLE_RECORDING_BUTTON', val);
+  });
+
+  function syncToggleRecBtn() {
+    if (state.toggle_recording_button !== undefined) {
+      var val = state.toggle_recording_button;
+      toggleRecBtnValue.textContent = TOGGLE_REC_BTN_LABELS[val] || val;
+      if (document.activeElement !== toggleRecBtnSelect) {
+        toggleRecBtnSelect.value = val;
       }
     }
   }

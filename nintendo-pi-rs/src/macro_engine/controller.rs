@@ -45,6 +45,7 @@ pub enum MacroCommand {
     SetCycleSpeedButton(String),
     SetPrevSlotButton(String),
     SetNextSlotButton(String),
+    SetToggleRecordingButton(String),
 }
 
 /// Side effects produced by executing a command.
@@ -92,6 +93,7 @@ pub struct MacroController {
     pub cycle_speed_button: crate::input::Button,
     pub prev_slot_button: crate::input::Button,
     pub next_slot_button: crate::input::Button,
+    pub toggle_recording_button: crate::input::Button,
     macros_dir: PathBuf,
 }
 
@@ -126,6 +128,7 @@ impl MacroController {
             cycle_speed_button: crate::combo::DEFAULT_CYCLE_SPEED_BUTTON,
             prev_slot_button: crate::combo::DEFAULT_PREV_SLOT_BUTTON,
             next_slot_button: crate::combo::DEFAULT_NEXT_SLOT_BUTTON,
+            toggle_recording_button: crate::combo::DEFAULT_TOGGLE_RECORDING_BUTTON,
             macros_dir,
         }
     }
@@ -162,6 +165,7 @@ impl MacroController {
             MacroCommand::SetCycleSpeedButton(s) => self.set_cycle_speed_button(&s),
             MacroCommand::SetPrevSlotButton(s) => self.set_prev_slot_button(&s),
             MacroCommand::SetNextSlotButton(s) => self.set_next_slot_button(&s),
+            MacroCommand::SetToggleRecordingButton(s) => self.set_toggle_recording_button(&s),
         }
     }
 
@@ -505,6 +509,19 @@ impl MacroController {
         if let Some(btn) = crate::input::Button::from_str_name(name) {
             self.next_slot_button = btn;
             info!("[SETTINGS] Next slot button set to {}", btn.display_name());
+        } else {
+            warn!("[SETTINGS] Unknown button name: {name}");
+        }
+        MacroEffect::none()
+    }
+
+    fn set_toggle_recording_button(&mut self, name: &str) -> MacroEffect {
+        if let Some(btn) = crate::input::Button::from_str_name(name) {
+            self.toggle_recording_button = btn;
+            info!(
+                "[SETTINGS] Toggle recording button set to {}",
+                btn.display_name()
+            );
         } else {
             warn!("[SETTINGS] Unknown button name: {name}");
         }
