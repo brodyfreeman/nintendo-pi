@@ -46,9 +46,7 @@ impl SuppressedButtons {
     }
 
     pub fn contains(&self, btn: Button) -> bool {
-        self.buttons[..self.count]
-            .iter()
-            .any(|b| *b == Some(btn))
+        self.buttons[..self.count].iter().any(|b| *b == Some(btn))
     }
 
     pub fn is_empty(&self) -> bool {
@@ -97,7 +95,7 @@ impl ComboDetector {
 
     /// Process button state. Returns (action, suppressed_buttons).
     pub fn update(&mut self, buttons: &ButtonState) -> (ComboAction, SuppressedButtons) {
-        let base_held = buttons.l3 && buttons.r3;
+        let base_held = buttons.get(Button::L3) && buttons.get(Button::R3);
         let mut action = ComboAction::None;
         let mut suppressed = SuppressedButtons::default();
 
@@ -107,7 +105,7 @@ impl ComboDetector {
             suppressed.add(Button::R3);
 
             // Check D-pad Down hold for macro mode toggle
-            let dpad_down = buttons.dpad_down;
+            let dpad_down = buttons.get(Button::DpadDown);
             if dpad_down {
                 suppressed.add(Button::DpadDown);
                 match self.dpad_down_start {
@@ -139,10 +137,8 @@ impl ComboDetector {
 
             // In macro mode, L3+R3 alone toggles recording (rising edge)
             if self.macro_mode && !self.prev_base_held {
-                let any_combo_btn = dpad_down
-                    || INSTANT_COMBOS
-                        .iter()
-                        .any(|&(btn, _)| buttons.get(btn));
+                let any_combo_btn =
+                    dpad_down || INSTANT_COMBOS.iter().any(|&(btn, _)| buttons.get(btn));
                 if !any_combo_btn {
                     action = ComboAction::ToggleRecording;
                 }
@@ -190,8 +186,12 @@ mod tests {
         let mut cd = ComboDetector::new();
         let (_, sup) = cd.update(&buttons_with(&[Button::L3, Button::R3]));
         assert!(!sup.is_empty());
-        assert!(sup.buttons[..sup.count].iter().any(|b| *b == Some(Button::L3)));
-        assert!(sup.buttons[..sup.count].iter().any(|b| *b == Some(Button::R3)));
+        assert!(sup.buttons[..sup.count]
+            .iter()
+            .any(|b| *b == Some(Button::L3)));
+        assert!(sup.buttons[..sup.count]
+            .iter()
+            .any(|b| *b == Some(Button::R3)));
     }
 
     #[test]
@@ -204,7 +204,9 @@ mod tests {
         // Second frame: L3+R3+A (A rising edge → PlayMacro)
         let (action, sup) = cd.update(&buttons_with(&[Button::L3, Button::R3, Button::A]));
         assert_eq!(action, ComboAction::PlayMacro);
-        assert!(sup.buttons[..sup.count].iter().any(|b| *b == Some(Button::A)));
+        assert!(sup.buttons[..sup.count]
+            .iter()
+            .any(|b| *b == Some(Button::A)));
     }
 
     #[test]
@@ -300,18 +302,18 @@ mod tests {
         let mut bs = buttons_with(&[Button::L3, Button::R3, Button::A, Button::B]);
         sup.filter_buttons(&mut bs);
 
-        assert!(!bs.l3);
-        assert!(!bs.r3);
-        assert!(!bs.a);
-        assert!(bs.b); // not suppressed
+        assert!(!bs.get(Button::L3));
+        assert!(!bs.get(Button::R3));
+        assert!(!bs.get(Button::A));
+        assert!(bs.get(Button::B)); // not suppressed
     }
 
     #[test]
     fn test_suppressed_filter_raw_report() {
         let mut sup = SuppressedButtons::default();
-        sup.add(Button::B);     // byte0, 0x01
-        sup.add(Button::L3);    // byte1, 0x80
-        sup.add(Button::Home);  // byte2, 0x01
+        sup.add(Button::B); // byte0, 0x01
+        sup.add(Button::L3); // byte1, 0x80
+        sup.add(Button::Home); // byte2, 0x01
 
         let mut report = [0u8; 64];
         report[3] = 0xFF; // all byte0 buttons

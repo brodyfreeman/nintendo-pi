@@ -27,27 +27,13 @@ pub struct InputState {
     pub right_trigger: u8,
 }
 
-/// All button states as booleans.
-#[derive(Clone, Debug, Default)]
+/// All button states packed as 3 bytes (USB HID bit layout).
+///
+/// Use [`Button`] with `get()`/`set()` to access individual buttons.
+/// Byte layout matches USB HID report button bytes directly.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct ButtonState {
-    pub b: bool,
-    pub a: bool,
-    pub y: bool,
-    pub x: bool,
-    pub r: bool,
-    pub zr: bool,
-    pub plus: bool,
-    pub r3: bool,
-    pub dpad_down: bool,
-    pub dpad_right: bool,
-    pub dpad_left: bool,
-    pub dpad_up: bool,
-    pub l: bool,
-    pub zl: bool,
-    pub minus: bool,
-    pub l3: bool,
-    pub home: bool,
-    pub capture: bool,
+    bytes: [u8; 3],
 }
 
 /// Unpack two 12-bit values from 3 bytes (little-endian nibble packing).
@@ -76,26 +62,7 @@ pub fn parse_hid_report(report: &[u8; 64]) -> InputState {
     let left_trigger_raw = report[13]; // payload[0x0C]
     let right_trigger_raw = report[14]; // payload[0x0D]
 
-    let buttons = ButtonState {
-        b: buttons_bytes[0] & 0x01 != 0,
-        a: buttons_bytes[0] & 0x02 != 0,
-        y: buttons_bytes[0] & 0x04 != 0,
-        x: buttons_bytes[0] & 0x08 != 0,
-        r: buttons_bytes[0] & 0x10 != 0,
-        zr: buttons_bytes[0] & 0x20 != 0,
-        plus: buttons_bytes[0] & 0x40 != 0,
-        r3: buttons_bytes[0] & 0x80 != 0,
-        dpad_down: buttons_bytes[1] & 0x01 != 0,
-        dpad_right: buttons_bytes[1] & 0x02 != 0,
-        dpad_left: buttons_bytes[1] & 0x04 != 0,
-        dpad_up: buttons_bytes[1] & 0x08 != 0,
-        l: buttons_bytes[1] & 0x10 != 0,
-        zl: buttons_bytes[1] & 0x20 != 0,
-        minus: buttons_bytes[1] & 0x40 != 0,
-        l3: buttons_bytes[1] & 0x80 != 0,
-        home: buttons_bytes[2] & 0x01 != 0,
-        capture: buttons_bytes[2] & 0x02 != 0,
-    };
+    let buttons = ButtonState::from_bytes([buttons_bytes[0], buttons_bytes[1], buttons_bytes[2]]);
 
     let (lx, ly) = unpack_12bit_triplet(stick1);
     let (rx, ry) = unpack_12bit_triplet(stick2);
@@ -160,51 +127,61 @@ impl Button {
 }
 
 impl ButtonState {
+    pub fn from_bytes(bytes: [u8; 3]) -> Self {
+        Self { bytes }
+    }
+
     pub fn get(&self, btn: Button) -> bool {
-        match btn {
-            Button::B => self.b,
-            Button::A => self.a,
-            Button::Y => self.y,
-            Button::X => self.x,
-            Button::R => self.r,
-            Button::ZR => self.zr,
-            Button::Plus => self.plus,
-            Button::R3 => self.r3,
-            Button::DpadDown => self.dpad_down,
-            Button::DpadRight => self.dpad_right,
-            Button::DpadLeft => self.dpad_left,
-            Button::DpadUp => self.dpad_up,
-            Button::L => self.l,
-            Button::ZL => self.zl,
-            Button::Minus => self.minus,
-            Button::L3 => self.l3,
-            Button::Home => self.home,
-            Button::Capture => self.capture,
-        }
+        let (byte_idx, mask) = btn.position();
+        self.bytes[byte_idx] & mask != 0
     }
 
     pub fn set(&mut self, btn: Button, val: bool) {
-        match btn {
-            Button::B => self.b = val,
-            Button::A => self.a = val,
-            Button::Y => self.y = val,
-            Button::X => self.x = val,
-            Button::R => self.r = val,
-            Button::ZR => self.zr = val,
-            Button::Plus => self.plus = val,
-            Button::R3 => self.r3 = val,
-            Button::DpadDown => self.dpad_down = val,
-            Button::DpadRight => self.dpad_right = val,
-            Button::DpadLeft => self.dpad_left = val,
-            Button::DpadUp => self.dpad_up = val,
-            Button::L => self.l = val,
-            Button::ZL => self.zl = val,
-            Button::Minus => self.minus = val,
-            Button::L3 => self.l3 = val,
-            Button::Home => self.home = val,
-            Button::Capture => self.capture = val,
+        let (byte_idx, mask) = btn.position();
+        if val {
+            self.bytes[byte_idx] |= mask;
+        } else {
+            self.bytes[byte_idx] &= !mask;
         }
     }
+}
+
+/// BT button mapping: (Button, bt_byte_index, bt_mask).
+///
+/// The BT wire format uses a different bit layout than USB HID.
+const BT_BUTTON_MAP: [(Button, usize, u8); 18] = [
+    // Byte 0 (right-side): Y X B A _ _ R ZR
+    (Button::Y, 0, 0x01),
+    (Button::X, 0, 0x02),
+    (Button::B, 0, 0x04),
+    (Button::A, 0, 0x08),
+    (Button::R, 0, 0x40),
+    (Button::ZR, 0, 0x80),
+    // Byte 1 (shared): MINUS PLUS RSTICK LSTICK HOME CAP _ _
+    (Button::Minus, 1, 0x01),
+    (Button::Plus, 1, 0x02),
+    (Button::R3, 1, 0x04),
+    (Button::L3, 1, 0x08),
+    (Button::Home, 1, 0x10),
+    (Button::Capture, 1, 0x20),
+    // Byte 2 (left-side): DD DU DR DL _ _ L ZL
+    (Button::DpadDown, 2, 0x01),
+    (Button::DpadUp, 2, 0x02),
+    (Button::DpadRight, 2, 0x04),
+    (Button::DpadLeft, 2, 0x08),
+    (Button::L, 2, 0x40),
+    (Button::ZL, 2, 0x80),
+];
+
+/// Encode button state into 3 BT report bytes.
+fn encode_bt_buttons(buttons: &ButtonState) -> [u8; 3] {
+    let mut bt = [0u8; 3];
+    for &(btn, byte_idx, mask) in &BT_BUTTON_MAP {
+        if buttons.get(btn) {
+            bt[byte_idx] |= mask;
+        }
+    }
+    bt
 }
 
 /// Build BT 0x30 report bytes from InputState + calibrated sticks.
@@ -236,36 +213,10 @@ pub fn build_bt_report(
     report[3] = 0x90; // Battery level (full) + connection info
 
     // --- BT button encoding ---
-    let b = &input.buttons;
-
-    // Byte 4: right-side buttons
-    let mut bt0: u8 = 0;
-    if b.y { bt0 |= 0x01; }
-    if b.x { bt0 |= 0x02; }
-    if b.b { bt0 |= 0x04; }
-    if b.a { bt0 |= 0x08; }
-    if b.r { bt0 |= 0x40; }
-    if b.zr { bt0 |= 0x80; }
+    // Each entry: (Button, bt_byte_offset, bt_mask)
+    let [bt0, bt1, bt2] = encode_bt_buttons(&input.buttons);
     report[4] = bt0;
-
-    // Byte 5: shared buttons
-    let mut bt1: u8 = 0;
-    if b.minus { bt1 |= 0x01; }
-    if b.plus { bt1 |= 0x02; }
-    if b.r3 { bt1 |= 0x04; }
-    if b.l3 { bt1 |= 0x08; }
-    if b.home { bt1 |= 0x10; }
-    if b.capture { bt1 |= 0x20; }
     report[5] = bt1;
-
-    // Byte 6: left-side buttons
-    let mut bt2: u8 = 0;
-    if b.dpad_down { bt2 |= 0x01; }
-    if b.dpad_up { bt2 |= 0x02; }
-    if b.dpad_right { bt2 |= 0x04; }
-    if b.dpad_left { bt2 |= 0x08; }
-    if b.l { bt2 |= 0x40; }
-    if b.zl { bt2 |= 0x80; }
     report[6] = bt2;
 
     // --- Stick encoding ---
@@ -317,45 +268,38 @@ mod tests {
     fn test_parse_no_buttons() {
         let report = make_report([0, 0, 0], [0, 0, 0], [0, 0, 0], 36, 36);
         let state = parse_hid_report(&report);
-        assert!(!state.buttons.a);
-        assert!(!state.buttons.b);
-        assert!(!state.buttons.x);
-        assert!(!state.buttons.y);
-        assert!(!state.buttons.l3);
-        assert!(!state.buttons.r3);
-        assert!(!state.buttons.dpad_down);
-        assert!(!state.buttons.home);
+        assert_eq!(state.buttons, ButtonState::default());
     }
 
     #[test]
     fn test_parse_individual_buttons() {
         // B = byte0 bit0
         let r = make_report([0x01, 0, 0], [0; 3], [0; 3], 36, 36);
-        assert!(parse_hid_report(&r).buttons.b);
+        assert!(parse_hid_report(&r).buttons.get(Button::B));
 
         // A = byte0 bit1
         let r = make_report([0x02, 0, 0], [0; 3], [0; 3], 36, 36);
-        assert!(parse_hid_report(&r).buttons.a);
+        assert!(parse_hid_report(&r).buttons.get(Button::A));
 
         // R3 = byte0 bit7
         let r = make_report([0x80, 0, 0], [0; 3], [0; 3], 36, 36);
-        assert!(parse_hid_report(&r).buttons.r3);
+        assert!(parse_hid_report(&r).buttons.get(Button::R3));
 
         // DpadDown = byte1 bit0
         let r = make_report([0, 0x01, 0], [0; 3], [0; 3], 36, 36);
-        assert!(parse_hid_report(&r).buttons.dpad_down);
+        assert!(parse_hid_report(&r).buttons.get(Button::DpadDown));
 
         // L3 = byte1 bit7
         let r = make_report([0, 0x80, 0], [0; 3], [0; 3], 36, 36);
-        assert!(parse_hid_report(&r).buttons.l3);
+        assert!(parse_hid_report(&r).buttons.get(Button::L3));
 
         // Home = byte2 bit0
         let r = make_report([0, 0, 0x01], [0; 3], [0; 3], 36, 36);
-        assert!(parse_hid_report(&r).buttons.home);
+        assert!(parse_hid_report(&r).buttons.get(Button::Home));
 
         // Capture = byte2 bit1
         let r = make_report([0, 0, 0x02], [0; 3], [0; 3], 36, 36);
-        assert!(parse_hid_report(&r).buttons.capture);
+        assert!(parse_hid_report(&r).buttons.get(Button::Capture));
     }
 
     #[test]
@@ -363,11 +307,11 @@ mod tests {
         // A + B + L3 + R3
         let r = make_report([0x03 | 0x80, 0x80, 0], [0; 3], [0; 3], 36, 36);
         let s = parse_hid_report(&r);
-        assert!(s.buttons.a);
-        assert!(s.buttons.b);
-        assert!(s.buttons.r3);
-        assert!(s.buttons.l3);
-        assert!(!s.buttons.x);
+        assert!(s.buttons.get(Button::A));
+        assert!(s.buttons.get(Button::B));
+        assert!(s.buttons.get(Button::R3));
+        assert!(s.buttons.get(Button::L3));
+        assert!(!s.buttons.get(Button::X));
     }
 
     #[test]
@@ -397,10 +341,10 @@ mod tests {
 
     #[test]
     fn test_remap_trigger_boundaries() {
-        assert_eq!(remap_trigger_value(36), 0);    // min input
-        assert_eq!(remap_trigger_value(240), 255);  // max input
-        assert_eq!(remap_trigger_value(0), 0);      // below min clamps
-        assert_eq!(remap_trigger_value(255), 255);   // above max clamps
+        assert_eq!(remap_trigger_value(36), 0); // min input
+        assert_eq!(remap_trigger_value(240), 255); // max input
+        assert_eq!(remap_trigger_value(0), 0); // below min clamps
+        assert_eq!(remap_trigger_value(255), 255); // above max clamps
 
         // Midpoint: (138 - 36) / (240 - 36) = 102/204 = 0.5 → 127
         assert_eq!(remap_trigger_value(138), 127);
@@ -410,11 +354,24 @@ mod tests {
     fn test_button_position_matches_parse() {
         // For each button, set only its bit, parse, and verify get() returns true
         let all_buttons = [
-            Button::B, Button::A, Button::Y, Button::X,
-            Button::R, Button::ZR, Button::Plus, Button::R3,
-            Button::DpadDown, Button::DpadRight, Button::DpadLeft, Button::DpadUp,
-            Button::L, Button::ZL, Button::Minus, Button::L3,
-            Button::Home, Button::Capture,
+            Button::B,
+            Button::A,
+            Button::Y,
+            Button::X,
+            Button::R,
+            Button::ZR,
+            Button::Plus,
+            Button::R3,
+            Button::DpadDown,
+            Button::DpadRight,
+            Button::DpadLeft,
+            Button::DpadUp,
+            Button::L,
+            Button::ZL,
+            Button::Minus,
+            Button::L3,
+            Button::Home,
+            Button::Capture,
         ];
 
         for btn in all_buttons {
@@ -455,13 +412,13 @@ mod tests {
     #[test]
     fn test_build_bt_report_buttons() {
         let mut input = InputState::default();
-        input.buttons.a = true;
-        input.buttons.b = true;
-        input.buttons.y = true;
-        input.buttons.plus = true;
-        input.buttons.l3 = true;
-        input.buttons.dpad_down = true;
-        input.buttons.zl = true;
+        input.buttons.set(Button::A, true);
+        input.buttons.set(Button::B, true);
+        input.buttons.set(Button::Y, true);
+        input.buttons.set(Button::Plus, true);
+        input.buttons.set(Button::L3, true);
+        input.buttons.set(Button::DpadDown, true);
+        input.buttons.set(Button::ZL, true);
 
         let report = build_bt_report(&input, (0.0, 0.0), (0.0, 0.0), 0);
 
@@ -516,11 +473,24 @@ mod tests {
     fn test_button_set_get_roundtrip() {
         let mut bs = ButtonState::default();
         let all = [
-            Button::B, Button::A, Button::Y, Button::X,
-            Button::R, Button::ZR, Button::Plus, Button::R3,
-            Button::DpadDown, Button::DpadRight, Button::DpadLeft, Button::DpadUp,
-            Button::L, Button::ZL, Button::Minus, Button::L3,
-            Button::Home, Button::Capture,
+            Button::B,
+            Button::A,
+            Button::Y,
+            Button::X,
+            Button::R,
+            Button::ZR,
+            Button::Plus,
+            Button::R3,
+            Button::DpadDown,
+            Button::DpadRight,
+            Button::DpadLeft,
+            Button::DpadUp,
+            Button::L,
+            Button::ZL,
+            Button::Minus,
+            Button::L3,
+            Button::Home,
+            Button::Capture,
         ];
 
         for btn in all {
