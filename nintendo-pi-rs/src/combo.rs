@@ -5,6 +5,8 @@
 
 use std::time::Instant;
 
+use tracing::{debug, info};
+
 use crate::input::{Button, ButtonState};
 
 /// Action triggered by a combo.
@@ -19,6 +21,22 @@ pub enum ComboAction {
     StopPlayback,
     CycleSpeed,
     ToggleLoop,
+}
+
+impl std::fmt::Display for ComboAction {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ComboAction::None => write!(f, "None"),
+            ComboAction::ToggleMacroMode => write!(f, "ToggleMacroMode"),
+            ComboAction::ToggleRecording => write!(f, "ToggleRecording"),
+            ComboAction::PrevSlot => write!(f, "PrevSlot"),
+            ComboAction::NextSlot => write!(f, "NextSlot"),
+            ComboAction::PlayMacro => write!(f, "PlayMacro"),
+            ComboAction::StopPlayback => write!(f, "StopPlayback"),
+            ComboAction::CycleSpeed => write!(f, "CycleSpeed"),
+            ComboAction::ToggleLoop => write!(f, "ToggleLoop"),
+        }
+    }
 }
 
 impl From<ComboAction> for Option<crate::macro_engine::controller::MacroCommand> {
@@ -112,6 +130,11 @@ impl ComboDetector {
         let mut action = ComboAction::None;
         let mut suppressed = SuppressedButtons::default();
 
+        // Log L3+R3 rising edge
+        if base_held && !self.prev_base_held {
+            debug!("[COMBO] L3+R3 held");
+        }
+
         if base_held {
             // Always suppress L3+R3 when both held
             suppressed.add(Button::L3);
@@ -123,6 +146,7 @@ impl ComboDetector {
                 suppressed.add(Button::DpadDown);
                 match self.dpad_down_start {
                     None => {
+                        debug!("[COMBO] D-pad Down hold started (need {HOLD_DURATION}s for macro mode toggle)");
                         self.dpad_down_start = Some(Instant::now());
                     }
                     Some(start) => {
@@ -133,6 +157,9 @@ impl ComboDetector {
                     }
                 }
             } else {
+                if self.dpad_down_start.is_some() {
+                    debug!("[COMBO] D-pad Down released before hold threshold");
+                }
                 self.dpad_down_start = None;
             }
 
@@ -158,6 +185,10 @@ impl ComboDetector {
             }
         } else {
             self.dpad_down_start = None;
+        }
+
+        if action != ComboAction::None {
+            info!("[COMBO] {action}");
         }
 
         self.prev_buttons = buttons.clone();
