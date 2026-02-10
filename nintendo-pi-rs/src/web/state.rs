@@ -24,6 +24,7 @@ pub enum WebCommand {
     SetComboHoldTime(f64),
     SetAutoLoopDefault(bool),
     SetPlaybackSpeedDefault(f64),
+    SetPlaybackStartDelay(f64),
 }
 
 impl From<WebCommand> for crate::macro_engine::controller::MacroCommand {
@@ -45,6 +46,7 @@ impl From<WebCommand> for crate::macro_engine::controller::MacroCommand {
             WebCommand::SetComboHoldTime(t) => Self::SetComboHoldTime(t),
             WebCommand::SetAutoLoopDefault(v) => Self::SetAutoLoopDefault(v),
             WebCommand::SetPlaybackSpeedDefault(s) => Self::SetPlaybackSpeedDefault(s),
+            WebCommand::SetPlaybackStartDelay(d) => Self::SetPlaybackStartDelay(d),
         }
     }
 }
@@ -123,6 +125,7 @@ pub struct StateSnapshot {
     pub combo_hold_time: f64,
     pub auto_loop_default: bool,
     pub playback_speed_default: f64,
+    pub playback_start_delay: f64,
 }
 
 impl Default for StateSnapshot {
@@ -146,6 +149,7 @@ impl Default for StateSnapshot {
             combo_hold_time: crate::combo::DEFAULT_HOLD_DURATION,
             auto_loop_default: false,
             playback_speed_default: 1.0,
+            playback_start_delay: 0.0,
         }
     }
 }

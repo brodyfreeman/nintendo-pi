@@ -22,6 +22,7 @@ pub struct MacroPlayer {
     frame_index: usize,
     start: Option<Instant>,
     last_report: Option<[u8; 64]>,
+    delay_us: u64,
 }
 
 impl MacroPlayer {
@@ -36,6 +37,7 @@ impl MacroPlayer {
             frame_index: 0,
             start: None,
             last_report: None,
+            delay_us: 0,
         }
     }
 
@@ -97,8 +99,9 @@ impl MacroPlayer {
         true
     }
 
-    /// Start playback. Must call load() first.
-    pub fn start(&mut self, looping: bool) -> bool {
+    /// Start playback with an optional delay (in seconds) before the first frame plays.
+    /// Must call load() first.
+    pub fn start_with_delay(&mut self, looping: bool, delay_secs: f64) -> bool {
         if self.mmap.is_none() || self.frame_count == 0 {
             return false;
         }
@@ -107,7 +110,12 @@ impl MacroPlayer {
         self.frame_index = 0;
         self.start = Some(Instant::now());
         self.last_report = None;
-        info!("[MACRO] Playback started (loop={})", looping);
+        self.delay_us = (delay_secs.max(0.0) * 1_000_000.0) as u64;
+        if self.delay_us > 0 {
+            info!("[MACRO] Playback starting in {delay_secs:.1}s (loop={looping})");
+        } else {
+            info!("[MACRO] Playback started (loop={looping})");
+        }
         true
     }
 
@@ -141,7 +149,11 @@ impl MacroPlayer {
             return None;
         }
         let mmap = self.mmap.as_ref()?;
-        let elapsed_us = (self.start.as_ref()?.elapsed().as_micros() as f64 * self.speed) as u64;
+        let raw_elapsed_us = self.start.as_ref()?.elapsed().as_micros() as u64;
+        if raw_elapsed_us < self.delay_us {
+            return None; // Still in countdown — pass through live input
+        }
+        let elapsed_us = ((raw_elapsed_us - self.delay_us) as f64 * self.speed) as u64;
 
         // Advance through frames whose timestamps have passed
         while self.frame_index < self.frame_count {
@@ -168,6 +180,7 @@ impl MacroPlayer {
             if self.looping {
                 self.frame_index = 0;
                 self.start = Some(Instant::now());
+                self.delay_us = 0; // No delay on loop restarts
                 debug!(
                     "[MACRO] Playback loop restarted ({} frames)",
                     self.frame_count

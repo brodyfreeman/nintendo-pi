@@ -840,6 +840,17 @@
       <span>Loop macros by default when playing</span>
     </div>
   </div>
+  <div class="setting-row">
+    <div class="setting-label">
+      <span class="setting-name">Playback Start Delay</span>
+      <span class="setting-value" id="startDelayValue">0.0s</span>
+    </div>
+    <input type="range" class="setting-slider" id="startDelaySlider" min="0" max="5" step="0.5" value="0">
+    <div class="setting-range-labels">
+      <span>0s (instant)</span>
+      <span>5s (max)</span>
+    </div>
+  </div>
 </div>
 
 <div class="section grid-span-full">
@@ -1158,6 +1169,7 @@
     syncHoldTime();
     syncAutoLoop();
     syncSpeedDefault();
+    syncStartDelay();
 
     // Update controller visualization
     updateController();
@@ -1555,6 +1567,31 @@
       if (document.activeElement !== speedDefaultSlider) {
         var idx = SPEED_PRESETS.indexOf(val);
         if (idx >= 0) speedDefaultSlider.value = idx;
+      }
+    }
+  }
+
+  // === Playback start delay slider ===
+  var startDelaySlider = document.getElementById('startDelaySlider');
+  var startDelayValue = document.getElementById('startDelayValue');
+
+  startDelaySlider.addEventListener('input', function() {
+    var val = parseFloat(startDelaySlider.value);
+    startDelayValue.textContent = val.toFixed(1) + 's';
+  });
+
+  startDelaySlider.addEventListener('change', function() {
+    var val = parseFloat(startDelaySlider.value);
+    sfx.nav();
+    sendCmd('SET_PLAYBACK_START_DELAY', val);
+  });
+
+  function syncStartDelay() {
+    if (state.playback_start_delay !== undefined) {
+      var val = state.playback_start_delay;
+      startDelayValue.textContent = val.toFixed(1) + 's';
+      if (document.activeElement !== startDelaySlider) {
+        startDelaySlider.value = val;
       }
     }
   }
