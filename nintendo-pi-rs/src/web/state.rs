@@ -22,6 +22,7 @@ pub enum WebCommand {
     ToggleLoop,
     SetStickDeadzone(f64),
     SetComboHoldTime(f64),
+    SetAutoLoopDefault(bool),
 }
 
 impl From<WebCommand> for crate::macro_engine::controller::MacroCommand {
@@ -41,6 +42,7 @@ impl From<WebCommand> for crate::macro_engine::controller::MacroCommand {
             WebCommand::ToggleLoop => Self::ToggleLoop,
             WebCommand::SetStickDeadzone(dz) => Self::SetStickDeadzone(dz),
             WebCommand::SetComboHoldTime(t) => Self::SetComboHoldTime(t),
+            WebCommand::SetAutoLoopDefault(v) => Self::SetAutoLoopDefault(v),
         }
     }
 }
@@ -117,6 +119,7 @@ pub struct StateSnapshot {
     pub live_input: Option<PlaybackInput>,
     pub stick_deadzone: f64,
     pub combo_hold_time: f64,
+    pub auto_loop_default: bool,
 }
 
 impl Default for StateSnapshot {
@@ -138,6 +141,7 @@ impl Default for StateSnapshot {
             live_input: None,
             stick_deadzone: crate::calibration::DEFAULT_DEADZONE,
             combo_hold_time: crate::combo::DEFAULT_HOLD_DURATION,
+            auto_loop_default: false,
         }
     }
 }

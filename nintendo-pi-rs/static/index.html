@@ -818,6 +818,17 @@
       <span>2.0s (slow)</span>
     </div>
   </div>
+  <div class="setting-row">
+    <div class="setting-label">
+      <span class="setting-name">Auto-Loop Playback</span>
+      <button class="switch-toggle" id="autoLoopToggle" onclick="toggleAutoLoop()">
+        <span class="knob"></span>
+      </button>
+    </div>
+    <div class="setting-range-labels">
+      <span>Loop macros by default when playing</span>
+    </div>
+  </div>
 </div>
 
 <div class="section grid-span-full">
@@ -1134,6 +1145,7 @@
     // Sync settings
     syncDeadzone();
     syncHoldTime();
+    syncAutoLoop();
 
     // Update controller visualization
     updateController();
@@ -1485,6 +1497,26 @@
       if (document.activeElement !== holdTimeSlider) {
         holdTimeSlider.value = val;
       }
+    }
+  }
+
+  // === Auto-loop default toggle ===
+  window.toggleAutoLoop = function() {
+    var newVal = !state.auto_loop_default;
+    (newVal ? sfx.toggleOn : sfx.toggleOff)();
+    fetch('/api/cmd', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ cmd: 'SET_AUTO_LOOP_DEFAULT', data: newVal })
+    });
+  };
+
+  function syncAutoLoop() {
+    var toggle = document.getElementById('autoLoopToggle');
+    if (state.auto_loop_default) {
+      toggle.classList.add('on');
+    } else {
+      toggle.classList.remove('on');
     }
   }
 })();

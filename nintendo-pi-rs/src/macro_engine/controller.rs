@@ -30,6 +30,7 @@ pub enum MacroCommand {
     ToggleLoop,
     SetStickDeadzone(f64),
     SetComboHoldTime(f64),
+    SetAutoLoopDefault(bool),
 }
 
 /// Side effects produced by executing a command.
@@ -62,6 +63,7 @@ pub struct MacroController {
     pub cached_macro_name: Option<String>,
     pub stick_deadzone: f64,
     pub combo_hold_time: f64,
+    pub auto_loop_default: bool,
     macros_dir: PathBuf,
 }
 
@@ -81,6 +83,7 @@ impl MacroController {
             cached_macro_name: macro_name,
             stick_deadzone: crate::calibration::DEFAULT_DEADZONE,
             combo_hold_time: crate::combo::DEFAULT_HOLD_DURATION,
+            auto_loop_default: false,
             macros_dir,
         }
     }
@@ -102,6 +105,7 @@ impl MacroController {
             MacroCommand::ToggleLoop => self.toggle_loop(),
             MacroCommand::SetStickDeadzone(dz) => self.set_stick_deadzone(dz),
             MacroCommand::SetComboHoldTime(t) => self.set_combo_hold_time(t),
+            MacroCommand::SetAutoLoopDefault(v) => self.set_auto_loop_default(v),
         }
     }
 
@@ -224,7 +228,8 @@ impl MacroController {
     fn play_macro(&mut self) -> MacroEffect {
         if let Some(macro_id) = storage::get_macro_id_by_slot(&self.macros_dir, self.current_slot) {
             if self.player.load(&self.macros_dir, macro_id) {
-                self.player.start(self.player.looping);
+                let should_loop = self.player.looping || self.auto_loop_default;
+                self.player.start(should_loop);
                 info!(
                     "[MACRO] Playing macro {} (slot {}, loop={}).",
                     macro_id, self.current_slot, self.player.looping
@@ -286,6 +291,15 @@ impl MacroController {
         info!(
             "[SETTINGS] Combo hold time set to {:.1}s",
             self.combo_hold_time
+        );
+        MacroEffect::none()
+    }
+
+    fn set_auto_loop_default(&mut self, enabled: bool) -> MacroEffect {
+        self.auto_loop_default = enabled;
+        info!(
+            "[SETTINGS] Auto-loop default: {}",
+            if enabled { "ON" } else { "OFF" }
         );
         MacroEffect::none()
     }

@@ -517,5 +517,6 @@ fn update_state(
         live_input: live_input.map(PlaybackInput::from_input_state),
         stick_deadzone: ctrl.stick_deadzone,
         combo_hold_time: ctrl.combo_hold_time,
+        auto_loop_default: ctrl.auto_loop_default,
     });
 }

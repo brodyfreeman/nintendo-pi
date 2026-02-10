@@ -175,6 +175,11 @@ fn parse_web_command(val: &serde_json::Value, _macros_dir: &std::path::Path) -> 
             debug!("[WEB] Set combo hold time: {t}s");
             Some(WebCommand::SetComboHoldTime(t))
         }
+        "SET_AUTO_LOOP_DEFAULT" => {
+            let v = val.get("data")?.as_bool()?;
+            debug!("[WEB] Set auto-loop default: {v}");
+            Some(WebCommand::SetAutoLoopDefault(v))
+        }
         _ => {
             warn!("[WEB] Unknown command: {cmd}");
             None
