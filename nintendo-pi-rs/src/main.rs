@@ -483,5 +483,6 @@ fn update_state(mitm_state: &MitmState, ctrl: &MacroController, bt_connected: bo
         current_macro_name: ctrl.cached_macro_name.clone(),
         usb_connected: true,
         bt_connected,
+        playback_speed: ctrl.player.speed,
     });
 }

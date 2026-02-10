@@ -16,6 +16,8 @@ pub enum WebCommand {
     SelectSlot(usize),
     RenameMacro(u32, String),
     DeleteMacro(u32),
+    CycleSpeed,
+    SetPlaybackSpeed(f64),
 }
 
 impl From<WebCommand> for crate::macro_engine::controller::MacroCommand {
@@ -30,12 +32,14 @@ impl From<WebCommand> for crate::macro_engine::controller::MacroCommand {
             WebCommand::StopPlayback => Self::StopPlayback,
             WebCommand::RenameMacro(id, name) => Self::RenameMacro(id, name),
             WebCommand::DeleteMacro(id) => Self::DeleteMacro(id),
+            WebCommand::CycleSpeed => Self::CycleSpeed,
+            WebCommand::SetPlaybackSpeed(speed) => Self::SetPlaybackSpeed(speed),
         }
     }
 }
 
 /// Thread/task-safe MITM state snapshot for the web UI.
-#[derive(Debug, Clone, Default, PartialEq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct StateSnapshot {
     pub macro_mode: bool,
     pub recording: bool,
@@ -45,6 +49,23 @@ pub struct StateSnapshot {
     pub current_macro_name: Option<String>,
     pub usb_connected: bool,
     pub bt_connected: bool,
+    pub playback_speed: f64,
+}
+
+impl Default for StateSnapshot {
+    fn default() -> Self {
+        Self {
+            macro_mode: false,
+            recording: false,
+            playing: false,
+            current_slot: 0,
+            slot_count: 0,
+            current_macro_name: None,
+            usb_connected: false,
+            bt_connected: false,
+            playback_speed: 1.0,
+        }
+    }
 }
 
 pub struct MitmState {

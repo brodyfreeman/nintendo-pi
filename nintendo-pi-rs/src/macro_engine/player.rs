@@ -9,9 +9,13 @@ use tracing::{error, info, warn};
 
 use super::storage::{self, FRAME_SIZE, HEADER_SIZE, MAGIC, MAGIC_V1};
 
+/// Available playback speed presets.
+pub const SPEED_PRESETS: &[f64] = &[0.25, 0.5, 1.0, 2.0, 4.0];
+
 pub struct MacroPlayer {
     pub playing: bool,
     pub looping: bool,
+    pub speed: f64,
     mmap: Option<Mmap>,
     _file: Option<File>,
     frame_count: usize,
@@ -25,6 +29,7 @@ impl MacroPlayer {
         Self {
             playing: false,
             looping: false,
+            speed: 1.0,
             mmap: None,
             _file: None,
             frame_count: 0,
@@ -112,6 +117,22 @@ impl MacroPlayer {
         info!("[MACRO] Playback stopped");
     }
 
+    /// Set playback speed (clamped to valid range).
+    pub fn set_speed(&mut self, speed: f64) {
+        self.speed = speed.clamp(SPEED_PRESETS[0], SPEED_PRESETS[SPEED_PRESETS.len() - 1]);
+        info!("[MACRO] Playback speed set to {:.2}x", self.speed);
+    }
+
+    /// Cycle to the next speed preset. Wraps around.
+    pub fn cycle_speed(&mut self) {
+        let current_idx = SPEED_PRESETS
+            .iter()
+            .position(|&s| (s - self.speed).abs() < 0.01)
+            .unwrap_or(2); // default to 1.0x index
+        let next_idx = (current_idx + 1) % SPEED_PRESETS.len();
+        self.set_speed(SPEED_PRESETS[next_idx]);
+    }
+
     /// Get the current frame if its timestamp has been reached.
     ///
     /// Returns Some(report) with the current 64-byte report, or None if done.
@@ -120,7 +141,7 @@ impl MacroPlayer {
             return None;
         }
         let mmap = self.mmap.as_ref()?;
-        let elapsed_us = self.start.as_ref()?.elapsed().as_micros() as u64;
+        let elapsed_us = (self.start.as_ref()?.elapsed().as_micros() as f64 * self.speed) as u64;
 
         // Advance through frames whose timestamps have passed
         while self.frame_index < self.frame_count {
@@ -166,5 +187,62 @@ impl MacroPlayer {
 impl Drop for MacroPlayer {
     fn drop(&mut self) {
         self.close_mmap();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_new_defaults_to_1x_speed() {
+        let player = MacroPlayer::new();
+        assert!((player.speed - 1.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn test_set_speed_clamps_to_range() {
+        let mut player = MacroPlayer::new();
+
+        player.set_speed(10.0);
+        assert!((player.speed - 4.0).abs() < f64::EPSILON);
+
+        player.set_speed(0.01);
+        assert!((player.speed - 0.25).abs() < f64::EPSILON);
+
+        player.set_speed(2.0);
+        assert!((player.speed - 2.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn test_cycle_speed_wraps() {
+        let mut player = MacroPlayer::new();
+        // Start at 1.0x (index 2)
+        assert!((player.speed - 1.0).abs() < f64::EPSILON);
+
+        player.cycle_speed(); // -> 2.0
+        assert!((player.speed - 2.0).abs() < f64::EPSILON);
+
+        player.cycle_speed(); // -> 4.0
+        assert!((player.speed - 4.0).abs() < f64::EPSILON);
+
+        player.cycle_speed(); // -> 0.25 (wrap)
+        assert!((player.speed - 0.25).abs() < f64::EPSILON);
+
+        player.cycle_speed(); // -> 0.5
+        assert!((player.speed - 0.5).abs() < f64::EPSILON);
+
+        player.cycle_speed(); // -> 1.0
+        assert!((player.speed - 1.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn test_cycle_speed_from_unknown_defaults_to_after_1x() {
+        let mut player = MacroPlayer::new();
+        // Set to a non-preset value
+        player.speed = 1.5;
+        // Should default to index 2 (1.0x), then advance to index 3 (2.0x)
+        player.cycle_speed();
+        assert!((player.speed - 2.0).abs() < f64::EPSILON);
     }
 }

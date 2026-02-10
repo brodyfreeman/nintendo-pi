@@ -17,6 +17,7 @@ pub enum ComboAction {
     NextSlot,
     PlayMacro,
     StopPlayback,
+    CycleSpeed,
 }
 
 impl From<ComboAction> for Option<crate::macro_engine::controller::MacroCommand> {
@@ -30,6 +31,7 @@ impl From<ComboAction> for Option<crate::macro_engine::controller::MacroCommand>
             ComboAction::NextSlot => Some(MacroCommand::NextSlot),
             ComboAction::PlayMacro => Some(MacroCommand::PlayMacro),
             ComboAction::StopPlayback => Some(MacroCommand::StopPlayback),
+            ComboAction::CycleSpeed => Some(MacroCommand::CycleSpeed),
         }
     }
 }
@@ -41,6 +43,7 @@ const HOLD_DURATION: f64 = 0.5;
 const INSTANT_COMBOS: &[(Button, ComboAction)] = &[
     (Button::DpadLeft, ComboAction::PrevSlot),
     (Button::DpadRight, ComboAction::NextSlot),
+    (Button::DpadUp, ComboAction::CycleSpeed),
     (Button::A, ComboAction::PlayMacro),
     (Button::B, ComboAction::StopPlayback),
 ];
@@ -342,5 +345,17 @@ mod tests {
         // L3+R3+A: should NOT trigger recording (A takes priority)
         let (action, _) = cd.update(&buttons_with(&[Button::L3, Button::R3, Button::A]));
         assert_eq!(action, ComboAction::PlayMacro);
+    }
+
+    #[test]
+    fn test_instant_combo_cycle_speed() {
+        let mut cd = ComboDetector::new();
+        cd.update(&buttons_with(&[Button::L3, Button::R3]));
+
+        let (action, sup) = cd.update(&buttons_with(&[Button::L3, Button::R3, Button::DpadUp]));
+        assert_eq!(action, ComboAction::CycleSpeed);
+        assert!(sup.buttons[..sup.count]
+            .iter()
+            .any(|b| *b == Some(Button::DpadUp)));
     }
 }

@@ -162,6 +162,11 @@ fn parse_web_command(val: &serde_json::Value, _macros_dir: &std::path::Path) -> 
             let id = val.get("data")?.as_u64()? as u32;
             Some(WebCommand::DeleteMacro(id))
         }
+        "CYCLE_SPEED" => Some(WebCommand::CycleSpeed),
+        "SET_PLAYBACK_SPEED" => {
+            let speed = val.get("data")?.as_f64()?;
+            Some(WebCommand::SetPlaybackSpeed(speed))
+        }
         _ => {
             warn!("[WEB] Unknown command: {cmd}");
             None

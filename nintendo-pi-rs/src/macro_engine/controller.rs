@@ -14,7 +14,7 @@ use super::storage;
 use crate::led;
 
 /// Unified command enum — covers both combo actions and web commands.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum MacroCommand {
     ToggleMacroMode,
     ToggleRecording,
@@ -25,6 +25,8 @@ pub enum MacroCommand {
     StopPlayback,
     RenameMacro(u32, String),
     DeleteMacro(u32),
+    CycleSpeed,
+    SetPlaybackSpeed(f64),
 }
 
 /// Side effects produced by executing a command.
@@ -88,6 +90,8 @@ impl MacroController {
             MacroCommand::StopPlayback => self.stop_playback(),
             MacroCommand::RenameMacro(id, name) => self.rename_macro(id, &name),
             MacroCommand::DeleteMacro(id) => self.delete_macro(id),
+            MacroCommand::CycleSpeed => self.cycle_speed(),
+            MacroCommand::SetPlaybackSpeed(speed) => self.set_playback_speed(speed),
         }
     }
 
@@ -214,6 +218,16 @@ impl MacroController {
         } else {
             MacroEffect::none()
         }
+    }
+
+    fn cycle_speed(&mut self) -> MacroEffect {
+        self.player.cycle_speed();
+        MacroEffect::none()
+    }
+
+    fn set_playback_speed(&mut self, speed: f64) -> MacroEffect {
+        self.player.set_speed(speed);
+        MacroEffect::none()
     }
 
     fn rename_macro(&mut self, id: u32, name: &str) -> MacroEffect {
@@ -407,5 +421,29 @@ mod tests {
         let (mut ctrl, _dir) = make_controller();
         let effect = ctrl.execute(MacroCommand::StopPlayback);
         assert!(effect.led.is_none());
+    }
+
+    #[test]
+    fn test_cycle_speed() {
+        let (mut ctrl, _dir) = make_controller();
+        assert!((ctrl.player.speed - 1.0).abs() < f64::EPSILON);
+
+        ctrl.execute(MacroCommand::CycleSpeed);
+        assert!((ctrl.player.speed - 2.0).abs() < f64::EPSILON);
+
+        ctrl.execute(MacroCommand::CycleSpeed);
+        assert!((ctrl.player.speed - 4.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn test_set_playback_speed() {
+        let (mut ctrl, _dir) = make_controller();
+
+        ctrl.execute(MacroCommand::SetPlaybackSpeed(0.5));
+        assert!((ctrl.player.speed - 0.5).abs() < f64::EPSILON);
+
+        // Clamped to max
+        ctrl.execute(MacroCommand::SetPlaybackSpeed(100.0));
+        assert!((ctrl.player.speed - 4.0).abs() < f64::EPSILON);
     }
 }
