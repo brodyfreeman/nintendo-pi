@@ -191,7 +191,6 @@
   }
   .rec-status.active { background: var(--red); animation: pulse 1s infinite; }
   @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.5; } }
-  /* viz-section show/hide handled by max-height transition below */
   .progress-bar-outer {
     width: 100%; height: 6px; background: rgba(255,255,255,0.08);
     border-radius: 3px; overflow: hidden; margin-bottom: 0.3rem;
@@ -201,47 +200,7 @@
     background: linear-gradient(to right, var(--joycon-blue), var(--accent), var(--joycon-red));
     transition: width 0.15s linear; width: 0%;
   }
-  .progress-label { font-size: 0.7rem; color: var(--muted); font-weight: 700; text-align: center; margin-bottom: 0.6rem; }
-  .sticks-row { display: flex; gap: 1.5rem; justify-content: center; margin-bottom: 0.6rem; }
-  .stick-container { text-align: center; }
-  .stick-label { font-size: 0.7rem; color: var(--muted); margin-bottom: 0.25rem; font-weight: 800; letter-spacing: 0.05em; }
-  .stick-circle {
-    width: 84px; height: 84px; border-radius: 50%; position: relative;
-    background: radial-gradient(circle, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0.02) 70%);
-    border: 2px solid rgba(255,255,255,0.12);
-    box-shadow: inset 0 2px 6px rgba(0,0,0,0.3);
-  }
-  .stick-container:first-child .stick-circle {
-    border-color: rgba(0,195,227,0.25);
-    box-shadow: inset 0 2px 6px rgba(0,0,0,0.3), 0 0 8px rgba(0,195,227,0.1);
-  }
-  .stick-container:last-child .stick-circle {
-    border-color: rgba(255,60,40,0.25);
-    box-shadow: inset 0 2px 6px rgba(0,0,0,0.3), 0 0 8px rgba(255,60,40,0.1);
-  }
-  .stick-dot {
-    width: 14px; height: 14px; border-radius: 50%; background: var(--muted);
-    position: absolute; transform: translate(-50%, -50%);
-    transition: left 0.1s linear, top 0.1s linear, background 0.1s;
-    left: 50%; top: 50%;
-    box-shadow: 0 1px 4px rgba(0,0,0,0.4);
-  }
-  .stick-dot.active { background: var(--green); box-shadow: 0 0 8px rgba(73,184,79,0.5); }
-  .btn-pills {
-    display: flex; flex-wrap: wrap; gap: 0.3rem; justify-content: center;
-    min-height: 1.6rem;
-  }
-  .btn-pill {
-    display: inline-block; padding: 0.2rem 0.6rem; border-radius: 20px;
-    font-size: 0.72rem; font-weight: 800; color: #fff;
-    background: var(--accent); letter-spacing: 0.02em;
-    box-shadow: 0 2px 0 rgba(0,0,0,0.2);
-  }
-  /* Color specific button pills like ABXY face buttons */
-  .btn-pill[data-btn="A"] { background: var(--green); }
-  .btn-pill[data-btn="B"] { background: var(--red); }
-  .btn-pill[data-btn="X"] { background: var(--blue); }
-  .btn-pill[data-btn="Y"] { background: var(--yellow); color: #222; }
+  .progress-label { font-size: 0.7rem; color: var(--muted); font-weight: 700; text-align: center; }
   /* Switch Home Screen macro tiles */
   .macro-list-grid {
     display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
@@ -392,6 +351,14 @@
   }
   .ctrl-status-text.recording { color: var(--red); }
   .ctrl-status-text.playing { color: var(--green); }
+  .ctrl-playback-progress {
+    max-height: 0; overflow: hidden; opacity: 0;
+    transition: max-height 0.4s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.3s ease, margin 0.3s ease;
+    margin-top: 0;
+  }
+  .ctrl-playback-progress.show {
+    max-height: 60px; opacity: 1; margin-top: 0.5rem;
+  }
 
   /* === Switch-style entrance animations === */
   @keyframes section-in {
@@ -408,20 +375,6 @@
   .grid-area .section:nth-child(4) { animation-delay: 0.16s; }
   .grid-area .section:nth-child(5) { animation-delay: 0.20s; }
 
-  /* === Smooth viz section slide === */
-  .viz-section {
-    max-height: 0; overflow: hidden; opacity: 0;
-    transition: max-height 0.4s cubic-bezier(0.22, 1, 0.36, 1),
-                opacity 0.3s ease,
-                margin 0.4s cubic-bezier(0.22, 1, 0.36, 1),
-                padding 0.4s cubic-bezier(0.22, 1, 0.36, 1);
-    margin: 0 0.75rem; padding-top: 0; padding-bottom: 0;
-    display: block;
-  }
-  .viz-section.show {
-    max-height: 400px; opacity: 1;
-    margin: 0.6rem 0.75rem; padding: 1rem;
-  }
 
   /* === Slot number pop on change === */
   @keyframes slot-pop {
@@ -507,7 +460,6 @@
     .content-wrap { padding: 0 1rem; }
     .grid-area .section { margin: 0.75rem 0.5rem; padding: 1.25rem; }
     .status-bar { margin: 0 0.5rem; }
-    .stick-circle { width: 100px; height: 100px; }
     .macro-list-grid { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 0.75rem; }
     .controller-svg-wrap { max-width: 380px; }
     .controller-section { padding: 1rem 0.5rem 0.8rem; }
@@ -603,6 +555,10 @@
     </svg>
   </div>
   <div class="ctrl-status-text" id="ctrlStatusText">Waiting for controller...</div>
+  <div class="ctrl-playback-progress" id="ctrlPlaybackProgress">
+    <div class="progress-bar-outer"><div class="progress-bar-inner" id="vizProgress"></div></div>
+    <div class="progress-label" id="vizProgressLabel">0 / 0</div>
+  </div>
 </div>
 
 <div class="grid-area">
@@ -652,23 +608,6 @@
   </div>
 </div>
 
-<div class="section viz-section grid-span-full" id="vizSection">
-  <div class="section-title">Playback</div>
-  <div class="progress-bar-outer"><div class="progress-bar-inner" id="vizProgress"></div></div>
-  <div class="progress-label" id="vizProgressLabel">0 / 0</div>
-  <div class="sticks-row">
-    <div class="stick-container">
-      <div class="stick-label">L</div>
-      <div class="stick-circle"><div class="stick-dot" id="vizLeftDot"></div></div>
-    </div>
-    <div class="stick-container">
-      <div class="stick-label">R</div>
-      <div class="stick-circle"><div class="stick-dot" id="vizRightDot"></div></div>
-    </div>
-  </div>
-  <div class="btn-pills" id="vizButtons"></div>
-</div>
-
 <div class="section grid-span-full">
   <div class="section-title">Macro Library</div>
   <div id="macroList"><div class="empty-msg">No macros yet</div></div>
@@ -705,8 +644,6 @@
   var macros = [];
   var renameId = null;
   var es = null;
-  var ABXY = ['A', 'B', 'X', 'Y'];
-
   // === Nintendo-style synthesized UI sound effects ===
   var audioCtx = null;
   var sfxEnabled = true;
@@ -944,36 +881,17 @@
         ? 'btn btn-dark active' : 'btn btn-dark';
     }
 
-    // Playback visualization
-    var vizEl = document.getElementById('vizSection');
+    // Playback progress bar (in controller section)
+    var progressWrap = document.getElementById('ctrlPlaybackProgress');
     if (state.playing && state.playback_input) {
-      vizEl.classList.add('show');
+      progressWrap.classList.add('show');
       var pct = state.playback_frame_count > 0
         ? (state.playback_frame / state.playback_frame_count * 100) : 0;
       document.getElementById('vizProgress').style.width = pct + '%';
       document.getElementById('vizProgressLabel').textContent =
         state.playback_frame + ' / ' + state.playback_frame_count;
-
-      var ls = state.playback_input.left_stick;
-      var rs = state.playback_input.right_stick;
-      var leftDot = document.getElementById('vizLeftDot');
-      var rightDot = document.getElementById('vizRightDot');
-      leftDot.style.left = ((ls[0] + 1) * 50) + '%';
-      leftDot.style.top = ((-ls[1] + 1) * 50) + '%';
-      leftDot.className = 'stick-dot' + (Math.abs(ls[0]) > 0.05 || Math.abs(ls[1]) > 0.05 ? ' active' : '');
-      rightDot.style.left = ((rs[0] + 1) * 50) + '%';
-      rightDot.style.top = ((-rs[1] + 1) * 50) + '%';
-      rightDot.className = 'stick-dot' + (Math.abs(rs[0]) > 0.05 || Math.abs(rs[1]) > 0.05 ? ' active' : '');
-
-      var btns = state.playback_input.buttons;
-      var html = '';
-      for (var j = 0; j < btns.length; j++) {
-        var attr = ABXY.indexOf(btns[j]) >= 0 ? ' data-btn="' + btns[j] + '"' : '';
-        html += '<span class="btn-pill"' + attr + '>' + btns[j] + '</span>';
-      }
-      document.getElementById('vizButtons').innerHTML = html;
     } else {
-      vizEl.classList.remove('show');
+      progressWrap.classList.remove('show');
     }
 
     // Update controller visualization
