@@ -291,3 +291,244 @@ pub fn build_bt_report(
 
     report
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Build a minimal 64-byte report with specified button bytes and stick data.
+    fn make_report(btn: [u8; 3], stick1: [u8; 3], stick2: [u8; 3], lt: u8, rt: u8) -> [u8; 64] {
+        let mut r = [0u8; 64];
+        r[3] = btn[0];
+        r[4] = btn[1];
+        r[5] = btn[2];
+        r[6] = stick1[0];
+        r[7] = stick1[1];
+        r[8] = stick1[2];
+        r[9] = stick2[0];
+        r[10] = stick2[1];
+        r[11] = stick2[2];
+        r[13] = lt;
+        r[14] = rt;
+        r
+    }
+
+    #[test]
+    fn test_parse_no_buttons() {
+        let report = make_report([0, 0, 0], [0, 0, 0], [0, 0, 0], 36, 36);
+        let state = parse_hid_report(&report);
+        assert!(!state.buttons.a);
+        assert!(!state.buttons.b);
+        assert!(!state.buttons.x);
+        assert!(!state.buttons.y);
+        assert!(!state.buttons.l3);
+        assert!(!state.buttons.r3);
+        assert!(!state.buttons.dpad_down);
+        assert!(!state.buttons.home);
+    }
+
+    #[test]
+    fn test_parse_individual_buttons() {
+        // B = byte0 bit0
+        let r = make_report([0x01, 0, 0], [0; 3], [0; 3], 36, 36);
+        assert!(parse_hid_report(&r).buttons.b);
+
+        // A = byte0 bit1
+        let r = make_report([0x02, 0, 0], [0; 3], [0; 3], 36, 36);
+        assert!(parse_hid_report(&r).buttons.a);
+
+        // R3 = byte0 bit7
+        let r = make_report([0x80, 0, 0], [0; 3], [0; 3], 36, 36);
+        assert!(parse_hid_report(&r).buttons.r3);
+
+        // DpadDown = byte1 bit0
+        let r = make_report([0, 0x01, 0], [0; 3], [0; 3], 36, 36);
+        assert!(parse_hid_report(&r).buttons.dpad_down);
+
+        // L3 = byte1 bit7
+        let r = make_report([0, 0x80, 0], [0; 3], [0; 3], 36, 36);
+        assert!(parse_hid_report(&r).buttons.l3);
+
+        // Home = byte2 bit0
+        let r = make_report([0, 0, 0x01], [0; 3], [0; 3], 36, 36);
+        assert!(parse_hid_report(&r).buttons.home);
+
+        // Capture = byte2 bit1
+        let r = make_report([0, 0, 0x02], [0; 3], [0; 3], 36, 36);
+        assert!(parse_hid_report(&r).buttons.capture);
+    }
+
+    #[test]
+    fn test_parse_multiple_buttons() {
+        // A + B + L3 + R3
+        let r = make_report([0x03 | 0x80, 0x80, 0], [0; 3], [0; 3], 36, 36);
+        let s = parse_hid_report(&r);
+        assert!(s.buttons.a);
+        assert!(s.buttons.b);
+        assert!(s.buttons.r3);
+        assert!(s.buttons.l3);
+        assert!(!s.buttons.x);
+    }
+
+    #[test]
+    fn test_unpack_12bit_sticks() {
+        // Pack known values: X=2048 (0x800), Y=2048 (0x800)
+        // Unpacking: a = data[0] | (data[1] & 0x0F) << 8
+        //            b = (data[1] >> 4) | data[2] << 4
+        // X=0x800: data[0]=0x00, data[1] low nibble = 0x8
+        // Y=0x800: data[1] high nibble = 0x0, data[2] = 0x80
+        // data[1] = 0x08 (low=8, high=0)
+        let stick = [0x00, 0x08, 0x80];
+        let r = make_report([0; 3], stick, [0; 3], 36, 36);
+        let s = parse_hid_report(&r);
+        assert_eq!(s.left_stick_raw, (0x800, 0x800));
+    }
+
+    #[test]
+    fn test_unpack_12bit_extremes() {
+        // X=0, Y=0
+        let r = make_report([0; 3], [0, 0, 0], [0; 3], 36, 36);
+        assert_eq!(parse_hid_report(&r).left_stick_raw, (0, 0));
+
+        // X=0xFFF (4095), Y=0xFFF
+        let r = make_report([0; 3], [0xFF, 0xFF, 0xFF], [0; 3], 36, 36);
+        assert_eq!(parse_hid_report(&r).left_stick_raw, (0xFFF, 0xFFF));
+    }
+
+    #[test]
+    fn test_remap_trigger_boundaries() {
+        assert_eq!(remap_trigger_value(36), 0);    // min input
+        assert_eq!(remap_trigger_value(240), 255);  // max input
+        assert_eq!(remap_trigger_value(0), 0);      // below min clamps
+        assert_eq!(remap_trigger_value(255), 255);   // above max clamps
+
+        // Midpoint: (138 - 36) / (240 - 36) = 102/204 = 0.5 → 127
+        assert_eq!(remap_trigger_value(138), 127);
+    }
+
+    #[test]
+    fn test_button_position_matches_parse() {
+        // For each button, set only its bit, parse, and verify get() returns true
+        let all_buttons = [
+            Button::B, Button::A, Button::Y, Button::X,
+            Button::R, Button::ZR, Button::Plus, Button::R3,
+            Button::DpadDown, Button::DpadRight, Button::DpadLeft, Button::DpadUp,
+            Button::L, Button::ZL, Button::Minus, Button::L3,
+            Button::Home, Button::Capture,
+        ];
+
+        for btn in all_buttons {
+            let (byte_idx, mask) = btn.position();
+            let mut btn_bytes = [0u8; 3];
+            btn_bytes[byte_idx] = mask;
+
+            let r = make_report(btn_bytes, [0; 3], [0; 3], 36, 36);
+            let state = parse_hid_report(&r);
+            assert!(
+                state.buttons.get(btn),
+                "{btn:?}: position ({byte_idx}, {mask:#04x}) didn't parse correctly"
+            );
+
+            // Also verify no other buttons are set
+            for other in all_buttons {
+                if other != btn {
+                    assert!(
+                        !state.buttons.get(other),
+                        "Setting {btn:?} also set {other:?}"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn test_build_bt_report_header() {
+        let input = InputState::default();
+        let report = build_bt_report(&input, (0.0, 0.0), (0.0, 0.0), 42);
+        assert_eq!(report[0], 0xA1);
+        assert_eq!(report[1], 0x30);
+        assert_eq!(report[2], 42); // timer
+        assert_eq!(report[3], 0x90); // battery
+        assert_eq!(report[13], 0xB0); // vibrator
+    }
+
+    #[test]
+    fn test_build_bt_report_buttons() {
+        let mut input = InputState::default();
+        input.buttons.a = true;
+        input.buttons.b = true;
+        input.buttons.y = true;
+        input.buttons.plus = true;
+        input.buttons.l3 = true;
+        input.buttons.dpad_down = true;
+        input.buttons.zl = true;
+
+        let report = build_bt_report(&input, (0.0, 0.0), (0.0, 0.0), 0);
+
+        // Byte 4: Y=0x01, B=0x04, A=0x08
+        assert_eq!(report[4] & 0x01, 0x01); // Y
+        assert_eq!(report[4] & 0x04, 0x04); // B
+        assert_eq!(report[4] & 0x08, 0x08); // A
+
+        // Byte 5: PLUS=0x02, LSTICK=0x08
+        assert_eq!(report[5] & 0x02, 0x02); // Plus
+        assert_eq!(report[5] & 0x08, 0x08); // L3
+
+        // Byte 6: DD=0x01, ZL=0x80
+        assert_eq!(report[6] & 0x01, 0x01); // DpadDown
+        assert_eq!(report[6] & 0x80, 0x80); // ZL
+    }
+
+    #[test]
+    fn test_build_bt_report_sticks_center() {
+        let input = InputState::default();
+        let report = build_bt_report(&input, (0.0, 0.0), (0.0, 0.0), 0);
+
+        // Center = 2048 = 0x800
+        // Byte 7: lx & 0xFF = 0x00
+        // Byte 8: (lx >> 8) & 0x0F = 0x8, (ly & 0x0F) << 4 = 0x00 → 0x80
+        // Byte 9: (ly >> 4) & 0xFF = 0x80
+        assert_eq!(report[7], 0x00);
+        assert_eq!(report[8], 0x08);
+        assert_eq!(report[9], 0x80);
+    }
+
+    #[test]
+    fn test_build_bt_report_sticks_full_tilt() {
+        let input = InputState::default();
+        // Full right: x=100 → lx = (100 * 2048/100 + 2048) = 4096 → clamped to 4095
+        let report = build_bt_report(&input, (100.0, 100.0), (-100.0, -100.0), 0);
+
+        // Left stick full positive: 4095 = 0xFFF
+        let lx = report[7] as u16 | (((report[8] & 0x0F) as u16) << 8);
+        let ly = ((report[8] >> 4) as u16) | ((report[9] as u16) << 4);
+        assert_eq!(lx, 4095);
+        assert_eq!(ly, 4095);
+
+        // Right stick full negative: 0 = 0x000
+        let rx = report[10] as u16 | (((report[11] & 0x0F) as u16) << 8);
+        let ry = ((report[11] >> 4) as u16) | ((report[12] as u16) << 4);
+        assert_eq!(rx, 0);
+        assert_eq!(ry, 0);
+    }
+
+    #[test]
+    fn test_button_set_get_roundtrip() {
+        let mut bs = ButtonState::default();
+        let all = [
+            Button::B, Button::A, Button::Y, Button::X,
+            Button::R, Button::ZR, Button::Plus, Button::R3,
+            Button::DpadDown, Button::DpadRight, Button::DpadLeft, Button::DpadUp,
+            Button::L, Button::ZL, Button::Minus, Button::L3,
+            Button::Home, Button::Capture,
+        ];
+
+        for btn in all {
+            assert!(!bs.get(btn));
+            bs.set(btn, true);
+            assert!(bs.get(btn));
+            bs.set(btn, false);
+            assert!(!bs.get(btn));
+        }
+    }
+}

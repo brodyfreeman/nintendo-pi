@@ -89,3 +89,125 @@ pub fn auto_calibrate_centers(reports: &[[u8; 64]]) -> ((u16, u16), (u16, u16)) 
         ((rx_sum / n) as u16, (ry_sum / n) as u16),
     )
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_deadzone() {
+        let cal = StickCalibrator::new(MAIN_STICK_CAL, 10.0);
+        // Small input well within deadzone
+        assert_eq!(cal.calibrate(1.0, 1.0), (0.0, 0.0));
+        assert_eq!(cal.calibrate(0.0, 0.0), (0.0, 0.0));
+        assert_eq!(cal.calibrate(-5.0, 5.0), (0.0, 0.0));
+    }
+
+    #[test]
+    fn test_center_returns_zero() {
+        let cal = StickCalibrator::new(MAIN_STICK_CAL, 10.0);
+        let (x, y) = cal.calibrate(0.0, 0.0);
+        assert_eq!(x, 0.0);
+        assert_eq!(y, 0.0);
+    }
+
+    #[test]
+    fn test_full_tilt_positive_x() {
+        let cal = StickCalibrator::new(MAIN_STICK_CAL, 10.0);
+        // Full tilt right: ~2048 raw centered
+        let (x, y) = cal.calibrate(2048.0, 0.0);
+        // Should produce a large positive X, near-zero Y
+        assert!(x > 50.0, "Expected large positive X, got {x}");
+        assert!(y.abs() < 1.0, "Expected near-zero Y, got {y}");
+    }
+
+    #[test]
+    fn test_opposite_directions() {
+        let cal = StickCalibrator::new(MAIN_STICK_CAL, 10.0);
+        let (x1, _y1) = cal.calibrate(1000.0, 0.0);
+        let (x2, _y2) = cal.calibrate(-1000.0, 0.0);
+        // Opposite directions should produce opposite signs
+        assert!(x1 > 0.0, "Right tilt should be positive: {x1}");
+        assert!(x2 < 0.0, "Left tilt should be negative: {x2}");
+        // Magnitudes should be in the same ballpark (within 15% of each other)
+        // since real calibration radii aren't perfectly symmetric
+        let ratio = x1.abs() / x2.abs();
+        assert!(ratio > 0.8 && ratio < 1.2, "Magnitude ratio {ratio} too far from 1.0");
+    }
+
+    #[test]
+    fn test_calibrator_from_string() {
+        // Verify that both calibration strings parse correctly (32 values)
+        let main_cal = StickCalibrator::new(MAIN_STICK_CAL, 10.0);
+        let c_cal = StickCalibrator::new(C_STICK_CAL, 10.0);
+
+        // All radii should be positive (real calibration data)
+        for r in &main_cal.radii {
+            assert!(*r > 0.0, "Main stick radius should be positive: {r}");
+        }
+        for r in &c_cal.radii {
+            assert!(*r > 0.0, "C stick radius should be positive: {r}");
+        }
+    }
+
+    #[test]
+    fn test_auto_calibrate_centers_empty() {
+        let (left, right) = auto_calibrate_centers(&[]);
+        assert_eq!(left, (2048, 2048));
+        assert_eq!(right, (2048, 2048));
+    }
+
+    #[test]
+    fn test_auto_calibrate_centers_known_data() {
+        // Create reports with known stick values
+        // Left stick at (0x800, 0x800) = (2048, 2048)
+        // Unpacking: a = data[0] | (data[1] & 0x0F) << 8
+        //            b = (data[1] >> 4) | data[2] << 4
+        // a=0x800: data[0]=0x00, data[1] low nibble=0x8 → data[1]=0x08
+        // b=0x800: data[1] high nibble=0x0, data[2]=0x80
+        let mut r1 = [0u8; 64];
+        r1[6] = 0x00;
+        r1[7] = 0x08;
+        r1[8] = 0x80;
+        // Right stick also at center
+        r1[9] = 0x00;
+        r1[10] = 0x08;
+        r1[11] = 0x80;
+
+        let reports = [r1, r1, r1]; // 3 identical reports
+        let (left, right) = auto_calibrate_centers(&reports);
+        assert_eq!(left, (0x800, 0x800));
+        assert_eq!(right, (0x800, 0x800));
+    }
+
+    #[test]
+    fn test_auto_calibrate_averages() {
+        // Two reports with different stick values, check averaging
+        let mut r1 = [0u8; 64];
+        let mut r2 = [0u8; 64];
+
+        // r1: left stick X=100, Y=200
+        // 100 = 0x064: lo8=0x64, hi4=0x0
+        // 200 = 0x0C8: lo4=0x0C, hi8=0x0C (wait, let me compute properly)
+        // unpack: a = data[0] | (data[1] & 0x0F) << 8
+        //         b = (data[1] >> 4) | data[2] << 4
+        // To pack X=100 (0x64), Y=200 (0xC8):
+        // data[0] = X & 0xFF = 0x64
+        // data[1] = ((X >> 8) & 0x0F) | ((Y & 0x0F) << 4) = 0x00 | 0x80 = 0x80
+        // data[2] = (Y >> 4) & 0xFF = 0x0C
+        r1[6] = 0x64;
+        r1[7] = 0x80;
+        r1[8] = 0x0C;
+
+        // r2: left stick X=200, Y=100
+        r2[6] = 0xC8;
+        r2[7] = 0x40;
+        r2[8] = 0x06;
+
+        let reports = [r1, r2];
+        let (left, _) = auto_calibrate_centers(&reports);
+        // Average: X=(100+200)/2=150, Y=(200+100)/2=150
+        assert_eq!(left.0, 150);
+        assert_eq!(left.1, 150);
+    }
+}

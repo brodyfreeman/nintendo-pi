@@ -24,7 +24,8 @@ use tracing::{error, info, warn};
 use calibration::{auto_calibrate_centers, StickCalibrator, C_STICK_CAL, MAIN_STICK_CAL};
 use combo::{ComboAction, ComboDetector};
 use input::{build_bt_report, parse_hid_report};
-use macro_engine::{player::MacroPlayer, recorder::MacroRecorder, storage};
+use macro_engine::controller::{MacroCommand, MacroController};
+use macro_engine::storage;
 use web::state::{MitmState, StateSnapshot, WebCommand};
 
 #[derive(Parser)]
@@ -323,132 +324,50 @@ fn usb_processing_loop(
     right_center: (u16, u16),
 ) -> mpsc::Receiver<WebCommand> {
     let mut combo = ComboDetector::new();
-    let mut recorder = MacroRecorder::new();
-    let mut player = MacroPlayer::new();
-    let mut current_slot: usize = 0;
-    let mut cached_slot_count = storage::get_slot_count(&macros_dir);
-    let mut cached_macro_name: Option<String> = None;
+    let mut ctrl = MacroController::new(macros_dir);
     let mut usb_check_counter: u32 = 0;
 
-    let refresh_cache = |slot: usize, macros_dir: &std::path::Path| -> (usize, Option<String>) {
-        let count = storage::get_slot_count(macros_dir);
-        let name = storage::get_macro_id_by_slot(macros_dir, slot)
-            .and_then(|id| storage::get_macro_info(macros_dir, id))
-            .map(|e| e.name);
-        (count, name)
-    };
-
-    let broadcast_macros = |broadcast: &broadcast::Sender<String>, macros_dir: &std::path::Path| {
-        let macros = storage::list_macros(macros_dir);
+    let broadcast_macros = |broadcast: &broadcast::Sender<String>, dir: &std::path::Path| {
+        let macros = storage::list_macros(dir);
         let msg = serde_json::json!({ "type": "macro_list", "macros": macros });
         let _ = broadcast.send(msg.to_string());
     };
 
-    // Initial cache
-    let (sc, mn) = refresh_cache(current_slot, &macros_dir);
-    cached_slot_count = sc;
-    cached_macro_name = mn;
+    /// Apply side effects from a macro command.
+    fn apply_effect(
+        effect: macro_engine::controller::MacroEffect,
+        state_broadcast: &broadcast::Sender<String>,
+        macros_dir: &std::path::Path,
+        broadcast_macros: &dyn Fn(&broadcast::Sender<String>, &std::path::Path),
+    ) {
+        if let Some(pattern) = effect.led {
+            led::set_led(pattern);
+        }
+        if effect.broadcast_macros {
+            broadcast_macros(state_broadcast, macros_dir);
+        }
+    }
 
     info!("[MITM] USB processing active.");
 
     loop {
         // --- Drain web command queue ---
         while let Ok(web_cmd) = cmd_rx.try_recv() {
-            match web_cmd {
-                WebCommand::ToggleMacroMode => {
-                    combo.macro_mode = !combo.macro_mode;
-                    if combo.macro_mode {
-                        led::set_led(&led::LED_MACRO_MODE);
-                        let (sc, mn) = refresh_cache(current_slot, &macros_dir);
-                        cached_slot_count = sc;
-                        cached_macro_name = mn;
-                        info!("[WEB] Macro mode ON. {} macro(s). Slot: {}", cached_slot_count, current_slot);
-                    } else {
-                        if recorder.recording {
-                            recorder.stop();
-                            recorder.save(&macros_dir, None);
-                            broadcast_macros(&state_broadcast, &macros_dir);
-                        }
-                        led::set_led(&led::LED_NORMAL);
-                        info!("[WEB] Macro mode OFF.");
-                    }
-                }
-                WebCommand::ToggleRecording => {
-                    if recorder.recording {
-                        recorder.stop();
-                        recorder.save(&macros_dir, None);
-                        led::set_led(&led::LED_MACRO_MODE);
-                        broadcast_macros(&state_broadcast, &macros_dir);
-                        let (sc, mn) = refresh_cache(current_slot, &macros_dir);
-                        cached_slot_count = sc;
-                        cached_macro_name = mn;
-                    } else {
-                        recorder.start();
-                        led::set_led(&led::LED_RECORDING);
-                    }
-                }
-                WebCommand::PrevSlot => {
-                    if cached_slot_count > 0 {
-                        current_slot = if current_slot == 0 { cached_slot_count - 1 } else { current_slot - 1 };
-                        let (sc, mn) = refresh_cache(current_slot, &macros_dir);
-                        cached_slot_count = sc;
-                        cached_macro_name = mn;
-                    }
-                }
-                WebCommand::NextSlot => {
-                    if cached_slot_count > 0 {
-                        current_slot = (current_slot + 1) % cached_slot_count;
-                        let (sc, mn) = refresh_cache(current_slot, &macros_dir);
-                        cached_slot_count = sc;
-                        cached_macro_name = mn;
-                    }
-                }
-                WebCommand::SelectSlot(slot) => {
-                    if slot < cached_slot_count {
-                        current_slot = slot;
-                        let (sc, mn) = refresh_cache(current_slot, &macros_dir);
-                        cached_slot_count = sc;
-                        cached_macro_name = mn;
-                    }
-                }
-                WebCommand::PlayMacro => {
-                    if let Some(macro_id) = storage::get_macro_id_by_slot(&macros_dir, current_slot) {
-                        if player.load(&macros_dir, macro_id) {
-                            player.start(false);
-                            led::set_led(&led::LED_PLAYBACK);
-                        }
-                    }
-                }
-                WebCommand::StopPlayback => {
-                    if player.playing {
-                        player.stop();
-                        led::set_led(if combo.macro_mode { &led::LED_MACRO_MODE } else { &led::LED_NORMAL });
-                    }
-                }
-                WebCommand::RenameMacro(id, name) => {
-                    if storage::rename_macro(&macros_dir, id, &name) {
-                        broadcast_macros(&state_broadcast, &macros_dir);
-                        let (sc, mn) = refresh_cache(current_slot, &macros_dir);
-                        cached_slot_count = sc;
-                        cached_macro_name = mn;
-                    }
-                }
-                WebCommand::DeleteMacro(id) => {
-                    if storage::delete_macro(&macros_dir, id) {
-                        broadcast_macros(&state_broadcast, &macros_dir);
-                        let new_count = storage::get_slot_count(&macros_dir);
-                        cached_slot_count = new_count;
-                        if new_count == 0 {
-                            current_slot = 0;
-                        } else if current_slot >= new_count {
-                            current_slot = new_count - 1;
-                        }
-                        let (sc, mn) = refresh_cache(current_slot, &macros_dir);
-                        cached_slot_count = sc;
-                        cached_macro_name = mn;
-                    }
-                }
-            }
+            let macro_cmd = match web_cmd {
+                WebCommand::ToggleMacroMode => MacroCommand::ToggleMacroMode,
+                WebCommand::ToggleRecording => MacroCommand::ToggleRecording,
+                WebCommand::PrevSlot => MacroCommand::PrevSlot,
+                WebCommand::NextSlot => MacroCommand::NextSlot,
+                WebCommand::SelectSlot(s) => MacroCommand::SelectSlot(s),
+                WebCommand::PlayMacro => MacroCommand::PlayMacro,
+                WebCommand::StopPlayback => MacroCommand::StopPlayback,
+                WebCommand::RenameMacro(id, name) => MacroCommand::RenameMacro(id, name),
+                WebCommand::DeleteMacro(id) => MacroCommand::DeleteMacro(id),
+            };
+            let effect = ctrl.execute(macro_cmd);
+            // Keep combo detector in sync with controller's macro_mode
+            combo.macro_mode = ctrl.macro_mode;
+            apply_effect(effect, &state_broadcast, ctrl.macros_dir(), &broadcast_macros);
         }
 
         // --- Read HID report (non-blocking from channel) ---
@@ -471,13 +390,12 @@ fn usb_processing_loop(
         };
 
         // --- Macro playback override ---
-        if player.playing {
-            if let Some(macro_frame) = player.get_frame() {
+        if ctrl.player.playing {
+            if let Some(macro_frame) = ctrl.player.get_frame() {
                 // Use macro frame for BT output
                 let parsed = parse_hid_report(&macro_frame);
                 let left_cal = calibrate_stick(&main_cal, parsed.left_stick_raw, left_center);
                 let right_cal = calibrate_stick(&c_cal, parsed.right_stick_raw, right_center);
-                // Build with timer=0; BT side overwrites with real timer
                 let bt_report = build_bt_report(&parsed, left_cal, right_cal, 0);
                 let _ = report_tx.try_send(bt_report);
 
@@ -485,20 +403,16 @@ fn usb_processing_loop(
                 let live_parsed = parse_hid_report(&raw_report);
                 let (action, _) = combo.update(&live_parsed.buttons);
                 if action == ComboAction::StopPlayback {
-                    player.stop();
-                    led::set_led(if combo.macro_mode { &led::LED_MACRO_MODE } else { &led::LED_NORMAL });
+                    let effect = ctrl.execute(MacroCommand::StopPlayback);
+                    apply_effect(effect, &state_broadcast, ctrl.macros_dir(), &broadcast_macros);
                 }
 
-                update_state(
-                    &mitm_state, &combo, &recorder, &player,
-                    current_slot, cached_slot_count, &cached_macro_name,
-                    bt_connected.load(Ordering::Relaxed),
-                );
+                update_state(&mitm_state, &ctrl, bt_connected.load(Ordering::Relaxed));
                 continue;
             } else {
                 // Playback finished
-                player.stop();
-                led::set_led(if combo.macro_mode { &led::LED_MACRO_MODE } else { &led::LED_NORMAL });
+                let effect = ctrl.execute(MacroCommand::StopPlayback);
+                apply_effect(effect, &state_broadcast, ctrl.macros_dir(), &broadcast_macros);
                 info!("[MACRO] Playback finished.");
             }
         }
@@ -510,73 +424,21 @@ fn usb_processing_loop(
         let (action, suppressed) = combo.update(&parsed.buttons);
 
         // --- Handle combo actions ---
-        match action {
-            ComboAction::ToggleMacroMode => {
-                combo.macro_mode = !combo.macro_mode;
-                if combo.macro_mode {
-                    led::set_led(&led::LED_MACRO_MODE);
-                    let (sc, mn) = refresh_cache(current_slot, &macros_dir);
-                    cached_slot_count = sc;
-                    cached_macro_name = mn;
-                    info!("[MACRO] Macro mode ON. {} macro(s). Slot: {}", cached_slot_count, current_slot);
-                } else {
-                    if recorder.recording {
-                        recorder.stop();
-                        recorder.save(&macros_dir, None);
-                        broadcast_macros(&state_broadcast, &macros_dir);
-                    }
-                    led::set_led(&led::LED_NORMAL);
-                    info!("[MACRO] Macro mode OFF.");
-                }
+        if action != ComboAction::None {
+            let macro_cmd = match action {
+                ComboAction::ToggleMacroMode => Some(MacroCommand::ToggleMacroMode),
+                ComboAction::ToggleRecording => Some(MacroCommand::ToggleRecording),
+                ComboAction::PrevSlot => Some(MacroCommand::PrevSlot),
+                ComboAction::NextSlot => Some(MacroCommand::NextSlot),
+                ComboAction::PlayMacro => Some(MacroCommand::PlayMacro),
+                ComboAction::StopPlayback => Some(MacroCommand::StopPlayback),
+                ComboAction::None => None,
+            };
+            if let Some(cmd) = macro_cmd {
+                let effect = ctrl.execute(cmd);
+                combo.macro_mode = ctrl.macro_mode;
+                apply_effect(effect, &state_broadcast, ctrl.macros_dir(), &broadcast_macros);
             }
-            ComboAction::ToggleRecording => {
-                if recorder.recording {
-                    recorder.stop();
-                    recorder.save(&macros_dir, None);
-                    led::set_led(&led::LED_MACRO_MODE);
-                    broadcast_macros(&state_broadcast, &macros_dir);
-                    let (sc, mn) = refresh_cache(current_slot, &macros_dir);
-                    cached_slot_count = sc;
-                    cached_macro_name = mn;
-                } else {
-                    recorder.start();
-                    led::set_led(&led::LED_RECORDING);
-                }
-            }
-            ComboAction::PrevSlot => {
-                if cached_slot_count > 0 {
-                    current_slot = if current_slot == 0 { cached_slot_count - 1 } else { current_slot - 1 };
-                    let (sc, mn) = refresh_cache(current_slot, &macros_dir);
-                    cached_slot_count = sc;
-                    cached_macro_name = mn;
-                    info!("[MACRO] Slot {} selected.", current_slot);
-                }
-            }
-            ComboAction::NextSlot => {
-                if cached_slot_count > 0 {
-                    current_slot = (current_slot + 1) % cached_slot_count;
-                    let (sc, mn) = refresh_cache(current_slot, &macros_dir);
-                    cached_slot_count = sc;
-                    cached_macro_name = mn;
-                    info!("[MACRO] Slot {} selected.", current_slot);
-                }
-            }
-            ComboAction::PlayMacro => {
-                if let Some(macro_id) = storage::get_macro_id_by_slot(&macros_dir, current_slot) {
-                    if player.load(&macros_dir, macro_id) {
-                        player.start(false);
-                        led::set_led(&led::LED_PLAYBACK);
-                        info!("[MACRO] Playing macro {} (slot {}).", macro_id, current_slot);
-                    }
-                }
-            }
-            ComboAction::StopPlayback => {
-                if player.playing {
-                    player.stop();
-                    led::set_led(if combo.macro_mode { &led::LED_MACRO_MODE } else { &led::LED_NORMAL });
-                }
-            }
-            ComboAction::None => {}
         }
 
         // --- Filter suppressed buttons ---
@@ -587,23 +449,18 @@ fn usb_processing_loop(
         }
 
         // --- Record if active ---
-        if recorder.recording {
-            recorder.add_frame(&filtered_report);
+        if ctrl.recorder.recording {
+            ctrl.recorder.add_frame(&filtered_report);
         }
 
         // --- Build BT report and send to forwarding channel ---
-        // Timer=0 placeholder; BT forwarding side overwrites with real timer
         let left_cal = calibrate_stick(&main_cal, parsed.left_stick_raw, left_center);
         let right_cal = calibrate_stick(&c_cal, parsed.right_stick_raw, right_center);
         let bt_report = build_bt_report(&parsed, left_cal, right_cal, 0);
         let _ = report_tx.try_send(bt_report);
 
         // --- Update web UI state ---
-        update_state(
-            &mitm_state, &combo, &recorder, &player,
-            current_slot, cached_slot_count, &cached_macro_name,
-            bt_connected.load(Ordering::Relaxed),
-        );
+        update_state(&mitm_state, &ctrl, bt_connected.load(Ordering::Relaxed));
     }
 }
 
@@ -625,21 +482,16 @@ fn calibrate_stick(
 
 fn update_state(
     mitm_state: &MitmState,
-    combo: &ComboDetector,
-    recorder: &MacroRecorder,
-    player: &MacroPlayer,
-    current_slot: usize,
-    slot_count: usize,
-    macro_name: &Option<String>,
+    ctrl: &MacroController,
     bt_connected: bool,
 ) {
     mitm_state.update(StateSnapshot {
-        macro_mode: combo.macro_mode,
-        recording: recorder.recording,
-        playing: player.playing,
-        current_slot,
-        slot_count,
-        current_macro_name: macro_name.clone(),
+        macro_mode: ctrl.macro_mode,
+        recording: ctrl.recorder.recording,
+        playing: ctrl.player.playing,
+        current_slot: ctrl.current_slot,
+        slot_count: ctrl.cached_slot_count,
+        current_macro_name: ctrl.cached_macro_name.clone(),
         usb_connected: true,
         bt_connected,
     });
