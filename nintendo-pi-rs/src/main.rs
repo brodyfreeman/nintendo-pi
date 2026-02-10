@@ -145,16 +145,7 @@ async fn main() -> anyhow::Result<()> {
         while cmd_rx.try_recv().is_ok() {}
 
         // --- Phase 0: USB Init (retry until controller is plugged in) ---
-        mitm_state.update(StateSnapshot {
-            macro_mode: false,
-            recording: false,
-            playing: false,
-            current_slot: 0,
-            slot_count: 0,
-            current_macro_name: None,
-            usb_connected: false,
-            bt_connected: false,
-        });
+        mitm_state.update(StateSnapshot::default());
         loop {
             match usb::init::initialize_controller().await {
                 Ok(()) => break,
@@ -166,14 +157,8 @@ async fn main() -> anyhow::Result<()> {
         }
         // USB controller found — update state
         mitm_state.update(StateSnapshot {
-            macro_mode: false,
-            recording: false,
-            playing: false,
-            current_slot: 0,
-            slot_count: 0,
-            current_macro_name: None,
             usb_connected: true,
-            bt_connected: false,
+            ..Default::default()
         });
 
         // Wait for HID device to appear after init
@@ -230,14 +215,8 @@ async fn main() -> anyhow::Result<()> {
             info!("[BT] Waiting for Switch to connect...");
             bt_connected.store(false, Ordering::Relaxed);
             mitm_state.update(StateSnapshot {
-                macro_mode: false,
-                recording: false,
-                playing: false,
-                current_slot: 0,
-                slot_count: 0,
-                current_macro_name: None,
                 usb_connected: true,
-                bt_connected: false,
+                ..Default::default()
             });
 
             // Wait for BT connection, but also check if USB has disconnected.
@@ -263,11 +242,7 @@ async fn main() -> anyhow::Result<()> {
                     _ = tokio::time::sleep(Duration::from_secs(2)) => {
                         if usb_handle.is_finished() {
                             warn!("[USB] Controller disconnected. Waiting for reconnection...");
-                            mitm_state.update(StateSnapshot {
-                                macro_mode: false, recording: false, playing: false,
-                                current_slot: 0, slot_count: 0, current_macro_name: None,
-                                usb_connected: false, bt_connected: false,
-                            });
+                            mitm_state.update(StateSnapshot::default());
                             break 'bt_loop;
                         }
                         // Don't recreate accept_fut — keep the listeners alive
@@ -323,16 +298,7 @@ async fn main() -> anyhow::Result<()> {
 
         // USB processing thread ended — get cmd_rx back for the next USB cycle
         bt_connected.store(false, Ordering::Relaxed);
-        mitm_state.update(StateSnapshot {
-            macro_mode: false,
-            recording: false,
-            playing: false,
-            current_slot: 0,
-            slot_count: 0,
-            current_macro_name: None,
-            usb_connected: false,
-            bt_connected: false,
-        });
+        mitm_state.update(StateSnapshot::default());
         cmd_rx = usb_handle.await?;
     }
 }
@@ -386,18 +352,7 @@ fn usb_processing_loop(
     loop {
         // --- Drain web command queue ---
         while let Ok(web_cmd) = cmd_rx.try_recv() {
-            let macro_cmd = match web_cmd {
-                WebCommand::ToggleMacroMode => MacroCommand::ToggleMacroMode,
-                WebCommand::ToggleRecording => MacroCommand::ToggleRecording,
-                WebCommand::PrevSlot => MacroCommand::PrevSlot,
-                WebCommand::NextSlot => MacroCommand::NextSlot,
-                WebCommand::SelectSlot(s) => MacroCommand::SelectSlot(s),
-                WebCommand::PlayMacro => MacroCommand::PlayMacro,
-                WebCommand::StopPlayback => MacroCommand::StopPlayback,
-                WebCommand::RenameMacro(id, name) => MacroCommand::RenameMacro(id, name),
-                WebCommand::DeleteMacro(id) => MacroCommand::DeleteMacro(id),
-            };
-            let effect = ctrl.execute(macro_cmd);
+            let effect = ctrl.execute(web_cmd.into());
             // Keep combo detector in sync with controller's macro_mode
             combo.macro_mode = ctrl.macro_mode;
             apply_effect(
@@ -472,26 +427,15 @@ fn usb_processing_loop(
         let (action, suppressed) = combo.update(&parsed.buttons);
 
         // --- Handle combo actions ---
-        if action != ComboAction::None {
-            let macro_cmd = match action {
-                ComboAction::ToggleMacroMode => Some(MacroCommand::ToggleMacroMode),
-                ComboAction::ToggleRecording => Some(MacroCommand::ToggleRecording),
-                ComboAction::PrevSlot => Some(MacroCommand::PrevSlot),
-                ComboAction::NextSlot => Some(MacroCommand::NextSlot),
-                ComboAction::PlayMacro => Some(MacroCommand::PlayMacro),
-                ComboAction::StopPlayback => Some(MacroCommand::StopPlayback),
-                ComboAction::None => None,
-            };
-            if let Some(cmd) = macro_cmd {
-                let effect = ctrl.execute(cmd);
-                combo.macro_mode = ctrl.macro_mode;
-                apply_effect(
-                    effect,
-                    &state_broadcast,
-                    ctrl.macros_dir(),
-                    &broadcast_macros,
-                );
-            }
+        if let Some(cmd) = Option::from(action) {
+            let effect = ctrl.execute(cmd);
+            combo.macro_mode = ctrl.macro_mode;
+            apply_effect(
+                effect,
+                &state_broadcast,
+                ctrl.macros_dir(),
+                &broadcast_macros,
+            );
         }
 
         // --- Filter suppressed buttons ---

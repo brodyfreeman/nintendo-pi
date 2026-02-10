@@ -18,8 +18,24 @@ pub enum WebCommand {
     DeleteMacro(u32),
 }
 
+impl From<WebCommand> for crate::macro_engine::controller::MacroCommand {
+    fn from(cmd: WebCommand) -> Self {
+        match cmd {
+            WebCommand::ToggleMacroMode => Self::ToggleMacroMode,
+            WebCommand::ToggleRecording => Self::ToggleRecording,
+            WebCommand::PrevSlot => Self::PrevSlot,
+            WebCommand::NextSlot => Self::NextSlot,
+            WebCommand::SelectSlot(s) => Self::SelectSlot(s),
+            WebCommand::PlayMacro => Self::PlayMacro,
+            WebCommand::StopPlayback => Self::StopPlayback,
+            WebCommand::RenameMacro(id, name) => Self::RenameMacro(id, name),
+            WebCommand::DeleteMacro(id) => Self::DeleteMacro(id),
+        }
+    }
+}
+
 /// Thread/task-safe MITM state snapshot for the web UI.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize)]
 pub struct StateSnapshot {
     pub macro_mode: bool,
     pub recording: bool,
@@ -39,33 +55,14 @@ pub struct MitmState {
 impl MitmState {
     pub fn new() -> Self {
         Self {
-            inner: Mutex::new(StateSnapshot {
-                macro_mode: false,
-                recording: false,
-                playing: false,
-                current_slot: 0,
-                slot_count: 0,
-                current_macro_name: None,
-                usb_connected: false,
-                bt_connected: false,
-            }),
+            inner: Mutex::new(StateSnapshot::default()),
             changed: Mutex::new(false),
         }
     }
 
     pub fn update(&self, snapshot: StateSnapshot) {
         let mut inner = self.inner.lock().unwrap();
-        // Only mark changed if values actually differ
-        let changed = inner.macro_mode != snapshot.macro_mode
-            || inner.recording != snapshot.recording
-            || inner.playing != snapshot.playing
-            || inner.current_slot != snapshot.current_slot
-            || inner.slot_count != snapshot.slot_count
-            || inner.current_macro_name != snapshot.current_macro_name
-            || inner.usb_connected != snapshot.usb_connected
-            || inner.bt_connected != snapshot.bt_connected;
-
-        if changed {
+        if *inner != snapshot {
             *inner = snapshot;
             *self.changed.lock().unwrap() = true;
         }

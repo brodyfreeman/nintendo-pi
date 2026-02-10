@@ -19,6 +19,21 @@ pub enum ComboAction {
     StopPlayback,
 }
 
+impl From<ComboAction> for Option<crate::macro_engine::controller::MacroCommand> {
+    fn from(action: ComboAction) -> Self {
+        use crate::macro_engine::controller::MacroCommand;
+        match action {
+            ComboAction::None => None,
+            ComboAction::ToggleMacroMode => Some(MacroCommand::ToggleMacroMode),
+            ComboAction::ToggleRecording => Some(MacroCommand::ToggleRecording),
+            ComboAction::PrevSlot => Some(MacroCommand::PrevSlot),
+            ComboAction::NextSlot => Some(MacroCommand::NextSlot),
+            ComboAction::PlayMacro => Some(MacroCommand::PlayMacro),
+            ComboAction::StopPlayback => Some(MacroCommand::StopPlayback),
+        }
+    }
+}
+
 /// Hold duration for macro mode toggle (seconds).
 const HOLD_DURATION: f64 = 0.5;
 
