@@ -111,6 +111,7 @@ pub struct StateSnapshot {
     pub playback_frame: usize,
     pub playback_frame_count: usize,
     pub playback_input: Option<PlaybackInput>,
+    pub live_input: Option<PlaybackInput>,
 }
 
 impl Default for StateSnapshot {
@@ -129,6 +130,7 @@ impl Default for StateSnapshot {
             playback_frame: 0,
             playback_frame_count: 0,
             playback_input: None,
+            live_input: None,
         }
     }
 }

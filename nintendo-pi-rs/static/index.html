@@ -1077,10 +1077,10 @@
   var CTRL_BTN_MAP = {
     'A': 'ctrlBtnA', 'B': 'ctrlBtnB', 'X': 'ctrlBtnX', 'Y': 'ctrlBtnY',
     'L': 'ctrlL', 'R': 'ctrlR', 'ZL': 'ctrlZL', 'ZR': 'ctrlZR',
-    'Plus': 'ctrlPlus', 'Minus': 'ctrlMinus',
-    'Home': 'ctrlHome', 'Capture': 'ctrlCapture',
+    '+': 'ctrlPlus', '-': 'ctrlMinus',
+    'Home': 'ctrlHome', 'Cap': 'ctrlCapture',
     'L3': 'ctrlL3', 'R3': 'ctrlR3',
-    'DUp': 'ctrlDUp', 'DDown': 'ctrlDDown', 'DLeft': 'ctrlDLeft', 'DRight': 'ctrlDRight'
+    'Up': 'ctrlDUp', 'Down': 'ctrlDDown', 'Left': 'ctrlDLeft', 'Right': 'ctrlDRight'
   };
   var CTRL_BTN_ACTIVE_CLASS = {
     'A': 'active-a', 'B': 'active-b', 'X': 'active-x', 'Y': 'active-y'
@@ -1121,6 +1121,9 @@
     } else if (state.macro_mode) {
       statusText.textContent = 'Macro mode active';
       statusText.className = 'ctrl-status-text';
+    } else if (state.live_input) {
+      statusText.textContent = 'Live';
+      statusText.className = 'ctrl-status-text';
     } else {
       statusText.textContent = 'Connected';
       statusText.className = 'ctrl-status-text';
@@ -1145,10 +1148,10 @@
     rStick.setAttribute('cy', RSTICK_REST[1]);
     rStick.classList.remove('active');
 
-    // Animate from playback input
-    if (state.playing && state.playback_input) {
-      var pi = state.playback_input;
+    // Choose input source: playback input during macro playback, live input otherwise
+    var pi = (state.playing && state.playback_input) ? state.playback_input : state.live_input;
 
+    if (pi) {
       // Light up active buttons
       for (var j = 0; j < pi.buttons.length; j++) {
         var btn = pi.buttons[j];

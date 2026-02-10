@@ -410,6 +410,7 @@ fn usb_processing_loop(
                     &ctrl,
                     bt_connected.load(Ordering::Relaxed),
                     Some(&parsed),
+                    Some(&live_parsed),
                 );
                 continue;
             } else if !ctrl.player.playing {
@@ -469,6 +470,7 @@ fn usb_processing_loop(
             &ctrl,
             bt_connected.load(Ordering::Relaxed),
             None,
+            Some(&parsed),
         );
     }
 }
@@ -490,6 +492,7 @@ fn update_state(
     ctrl: &MacroController,
     bt_connected: bool,
     playback_input: Option<&input::InputState>,
+    live_input: Option<&input::InputState>,
 ) {
     mitm_state.update(StateSnapshot {
         macro_mode: ctrl.macro_mode,
@@ -505,5 +508,6 @@ fn update_state(
         playback_frame: ctrl.player.frame_index(),
         playback_frame_count: ctrl.player.frame_count(),
         playback_input: playback_input.map(PlaybackInput::from_input_state),
+        live_input: live_input.map(PlaybackInput::from_input_state),
     });
 }
