@@ -443,6 +443,131 @@
   var es = null;
   var ABXY = ['A', 'B', 'X', 'Y'];
 
+  // === Nintendo-style synthesized UI sound effects ===
+  var audioCtx = null;
+  var sfxEnabled = true;
+  var sfxUnlocked = false;
+
+  function getAudioCtx() {
+    if (!audioCtx) {
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    }
+    if (audioCtx.state === 'suspended') {
+      audioCtx.resume();
+    }
+    return audioCtx;
+  }
+
+  // Unlock audio on first user interaction (required by mobile browsers)
+  function unlockAudio() {
+    if (sfxUnlocked) return;
+    sfxUnlocked = true;
+    var ctx = getAudioCtx();
+    var b = ctx.createBuffer(1, 1, ctx.sampleRate);
+    var s = ctx.createBufferSource();
+    s.buffer = b;
+    s.connect(ctx.destination);
+    s.start(0);
+  }
+  document.addEventListener('touchstart', unlockAudio, { once: true });
+  document.addEventListener('click', unlockAudio, { once: true });
+
+  // Play a tone: frequency (Hz), duration (s), volume (0-1), type, optional ramp
+  function playTone(freq, dur, vol, type, rampTo) {
+    if (!sfxEnabled) return;
+    var ctx = getAudioCtx();
+    var osc = ctx.createOscillator();
+    var gain = ctx.createGain();
+    osc.type = type || 'sine';
+    osc.frequency.setValueAtTime(freq, ctx.currentTime);
+    if (rampTo) {
+      osc.frequency.exponentialRampToValueAtTime(rampTo, ctx.currentTime + dur);
+    }
+    gain.gain.setValueAtTime(vol, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + dur);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start(ctx.currentTime);
+    osc.stop(ctx.currentTime + dur);
+  }
+
+  // Play a quick noise click (like a soft mechanical tick)
+  function playClick(vol) {
+    if (!sfxEnabled) return;
+    var ctx = getAudioCtx();
+    var bufferSize = Math.floor(ctx.sampleRate * 0.012);
+    var buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+    var data = buffer.getChannelData(0);
+    for (var i = 0; i < bufferSize; i++) {
+      // Shaped noise burst — sharp attack, fast decay
+      var env = Math.exp(-i / (bufferSize * 0.15));
+      data[i] = (Math.random() * 2 - 1) * env;
+    }
+    var src = ctx.createBufferSource();
+    var gain = ctx.createGain();
+    src.buffer = buffer;
+    gain.gain.setValueAtTime(vol || 0.15, ctx.currentTime);
+    src.connect(gain);
+    gain.connect(ctx.destination);
+    src.start(ctx.currentTime);
+  }
+
+  // Sound library — short, musical, Switch-OS-inspired
+  var sfx = {
+    // Navigation tick — soft high pop
+    nav: function() {
+      playClick(0.12);
+      playTone(1800, 0.04, 0.08, 'sine');
+    },
+    // Confirmation — two-note rising chime
+    confirm: function() {
+      playTone(880, 0.08, 0.1, 'sine');
+      setTimeout(function() { playTone(1320, 0.1, 0.1, 'sine'); }, 60);
+    },
+    // Toggle ON — bright rising sweep
+    toggleOn: function() {
+      playTone(660, 0.12, 0.1, 'sine', 1200);
+    },
+    // Toggle OFF — descending soft tone
+    toggleOff: function() {
+      playTone(880, 0.12, 0.08, 'sine', 440);
+    },
+    // Record start — two quick ascending pips
+    recStart: function() {
+      playTone(740, 0.06, 0.1, 'square');
+      setTimeout(function() { playTone(988, 0.08, 0.1, 'square'); }, 70);
+    },
+    // Record stop — single descending tone
+    recStop: function() {
+      playTone(988, 0.1, 0.1, 'square', 520);
+    },
+    // Play macro — cheerful three-note ascending
+    play: function() {
+      playTone(660, 0.07, 0.09, 'sine');
+      setTimeout(function() { playTone(880, 0.07, 0.09, 'sine'); }, 60);
+      setTimeout(function() { playTone(1100, 0.1, 0.09, 'sine'); }, 120);
+    },
+    // Stop — soft thud
+    stop: function() {
+      playTone(220, 0.1, 0.12, 'sine', 110);
+      playClick(0.1);
+    },
+    // Slot change — crisp tick
+    slot: function() {
+      playClick(0.15);
+      playTone(1400, 0.035, 0.07, 'triangle');
+    },
+    // Delete — low warning
+    del: function() {
+      playTone(330, 0.08, 0.1, 'sawtooth', 220);
+      setTimeout(function() { playTone(220, 0.12, 0.08, 'sawtooth', 165); }, 80);
+    },
+    // Generic button press
+    press: function() {
+      playClick(0.1);
+    }
+  };
+
   function connect() {
     es = new EventSource('/events');
 
@@ -589,6 +714,7 @@
   }
 
   window.setSpeed = function(speed) {
+    sfx.nav();
     sendCmd('SET_PLAYBACK_SPEED', speed);
   }
 
@@ -647,6 +773,26 @@
   }
 
   window.sendCmd = function(cmd, data) {
+    // Play appropriate sound effect per command
+    switch (cmd) {
+      case 'TOGGLE_MACRO_MODE':
+        (state.macro_mode ? sfx.toggleOff : sfx.toggleOn)(); break;
+      case 'TOGGLE_RECORDING':
+        (state.recording ? sfx.recStop : sfx.recStart)(); break;
+      case 'PREV_SLOT':
+      case 'NEXT_SLOT':
+        sfx.slot(); break;
+      case 'PLAY_MACRO':
+        sfx.play(); break;
+      case 'STOP_PLAYBACK':
+        sfx.stop(); break;
+      case 'TOGGLE_LOOP':
+        (state.looping ? sfx.toggleOff : sfx.toggleOn)(); break;
+      case 'SET_PLAYBACK_SPEED':
+        sfx.nav(); break;
+      default:
+        sfx.press(); break;
+    }
     fetch('/api/cmd', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -655,6 +801,7 @@
   };
 
   window.selectSlot = function(idx) {
+    sfx.slot();
     fetch('/api/cmd', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -663,6 +810,7 @@
   };
 
   window.openRename = function(id, name) {
+    sfx.nav();
     renameId = id;
     document.getElementById('renameInput').value = name;
     document.getElementById('renameModal').classList.add('show');
@@ -670,6 +818,7 @@
   };
 
   window.closeRename = function() {
+    sfx.press();
     document.getElementById('renameModal').classList.remove('show');
     renameId = null;
   };
@@ -677,12 +826,14 @@
   window.submitRename = function() {
     var name = document.getElementById('renameInput').value.trim();
     if (name && renameId !== null) {
+      sfx.confirm();
       window.sendCmd('RENAME_MACRO', [renameId, name]);
     }
     closeRename();
   };
 
   window.deleteMacro = function(id, name) {
+    sfx.del();
     if (confirm('Delete macro "' + name + '"?')) {
       window.sendCmd('DELETE_MACRO', id);
     }
