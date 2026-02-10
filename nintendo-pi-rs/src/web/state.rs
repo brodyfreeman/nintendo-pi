@@ -1,8 +1,7 @@
 //! Shared MITM state and web command types.
 
-use std::sync::Mutex;
-
 use serde::Serialize;
+use tokio::sync::watch;
 
 use crate::input::{Button, InputState};
 
@@ -136,42 +135,35 @@ impl Default for StateSnapshot {
 }
 
 pub struct MitmState {
-    inner: Mutex<StateSnapshot>,
-    changed: Mutex<bool>,
+    tx: watch::Sender<StateSnapshot>,
 }
 
 impl MitmState {
     pub fn new() -> Self {
-        Self {
-            inner: Mutex::new(StateSnapshot::default()),
-            changed: Mutex::new(false),
-        }
+        let (tx, _) = watch::channel(StateSnapshot::default());
+        Self { tx }
     }
 
     pub fn update(&self, snapshot: StateSnapshot) {
-        let mut inner = self.inner.lock().unwrap();
-        if *inner != snapshot {
-            *inner = snapshot;
-            *self.changed.lock().unwrap() = true;
-        }
+        self.tx.send_if_modified(|current| {
+            if *current != snapshot {
+                *current = snapshot;
+                true
+            } else {
+                false
+            }
+        });
     }
 
     pub fn snapshot(&self) -> StateSnapshot {
-        self.inner.lock().unwrap().clone()
+        self.tx.borrow().clone()
     }
 
     pub fn snapshot_json(&self) -> serde_json::Value {
         serde_json::to_value(self.snapshot()).unwrap_or_default()
     }
 
-    /// Return snapshot if changed since last pop, else None.
-    pub fn pop_if_changed(&self) -> Option<StateSnapshot> {
-        let mut changed = self.changed.lock().unwrap();
-        if *changed {
-            *changed = false;
-            Some(self.inner.lock().unwrap().clone())
-        } else {
-            None
-        }
+    pub fn subscribe(&self) -> watch::Receiver<StateSnapshot> {
+        self.tx.subscribe()
     }
 }

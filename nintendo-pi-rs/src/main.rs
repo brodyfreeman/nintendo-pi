@@ -118,18 +118,20 @@ async fn main() -> anyhow::Result<()> {
         }
     };
 
-    // --- State emitter task (5Hz broadcast when changed) ---
-    let emitter_state = mitm_state.clone();
+    // --- State emitter task (throttled broadcast on change) ---
+    let mut state_rx = mitm_state.subscribe();
     let emitter_broadcast = state_broadcast.clone();
     tokio::spawn(async move {
         loop {
-            if let Some(snapshot) = emitter_state.pop_if_changed() {
-                let msg = serde_json::json!({
-                    "type": "state_update",
-                    "state": snapshot,
-                });
-                let _ = emitter_broadcast.send(msg.to_string());
+            if state_rx.changed().await.is_err() {
+                break; // sender dropped
             }
+            let snapshot = state_rx.borrow_and_update().clone();
+            let msg = serde_json::json!({
+                "type": "state_update",
+                "state": snapshot,
+            });
+            let _ = emitter_broadcast.send(msg.to_string());
             tokio::time::sleep(Duration::from_millis(200)).await;
         }
     });
