@@ -13,7 +13,7 @@ use axum::{
 };
 use tokio::sync::{broadcast, mpsc};
 use tokio_stream::{wrappers::BroadcastStream, Stream, StreamExt};
-use tracing::{error, info, warn};
+use tracing::{debug, error, info, warn};
 
 use self::state::{MitmState, WebCommand};
 use crate::macro_engine::storage::{self, MacroEntry};
@@ -85,10 +85,18 @@ async fn sse_handler(
         "macros": initial_macros,
     });
 
+    info!(
+        "[WEB] SSE client connected (macros: {})",
+        initial_macros.len()
+    );
+
     let rx = state.state_rx.subscribe();
     let broadcast_stream = BroadcastStream::new(rx).filter_map(|result| match result {
         Ok(msg) => Some(Ok(Event::default().data(msg))),
-        Err(_) => None,
+        Err(e) => {
+            debug!("[WEB] SSE broadcast lag, dropping message: {e}");
+            None
+        }
     });
 
     let init_event = tokio_stream::once(Ok(Event::default().data(init_msg.to_string())));
@@ -103,6 +111,7 @@ async fn cmd_handler(
 ) -> axum::http::StatusCode {
     match parse_web_command(&val, &state.macros_dir) {
         Some(cmd) => {
+            debug!("[WEB] Command received: {cmd:?}");
             if let Err(e) = state.cmd_tx.send(cmd).await {
                 error!("[WEB] Failed to send command: {e}");
                 axum::http::StatusCode::INTERNAL_SERVER_ERROR
@@ -111,7 +120,7 @@ async fn cmd_handler(
             }
         }
         None => {
-            warn!("[WEB] Invalid command: {val}");
+            warn!("[WEB] Invalid command payload: {val}");
             axum::http::StatusCode::BAD_REQUEST
         }
     }
@@ -128,6 +137,7 @@ fn parse_web_command(val: &serde_json::Value, _macros_dir: &std::path::Path) -> 
         "STOP_PLAYBACK" => Some(WebCommand::StopPlayback),
         "SELECT_SLOT" => {
             let slot = val.get("data")?.as_u64()? as usize;
+            debug!("[WEB] Select slot {slot}");
             Some(WebCommand::SelectSlot(slot))
         }
         "RENAME_MACRO" => {
@@ -136,19 +146,23 @@ fn parse_web_command(val: &serde_json::Value, _macros_dir: &std::path::Path) -> 
             if arr.len() >= 2 {
                 let id = arr[0].as_u64()? as u32;
                 let name = arr[1].as_str()?.to_string();
+                debug!("[WEB] Rename macro {id} -> \"{name}\"");
                 Some(WebCommand::RenameMacro(id, name))
             } else {
+                warn!("[WEB] RENAME_MACRO: expected [id, name], got {data}");
                 None
             }
         }
         "DELETE_MACRO" => {
             let id = val.get("data")?.as_u64()? as u32;
+            debug!("[WEB] Delete macro {id}");
             Some(WebCommand::DeleteMacro(id))
         }
         "CYCLE_SPEED" => Some(WebCommand::CycleSpeed),
         "TOGGLE_LOOP" => Some(WebCommand::ToggleLoop),
         "SET_PLAYBACK_SPEED" => {
             let speed = val.get("data")?.as_f64()?;
+            debug!("[WEB] Set playback speed: {speed}x");
             Some(WebCommand::SetPlaybackSpeed(speed))
         }
         _ => {
