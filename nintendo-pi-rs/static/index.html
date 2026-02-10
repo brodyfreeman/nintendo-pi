@@ -896,6 +896,17 @@
       <span>500ms (slow)</span>
     </div>
   </div>
+  <div class="setting-row">
+    <div class="setting-label">
+      <span class="setting-name">Calibration Samples</span>
+      <span class="setting-value" id="calSamplesValue">20</span>
+    </div>
+    <input type="range" class="setting-slider" id="calSamplesSlider" min="5" max="100" step="5" value="20">
+    <div class="setting-range-labels">
+      <span>5 (fast)</span>
+      <span>100 (precise)</span>
+    </div>
+  </div>
 </div>
 
 <div class="section grid-span-full">
@@ -1225,6 +1236,7 @@
     syncTrimEnd();
     syncRecDelay();
     syncUiInterval();
+    syncCalSamples();
 
     // Update controller visualization
     updateController();
@@ -1747,6 +1759,31 @@
       uiIntervalValue.textContent = val + 'ms';
       if (document.activeElement !== uiIntervalSlider) {
         uiIntervalSlider.value = val;
+      }
+    }
+  }
+
+  // === Calibration samples slider ===
+  var calSamplesSlider = document.getElementById('calSamplesSlider');
+  var calSamplesValue = document.getElementById('calSamplesValue');
+
+  calSamplesSlider.addEventListener('input', function() {
+    var val = parseInt(calSamplesSlider.value);
+    calSamplesValue.textContent = val;
+  });
+
+  calSamplesSlider.addEventListener('change', function() {
+    var val = parseInt(calSamplesSlider.value);
+    sfx.nav();
+    sendCmd('SET_CALIBRATION_SAMPLES', val);
+  });
+
+  function syncCalSamples() {
+    if (state.calibration_samples !== undefined) {
+      var val = state.calibration_samples;
+      calSamplesValue.textContent = val;
+      if (document.activeElement !== calSamplesSlider) {
+        calSamplesSlider.value = val;
       }
     }
   }

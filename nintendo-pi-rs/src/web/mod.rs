@@ -210,6 +210,11 @@ fn parse_web_command(val: &serde_json::Value, _macros_dir: &std::path::Path) -> 
             debug!("[WEB] Set UI update interval: {ms}ms");
             Some(WebCommand::SetUiUpdateInterval(ms))
         }
+        "SET_CALIBRATION_SAMPLES" => {
+            let n = val.get("data")?.as_u64()? as u32;
+            debug!("[WEB] Set calibration samples: {n}");
+            Some(WebCommand::SetCalibrationSamples(n))
+        }
         _ => {
             warn!("[WEB] Unknown command: {cmd}");
             None

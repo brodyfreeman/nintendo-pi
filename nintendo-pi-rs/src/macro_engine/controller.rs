@@ -37,6 +37,7 @@ pub enum MacroCommand {
     SetRecordingTrimEnd(f64),
     SetRecordingStartDelay(f64),
     SetUiUpdateInterval(u64),
+    SetCalibrationSamples(u32),
 }
 
 /// Side effects produced by executing a command.
@@ -76,6 +77,7 @@ pub struct MacroController {
     pub recording_trim_end: f64,
     pub recording_start_delay: f64,
     pub ui_update_interval_ms: u64,
+    pub calibration_samples: u32,
     macros_dir: PathBuf,
 }
 
@@ -102,6 +104,7 @@ impl MacroController {
             recording_trim_end: 0.0,
             recording_start_delay: 0.0,
             ui_update_interval_ms: 200,
+            calibration_samples: 20,
             macros_dir,
         }
     }
@@ -130,6 +133,7 @@ impl MacroController {
             MacroCommand::SetRecordingTrimEnd(d) => self.set_recording_trim_end(d),
             MacroCommand::SetRecordingStartDelay(d) => self.set_recording_start_delay(d),
             MacroCommand::SetUiUpdateInterval(ms) => self.set_ui_update_interval(ms),
+            MacroCommand::SetCalibrationSamples(n) => self.set_calibration_samples(n),
         }
     }
 
@@ -384,6 +388,15 @@ impl MacroController {
         info!(
             "[SETTINGS] UI update interval set to {}ms",
             self.ui_update_interval_ms
+        );
+        MacroEffect::none()
+    }
+
+    fn set_calibration_samples(&mut self, n: u32) -> MacroEffect {
+        self.calibration_samples = n.clamp(5, 100);
+        info!(
+            "[SETTINGS] Calibration samples set to {}",
+            self.calibration_samples
         );
         MacroEffect::none()
     }

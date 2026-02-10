@@ -13,7 +13,7 @@ mod usb;
 mod web;
 
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -139,6 +139,8 @@ async fn main() -> anyhow::Result<()> {
 
     // Shared flag: BT forwarding side sets this so USB processing knows BT status
     let bt_connected = Arc::new(AtomicBool::new(false));
+    // Shared calibration samples count — persists across USB reconnects
+    let calibration_samples = Arc::new(AtomicU32::new(20));
 
     // === Hardware lifecycle loop ===
     // Outer loop handles USB controller disconnect/reconnect.
@@ -172,9 +174,10 @@ async fn main() -> anyhow::Result<()> {
         let hid_rx = usb::hid::spawn_reader(2);
 
         // --- Auto-calibrate stick centers ---
-        info!("[USB] Calibrating stick centers (don't touch the sticks)...");
-        let mut cal_reports = Vec::with_capacity(20);
-        for _ in 0..20 {
+        let cal_count = calibration_samples.load(Ordering::Relaxed) as usize;
+        info!("[USB] Calibrating stick centers ({cal_count} samples, don't touch the sticks)...");
+        let mut cal_reports = Vec::with_capacity(cal_count);
+        for _ in 0..cal_count {
             match hid_rx.recv_timeout(Duration::from_millis(200)) {
                 Ok(report) => cal_reports.push(report),
                 Err(_) => break,
@@ -196,6 +199,7 @@ async fn main() -> anyhow::Result<()> {
         let usb_state_broadcast = state_broadcast.clone();
         let usb_bt_connected = bt_connected.clone();
         let usb_macros_dir = args.macros_dir.clone();
+        let usb_cal_samples = calibration_samples.clone();
 
         let usb_handle = tokio::task::spawn_blocking(move || {
             usb_processing_loop(
@@ -210,6 +214,7 @@ async fn main() -> anyhow::Result<()> {
                 c_cal,
                 left_center,
                 right_center,
+                usb_cal_samples,
             )
         });
 
@@ -324,9 +329,11 @@ fn usb_processing_loop(
     mut c_cal: StickCalibrator,
     left_center: (u16, u16),
     right_center: (u16, u16),
+    calibration_samples: Arc<AtomicU32>,
 ) -> mpsc::Receiver<WebCommand> {
     let mut combo = ComboDetector::new();
     let mut ctrl = MacroController::new(macros_dir);
+    ctrl.calibration_samples = calibration_samples.load(Ordering::Relaxed);
     let mut usb_check_counter: u32 = 0;
 
     let broadcast_macros = |broadcast: &broadcast::Sender<String>, dir: &std::path::Path| {
@@ -362,6 +369,8 @@ fn usb_processing_loop(
             // Sync stick deadzone to calibrators
             main_cal.deadzone = ctrl.stick_deadzone;
             c_cal.deadzone = ctrl.stick_deadzone;
+            // Sync calibration samples for next USB reconnect
+            calibration_samples.store(ctrl.calibration_samples, Ordering::Relaxed);
             apply_effect(
                 effect,
                 &state_broadcast,
@@ -526,5 +535,6 @@ fn update_state(
         recording_trim_end: ctrl.recording_trim_end,
         recording_start_delay: ctrl.recording_start_delay,
         ui_update_interval_ms: ctrl.ui_update_interval_ms,
+        calibration_samples: ctrl.calibration_samples,
     });
 }
