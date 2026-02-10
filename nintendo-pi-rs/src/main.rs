@@ -374,6 +374,8 @@ fn usb_processing_loop(
             combo.prev_slot_button = ctrl.prev_slot_button;
             combo.next_slot_button = ctrl.next_slot_button;
             combo.toggle_recording_button = ctrl.toggle_recording_button;
+            combo.base_combo_button_1 = ctrl.base_combo_button_1;
+            combo.base_combo_button_2 = ctrl.base_combo_button_2;
             // Sync stick deadzone to calibrators
             main_cal.deadzone = ctrl.stick_deadzone;
             c_cal.deadzone = ctrl.stick_deadzone;
@@ -552,5 +554,7 @@ fn update_state(
         prev_slot_button: ctrl.prev_slot_button.display_name().to_string(),
         next_slot_button: ctrl.next_slot_button.display_name().to_string(),
         toggle_recording_button: ctrl.toggle_recording_button.display_name().to_string(),
+        base_combo_button_1: ctrl.base_combo_button_1.display_name().to_string(),
+        base_combo_button_2: ctrl.base_combo_button_2.display_name().to_string(),
     });
 }

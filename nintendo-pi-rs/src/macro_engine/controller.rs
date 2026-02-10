@@ -46,6 +46,8 @@ pub enum MacroCommand {
     SetPrevSlotButton(String),
     SetNextSlotButton(String),
     SetToggleRecordingButton(String),
+    SetBaseComboButton1(String),
+    SetBaseComboButton2(String),
 }
 
 /// Side effects produced by executing a command.
@@ -94,6 +96,8 @@ pub struct MacroController {
     pub prev_slot_button: crate::input::Button,
     pub next_slot_button: crate::input::Button,
     pub toggle_recording_button: crate::input::Button,
+    pub base_combo_button_1: crate::input::Button,
+    pub base_combo_button_2: crate::input::Button,
     macros_dir: PathBuf,
 }
 
@@ -129,6 +133,8 @@ impl MacroController {
             prev_slot_button: crate::combo::DEFAULT_PREV_SLOT_BUTTON,
             next_slot_button: crate::combo::DEFAULT_NEXT_SLOT_BUTTON,
             toggle_recording_button: crate::combo::DEFAULT_TOGGLE_RECORDING_BUTTON,
+            base_combo_button_1: crate::combo::DEFAULT_BASE_COMBO_BUTTON_1,
+            base_combo_button_2: crate::combo::DEFAULT_BASE_COMBO_BUTTON_2,
             macros_dir,
         }
     }
@@ -166,6 +172,8 @@ impl MacroController {
             MacroCommand::SetPrevSlotButton(s) => self.set_prev_slot_button(&s),
             MacroCommand::SetNextSlotButton(s) => self.set_next_slot_button(&s),
             MacroCommand::SetToggleRecordingButton(s) => self.set_toggle_recording_button(&s),
+            MacroCommand::SetBaseComboButton1(s) => self.set_base_combo_button_1(&s),
+            MacroCommand::SetBaseComboButton2(s) => self.set_base_combo_button_2(&s),
         }
     }
 
@@ -520,6 +528,32 @@ impl MacroController {
             self.toggle_recording_button = btn;
             info!(
                 "[SETTINGS] Toggle recording button set to {}",
+                btn.display_name()
+            );
+        } else {
+            warn!("[SETTINGS] Unknown button name: {name}");
+        }
+        MacroEffect::none()
+    }
+
+    fn set_base_combo_button_1(&mut self, name: &str) -> MacroEffect {
+        if let Some(btn) = crate::input::Button::from_str_name(name) {
+            self.base_combo_button_1 = btn;
+            info!(
+                "[SETTINGS] Base combo button 1 set to {}",
+                btn.display_name()
+            );
+        } else {
+            warn!("[SETTINGS] Unknown button name: {name}");
+        }
+        MacroEffect::none()
+    }
+
+    fn set_base_combo_button_2(&mut self, name: &str) -> MacroEffect {
+        if let Some(btn) = crate::input::Button::from_str_name(name) {
+            self.base_combo_button_2 = btn;
+            info!(
+                "[SETTINGS] Base combo button 2 set to {}",
                 btn.display_name()
             );
         } else {

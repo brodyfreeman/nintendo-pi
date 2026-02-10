@@ -83,6 +83,12 @@ pub const DEFAULT_NEXT_SLOT_BUTTON: Button = Button::DpadRight;
 /// Default toggle recording button.
 pub const DEFAULT_TOGGLE_RECORDING_BUTTON: Button = Button::Minus;
 
+/// Default base combo button 1.
+pub const DEFAULT_BASE_COMBO_BUTTON_1: Button = Button::L3;
+
+/// Default base combo button 2.
+pub const DEFAULT_BASE_COMBO_BUTTON_2: Button = Button::R3;
+
 /// Set of buttons to suppress (smallvec would be overkill, just use a fixed array).
 #[derive(Debug, Clone, Default)]
 pub struct SuppressedButtons {
@@ -132,6 +138,8 @@ pub struct ComboDetector {
     pub prev_slot_button: Button,
     pub next_slot_button: Button,
     pub toggle_recording_button: Button,
+    pub base_combo_button_1: Button,
+    pub base_combo_button_2: Button,
     hold_button_start: Option<Instant>,
     prev_buttons: ButtonState,
     prev_base_held: bool,
@@ -150,6 +158,8 @@ impl ComboDetector {
             prev_slot_button: DEFAULT_PREV_SLOT_BUTTON,
             next_slot_button: DEFAULT_NEXT_SLOT_BUTTON,
             toggle_recording_button: DEFAULT_TOGGLE_RECORDING_BUTTON,
+            base_combo_button_1: DEFAULT_BASE_COMBO_BUTTON_1,
+            base_combo_button_2: DEFAULT_BASE_COMBO_BUTTON_2,
             hold_button_start: None,
             prev_buttons: ButtonState::default(),
             prev_base_held: false,
@@ -158,19 +168,24 @@ impl ComboDetector {
 
     /// Process button state. Returns (action, suppressed_buttons).
     pub fn update(&mut self, buttons: &ButtonState) -> (ComboAction, SuppressedButtons) {
-        let base_held = buttons.get(Button::L3) && buttons.get(Button::R3);
+        let base_held =
+            buttons.get(self.base_combo_button_1) && buttons.get(self.base_combo_button_2);
         let mut action = ComboAction::None;
         let mut suppressed = SuppressedButtons::default();
 
-        // Log L3+R3 rising edge
+        // Log base combo rising edge
         if base_held && !self.prev_base_held {
-            debug!("[COMBO] L3+R3 held");
+            debug!(
+                "[COMBO] {}+{} held",
+                self.base_combo_button_1.display_name(),
+                self.base_combo_button_2.display_name()
+            );
         }
 
         if base_held {
-            // Always suppress L3+R3 when both held
-            suppressed.add(Button::L3);
-            suppressed.add(Button::R3);
+            // Always suppress base combo buttons when both held
+            suppressed.add(self.base_combo_button_1);
+            suppressed.add(self.base_combo_button_2);
 
             // Check configurable hold button for macro mode toggle
             let hold_btn_pressed = buttons.get(self.toggle_macro_mode_button);

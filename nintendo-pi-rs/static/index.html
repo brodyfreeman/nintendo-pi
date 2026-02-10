@@ -831,6 +831,34 @@
   </div>
   <div class="setting-row">
     <div class="setting-label">
+      <span class="setting-name">Base Combo Button 1</span>
+      <span class="setting-value" id="baseCombo1Value">L3</span>
+    </div>
+    <select class="setting-select" id="baseCombo1Select">
+      <option value="L3">L3</option>
+      <option value="R3">R3</option>
+      <option value="L">L</option>
+      <option value="R">R</option>
+      <option value="ZL">ZL</option>
+      <option value="ZR">ZR</option>
+    </select>
+  </div>
+  <div class="setting-row">
+    <div class="setting-label">
+      <span class="setting-name">Base Combo Button 2</span>
+      <span class="setting-value" id="baseCombo2Value">R3</span>
+    </div>
+    <select class="setting-select" id="baseCombo2Select">
+      <option value="R3">R3</option>
+      <option value="L3">L3</option>
+      <option value="L">L</option>
+      <option value="R">R</option>
+      <option value="ZL">ZL</option>
+      <option value="ZR">ZR</option>
+    </select>
+  </div>
+  <div class="setting-row">
+    <div class="setting-label">
       <span class="setting-name">Play Macro Button</span>
       <span class="setting-value" id="playBtnValue">A</span>
     </div>
@@ -1369,6 +1397,8 @@
     // Sync settings
     syncDeadzone();
     syncHoldTime();
+    syncBaseCombo1();
+    syncBaseCombo2();
     syncPlayBtn();
     syncStopBtn();
     syncToggleModeBtn();
@@ -1735,6 +1765,51 @@
       holdTimeValue.textContent = val.toFixed(1) + 's';
       if (document.activeElement !== holdTimeSlider) {
         holdTimeSlider.value = val;
+      }
+    }
+  }
+
+  // === Base combo button 1 select ===
+  var baseCombo1Select = document.getElementById('baseCombo1Select');
+  var baseCombo1Value = document.getElementById('baseCombo1Value');
+  var BASE_COMBO_BTN_LABELS = {
+    'L3': 'L3', 'R3': 'R3', 'L': 'L', 'R': 'R', 'ZL': 'ZL', 'ZR': 'ZR'
+  };
+
+  baseCombo1Select.addEventListener('change', function() {
+    var val = baseCombo1Select.value;
+    baseCombo1Value.textContent = BASE_COMBO_BTN_LABELS[val] || val;
+    sfx.nav();
+    sendCmd('SET_BASE_COMBO_BUTTON_1', val);
+  });
+
+  function syncBaseCombo1() {
+    if (state.base_combo_button_1 !== undefined) {
+      var val = state.base_combo_button_1;
+      baseCombo1Value.textContent = BASE_COMBO_BTN_LABELS[val] || val;
+      if (document.activeElement !== baseCombo1Select) {
+        baseCombo1Select.value = val;
+      }
+    }
+  }
+
+  // === Base combo button 2 select ===
+  var baseCombo2Select = document.getElementById('baseCombo2Select');
+  var baseCombo2Value = document.getElementById('baseCombo2Value');
+
+  baseCombo2Select.addEventListener('change', function() {
+    var val = baseCombo2Select.value;
+    baseCombo2Value.textContent = BASE_COMBO_BTN_LABELS[val] || val;
+    sfx.nav();
+    sendCmd('SET_BASE_COMBO_BUTTON_2', val);
+  });
+
+  function syncBaseCombo2() {
+    if (state.base_combo_button_2 !== undefined) {
+      var val = state.base_combo_button_2;
+      baseCombo2Value.textContent = BASE_COMBO_BTN_LABELS[val] || val;
+      if (document.activeElement !== baseCombo2Select) {
+        baseCombo2Select.value = val;
       }
     }
   }

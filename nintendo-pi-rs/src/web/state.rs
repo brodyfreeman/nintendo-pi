@@ -38,6 +38,8 @@ pub enum WebCommand {
     SetPrevSlotButton(String),
     SetNextSlotButton(String),
     SetToggleRecordingButton(String),
+    SetBaseComboButton1(String),
+    SetBaseComboButton2(String),
 }
 
 impl From<WebCommand> for crate::macro_engine::controller::MacroCommand {
@@ -73,6 +75,8 @@ impl From<WebCommand> for crate::macro_engine::controller::MacroCommand {
             WebCommand::SetPrevSlotButton(s) => Self::SetPrevSlotButton(s),
             WebCommand::SetNextSlotButton(s) => Self::SetNextSlotButton(s),
             WebCommand::SetToggleRecordingButton(s) => Self::SetToggleRecordingButton(s),
+            WebCommand::SetBaseComboButton1(s) => Self::SetBaseComboButton1(s),
+            WebCommand::SetBaseComboButton2(s) => Self::SetBaseComboButton2(s),
         }
     }
 }
@@ -166,6 +170,8 @@ pub struct StateSnapshot {
     pub prev_slot_button: String,
     pub next_slot_button: String,
     pub toggle_recording_button: String,
+    pub base_combo_button_1: String,
+    pub base_combo_button_2: String,
 }
 
 impl Default for StateSnapshot {
@@ -218,6 +224,12 @@ impl Default for StateSnapshot {
                 .display_name()
                 .to_string(),
             toggle_recording_button: crate::combo::DEFAULT_TOGGLE_RECORDING_BUTTON
+                .display_name()
+                .to_string(),
+            base_combo_button_1: crate::combo::DEFAULT_BASE_COMBO_BUTTON_1
+                .display_name()
+                .to_string(),
+            base_combo_button_2: crate::combo::DEFAULT_BASE_COMBO_BUTTON_2
                 .display_name()
                 .to_string(),
         }
