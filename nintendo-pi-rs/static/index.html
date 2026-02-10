@@ -82,6 +82,9 @@
   }
   .playback-row { display: flex; gap: 0.5rem; }
   .playback-row .btn { flex: 1; }
+  .speed-row { display: flex; gap: 0.4rem; margin-top: 0.6rem; }
+  .speed-row .btn { flex: 1; padding: 0.5rem 0.3rem; font-size: 0.8rem; min-height: 40px; }
+  .speed-row .btn.active { background: var(--blue); }
   .rec-status {
     display: inline-block; padding: 0.25rem 0.6rem; border-radius: 6px;
     font-size: 0.8rem; font-weight: 600; margin-left: 0.5rem;
@@ -156,6 +159,13 @@
     <button class="btn btn-green" id="btnPlay" onclick="sendCmd('PLAY_MACRO')">Play</button>
     <button class="btn btn-red" id="btnStop" onclick="sendCmd('STOP_PLAYBACK')">Stop</button>
     <button class="btn btn-dark" id="btnLoop" onclick="sendCmd('TOGGLE_LOOP')">Loop: OFF</button>
+  </div>
+  <div class="speed-row" id="speedRow">
+    <button class="btn btn-dark" onclick="setSpeed(0.25)">0.25x</button>
+    <button class="btn btn-dark" onclick="setSpeed(0.5)">0.5x</button>
+    <button class="btn btn-dark active" onclick="setSpeed(1)">1x</button>
+    <button class="btn btn-dark" onclick="setSpeed(2)">2x</button>
+    <button class="btn btn-dark" onclick="setSpeed(4)">4x</button>
   </div>
 </div>
 
@@ -288,6 +298,17 @@
       loopBtn.textContent = 'Loop: OFF';
       loopBtn.className = 'btn btn-dark';
     }
+
+    var speedBtns = document.getElementById('speedRow').children;
+    var speeds = [0.25, 0.5, 1, 2, 4];
+    for (var i = 0; i < speedBtns.length; i++) {
+      speedBtns[i].className = state.playback_speed === speeds[i]
+        ? 'btn btn-dark active' : 'btn btn-dark';
+    }
+  }
+
+  window.setSpeed = function(speed) {
+    sendCmd('SET_PLAYBACK_SPEED', speed);
   }
 
   function updateSlotName() {
