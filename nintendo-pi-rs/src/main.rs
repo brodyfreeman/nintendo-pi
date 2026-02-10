@@ -484,5 +484,6 @@ fn update_state(mitm_state: &MitmState, ctrl: &MacroController, bt_connected: bo
         usb_connected: true,
         bt_connected,
         playback_speed: ctrl.player.speed,
+        looping: ctrl.player.looping,
     });
 }

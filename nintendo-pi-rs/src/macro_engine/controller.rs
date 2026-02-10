@@ -27,6 +27,7 @@ pub enum MacroCommand {
     DeleteMacro(u32),
     CycleSpeed,
     SetPlaybackSpeed(f64),
+    ToggleLoop,
 }
 
 /// Side effects produced by executing a command.
@@ -92,6 +93,7 @@ impl MacroController {
             MacroCommand::DeleteMacro(id) => self.delete_macro(id),
             MacroCommand::CycleSpeed => self.cycle_speed(),
             MacroCommand::SetPlaybackSpeed(speed) => self.set_playback_speed(speed),
+            MacroCommand::ToggleLoop => self.toggle_loop(),
         }
     }
 
@@ -194,10 +196,10 @@ impl MacroController {
     fn play_macro(&mut self) -> MacroEffect {
         if let Some(macro_id) = storage::get_macro_id_by_slot(&self.macros_dir, self.current_slot) {
             if self.player.load(&self.macros_dir, macro_id) {
-                self.player.start(false);
+                self.player.start(self.player.looping);
                 info!(
-                    "[MACRO] Playing macro {} (slot {}).",
-                    macro_id, self.current_slot
+                    "[MACRO] Playing macro {} (slot {}, loop={}).",
+                    macro_id, self.current_slot, self.player.looping
                 );
                 return MacroEffect {
                     led: Some(&led::LED_PLAYBACK),
@@ -227,6 +229,15 @@ impl MacroController {
 
     fn set_playback_speed(&mut self, speed: f64) -> MacroEffect {
         self.player.set_speed(speed);
+        MacroEffect::none()
+    }
+
+    fn toggle_loop(&mut self) -> MacroEffect {
+        self.player.looping = !self.player.looping;
+        info!(
+            "[MACRO] Loop mode: {}",
+            if self.player.looping { "ON" } else { "OFF" }
+        );
         MacroEffect::none()
     }
 
@@ -433,6 +444,18 @@ mod tests {
 
         ctrl.execute(MacroCommand::CycleSpeed);
         assert!((ctrl.player.speed - 4.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn test_toggle_loop() {
+        let (mut ctrl, _dir) = make_controller();
+        assert!(!ctrl.player.looping);
+
+        ctrl.execute(MacroCommand::ToggleLoop);
+        assert!(ctrl.player.looping);
+
+        ctrl.execute(MacroCommand::ToggleLoop);
+        assert!(!ctrl.player.looping);
     }
 
     #[test]

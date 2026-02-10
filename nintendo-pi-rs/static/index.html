@@ -155,6 +155,7 @@
   <div class="playback-row">
     <button class="btn btn-green" id="btnPlay" onclick="sendCmd('PLAY_MACRO')">Play</button>
     <button class="btn btn-red" id="btnStop" onclick="sendCmd('STOP_PLAYBACK')">Stop</button>
+    <button class="btn btn-dark" id="btnLoop" onclick="sendCmd('TOGGLE_LOOP')">Loop: OFF</button>
   </div>
 </div>
 
@@ -277,6 +278,15 @@
     } else {
       playBtn.textContent = 'Play';
       playBtn.disabled = false;
+    }
+
+    var loopBtn = document.getElementById('btnLoop');
+    if (state.looping) {
+      loopBtn.textContent = 'Loop: ON';
+      loopBtn.className = 'btn btn-blue';
+    } else {
+      loopBtn.textContent = 'Loop: OFF';
+      loopBtn.className = 'btn btn-dark';
     }
   }
 

@@ -18,6 +18,7 @@ pub enum WebCommand {
     DeleteMacro(u32),
     CycleSpeed,
     SetPlaybackSpeed(f64),
+    ToggleLoop,
 }
 
 impl From<WebCommand> for crate::macro_engine::controller::MacroCommand {
@@ -34,6 +35,7 @@ impl From<WebCommand> for crate::macro_engine::controller::MacroCommand {
             WebCommand::DeleteMacro(id) => Self::DeleteMacro(id),
             WebCommand::CycleSpeed => Self::CycleSpeed,
             WebCommand::SetPlaybackSpeed(speed) => Self::SetPlaybackSpeed(speed),
+            WebCommand::ToggleLoop => Self::ToggleLoop,
         }
     }
 }
@@ -50,6 +52,7 @@ pub struct StateSnapshot {
     pub usb_connected: bool,
     pub bt_connected: bool,
     pub playback_speed: f64,
+    pub looping: bool,
 }
 
 impl Default for StateSnapshot {
@@ -64,6 +67,7 @@ impl Default for StateSnapshot {
             usb_connected: false,
             bt_connected: false,
             playback_speed: 1.0,
+            looping: false,
         }
     }
 }

@@ -163,6 +163,7 @@ fn parse_web_command(val: &serde_json::Value, _macros_dir: &std::path::Path) -> 
             Some(WebCommand::DeleteMacro(id))
         }
         "CYCLE_SPEED" => Some(WebCommand::CycleSpeed),
+        "TOGGLE_LOOP" => Some(WebCommand::ToggleLoop),
         "SET_PLAYBACK_SPEED" => {
             let speed = val.get("data")?.as_f64()?;
             Some(WebCommand::SetPlaybackSpeed(speed))

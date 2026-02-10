@@ -18,6 +18,7 @@ pub enum ComboAction {
     PlayMacro,
     StopPlayback,
     CycleSpeed,
+    ToggleLoop,
 }
 
 impl From<ComboAction> for Option<crate::macro_engine::controller::MacroCommand> {
@@ -32,6 +33,7 @@ impl From<ComboAction> for Option<crate::macro_engine::controller::MacroCommand>
             ComboAction::PlayMacro => Some(MacroCommand::PlayMacro),
             ComboAction::StopPlayback => Some(MacroCommand::StopPlayback),
             ComboAction::CycleSpeed => Some(MacroCommand::CycleSpeed),
+            ComboAction::ToggleLoop => Some(MacroCommand::ToggleLoop),
         }
     }
 }
@@ -46,6 +48,7 @@ const INSTANT_COMBOS: &[(Button, ComboAction)] = &[
     (Button::DpadUp, ComboAction::CycleSpeed),
     (Button::A, ComboAction::PlayMacro),
     (Button::B, ComboAction::StopPlayback),
+    (Button::Y, ComboAction::ToggleLoop),
 ];
 
 /// Set of buttons to suppress (smallvec would be overkill, just use a fixed array).
@@ -345,6 +348,18 @@ mod tests {
         // L3+R3+A: should NOT trigger recording (A takes priority)
         let (action, _) = cd.update(&buttons_with(&[Button::L3, Button::R3, Button::A]));
         assert_eq!(action, ComboAction::PlayMacro);
+    }
+
+    #[test]
+    fn test_instant_combo_toggle_loop() {
+        let mut cd = ComboDetector::new();
+        cd.update(&buttons_with(&[Button::L3, Button::R3]));
+
+        let (action, sup) = cd.update(&buttons_with(&[Button::L3, Button::R3, Button::Y]));
+        assert_eq!(action, ComboAction::ToggleLoop);
+        assert!(sup.buttons[..sup.count]
+            .iter()
+            .any(|b| *b == Some(Button::Y)));
     }
 
     #[test]
