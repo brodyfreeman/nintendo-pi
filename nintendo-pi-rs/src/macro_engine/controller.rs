@@ -6,7 +6,7 @@
 
 use std::path::{Path, PathBuf};
 
-use tracing::info;
+use tracing::{info, warn};
 
 use super::player::MacroPlayer;
 use super::recorder::MacroRecorder;
@@ -133,8 +133,13 @@ impl MacroController {
         } else {
             let mut broadcast = false;
             if self.recorder.recording {
-                self.recorder.stop();
-                self.recorder.save(&self.macros_dir, None);
+                let (frame_count, duration_us) = self.recorder.stop();
+                if let Some(id) = self.recorder.save(&self.macros_dir, None) {
+                    info!(
+                        "[MACRO] Auto-saved recording as macro {id} ({frame_count} frames, {}ms)",
+                        duration_us / 1000
+                    );
+                }
                 broadcast = true;
             }
             info!("[MACRO] Macro mode OFF.");
@@ -147,8 +152,17 @@ impl MacroController {
 
     fn toggle_recording(&mut self) -> MacroEffect {
         if self.recorder.recording {
-            self.recorder.stop();
-            self.recorder.save(&self.macros_dir, None);
+            let (frame_count, duration_us) = self.recorder.stop();
+            if let Some(id) = self.recorder.save(&self.macros_dir, None) {
+                info!(
+                    "[MACRO] Recording saved as macro {id} ({frame_count} frames, {}ms)",
+                    duration_us / 1000
+                );
+            } else if frame_count == 0 {
+                warn!("[MACRO] Recording discarded: 0 frames captured");
+            } else {
+                warn!("[MACRO] Recording failed to save ({frame_count} frames lost)");
+            }
             self.refresh_cache();
             MacroEffect {
                 led: Some(&led::LED_MACRO_MODE),
@@ -189,6 +203,12 @@ impl MacroController {
         if slot < self.cached_slot_count {
             self.current_slot = slot;
             self.refresh_cache();
+            info!("[MACRO] Slot {slot} selected via web UI.");
+        } else {
+            warn!(
+                "[MACRO] Slot {slot} out of range (have {} macros)",
+                self.cached_slot_count
+            );
         }
         MacroEffect::none()
     }
@@ -212,7 +232,10 @@ impl MacroController {
 
     fn stop_playback(&mut self) -> MacroEffect {
         if self.player.playing {
+            let progress = self.player.frame_index();
+            let total = self.player.frame_count();
             self.player.stop();
+            info!("[MACRO] Playback stopped at frame {progress}/{total}.");
             MacroEffect {
                 led: Some(self.mode_led()),
                 broadcast_macros: false,
@@ -249,6 +272,7 @@ impl MacroController {
                 broadcast_macros: true,
             }
         } else {
+            warn!("[MACRO] Rename command failed for macro {id}");
             MacroEffect::none()
         }
     }
@@ -263,11 +287,16 @@ impl MacroController {
                 self.current_slot = new_count - 1;
             }
             self.refresh_cache();
+            info!(
+                "[MACRO] Macro {id} deleted. {} macro(s) remaining, slot {}.",
+                self.cached_slot_count, self.current_slot
+            );
             MacroEffect {
                 led: None,
                 broadcast_macros: true,
             }
         } else {
+            warn!("[MACRO] Delete command failed for macro {id}");
             MacroEffect::none()
         }
     }

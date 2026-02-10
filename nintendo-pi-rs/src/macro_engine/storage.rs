@@ -16,7 +16,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
-use tracing::{error, info};
+use tracing::{debug, error, info, warn};
 
 pub const MAGIC: &[u8; 4] = b"MAC2";
 pub const FORMAT_VERSION: u16 = 2;
@@ -80,6 +80,7 @@ pub fn save_macro(
     name: Option<&str>,
 ) -> Option<u32> {
     if frames.is_empty() {
+        warn!("[MACRO] save_macro called with 0 frames, skipping");
         return None;
     }
 
@@ -143,17 +144,25 @@ pub fn get_macro_info(macros_dir: &Path, macro_id: u32) -> Option<MacroEntry> {
 pub fn rename_macro(macros_dir: &Path, macro_id: u32, new_name: &str) -> bool {
     let mut index = load_index(macros_dir);
     if let Some(entry) = index.iter_mut().find(|e| e.id == macro_id) {
+        let old_name = entry.name.clone();
         let old_path = macros_dir.join(&entry.filename);
         let new_filename = format!("{:03}_{}.bin", macro_id, new_name);
         let new_path = macros_dir.join(&new_filename);
         if old_path.exists() {
-            let _ = fs::rename(&old_path, &new_path);
+            if let Err(e) = fs::rename(&old_path, &new_path) {
+                error!(
+                    "[MACRO] Failed to rename file {:?} -> {:?}: {e}",
+                    old_path, new_path
+                );
+            }
         }
         entry.name = new_name.to_string();
         entry.filename = new_filename;
         save_index(macros_dir, &index);
+        info!("[MACRO] Renamed macro {macro_id} \"{old_name}\" -> \"{new_name}\"");
         true
     } else {
+        warn!("[MACRO] Rename failed: macro {macro_id} not found in index");
         false
     }
 }
@@ -164,7 +173,14 @@ pub fn delete_macro(macros_dir: &Path, macro_id: u32) -> bool {
 
     index.retain(|entry| {
         if entry.id == macro_id {
-            let _ = fs::remove_file(macros_dir.join(&entry.filename));
+            let path = macros_dir.join(&entry.filename);
+            if let Err(e) = fs::remove_file(&path) {
+                warn!("[MACRO] Failed to remove file {}: {e}", entry.filename);
+            }
+            info!(
+                "[MACRO] Deleted macro {macro_id} \"{}\" ({})",
+                entry.name, entry.filename
+            );
             false
         } else {
             true
@@ -174,6 +190,9 @@ pub fn delete_macro(macros_dir: &Path, macro_id: u32) -> bool {
     let deleted = index.len() < orig_len;
     if deleted {
         save_index(macros_dir, &index);
+        debug!("[MACRO] Index updated: {} macro(s) remaining", index.len());
+    } else {
+        warn!("[MACRO] Delete failed: macro {macro_id} not found in index");
     }
     deleted
 }

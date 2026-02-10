@@ -3,7 +3,7 @@
 use std::path::Path;
 use std::time::Instant;
 
-use tracing::info;
+use tracing::{debug, info, warn};
 
 use super::storage;
 
@@ -39,6 +39,15 @@ impl MacroRecorder {
             .map(|s| s.elapsed().as_micros() as u64)
             .unwrap_or(0);
         self.frames.push((elapsed_us, *raw_report));
+        let count = self.frames.len();
+        if count == 1 {
+            debug!("[MACRO] First frame captured");
+        } else if count.is_multiple_of(1000) {
+            debug!(
+                "[MACRO] Recording: {count} frames ({}s)",
+                elapsed_us / 1_000_000
+            );
+        }
     }
 
     /// Stop recording. Returns (frame_count, duration_us).
@@ -55,8 +64,12 @@ impl MacroRecorder {
 
     /// Save recorded frames to disk. Returns macro ID or None.
     pub fn save(&mut self, macros_dir: &Path, name: Option<&str>) -> Option<u32> {
+        let frame_count = self.frames.len();
         let result = storage::save_macro(macros_dir, &self.frames, name);
         self.frames.clear();
+        if result.is_none() && frame_count > 0 {
+            warn!("[MACRO] Save failed for {frame_count} recorded frames");
+        }
         result
     }
 }

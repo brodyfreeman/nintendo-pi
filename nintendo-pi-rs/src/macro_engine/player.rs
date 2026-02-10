@@ -5,7 +5,7 @@ use std::path::Path;
 use std::time::Instant;
 
 use memmap2::Mmap;
-use tracing::{error, info, warn};
+use tracing::{debug, error, info, warn};
 
 use super::storage::{self, FRAME_SIZE, HEADER_SIZE, MAGIC, MAGIC_V1};
 
@@ -168,8 +168,13 @@ impl MacroPlayer {
             if self.looping {
                 self.frame_index = 0;
                 self.start = Some(Instant::now());
+                debug!(
+                    "[MACRO] Playback loop restarted ({} frames)",
+                    self.frame_count
+                );
             } else {
                 self.playing = false;
+                info!("[MACRO] Playback finished ({} frames)", self.frame_count);
                 let report = self.last_report.take();
                 return report;
             }
