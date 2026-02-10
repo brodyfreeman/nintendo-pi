@@ -59,12 +59,14 @@ impl From<ComboAction> for Option<crate::macro_engine::controller::MacroCommand>
 /// Default hold duration for macro mode toggle (seconds).
 pub const DEFAULT_HOLD_DURATION: f64 = 0.5;
 
-/// Instant combos: button -> action (edge-triggered when L3+R3 held).
-const INSTANT_COMBOS: &[(Button, ComboAction)] = &[
+/// Default play macro button.
+pub const DEFAULT_PLAY_MACRO_BUTTON: Button = Button::A;
+
+/// Fixed instant combos (not configurable).
+const FIXED_COMBOS: &[(Button, ComboAction)] = &[
     (Button::DpadLeft, ComboAction::PrevSlot),
     (Button::DpadRight, ComboAction::NextSlot),
     (Button::DpadUp, ComboAction::CycleSpeed),
-    (Button::A, ComboAction::PlayMacro),
     (Button::B, ComboAction::StopPlayback),
     (Button::Y, ComboAction::ToggleLoop),
 ];
@@ -110,6 +112,7 @@ impl SuppressedButtons {
 pub struct ComboDetector {
     pub macro_mode: bool,
     pub hold_duration: f64,
+    pub play_macro_button: Button,
     dpad_down_start: Option<Instant>,
     prev_buttons: ButtonState,
     prev_base_held: bool,
@@ -120,6 +123,7 @@ impl ComboDetector {
         Self {
             macro_mode: false,
             hold_duration: DEFAULT_HOLD_DURATION,
+            play_macro_button: DEFAULT_PLAY_MACRO_BUTTON,
             dpad_down_start: None,
             prev_buttons: ButtonState::default(),
             prev_base_held: false,
@@ -168,8 +172,8 @@ impl ComboDetector {
                 self.dpad_down_start = None;
             }
 
-            // Check instant combos (edge-triggered)
-            for &(btn, combo_action) in INSTANT_COMBOS {
+            // Check fixed instant combos (edge-triggered)
+            for &(btn, combo_action) in FIXED_COMBOS {
                 let pressed = buttons.get(btn);
                 let was_pressed = self.prev_buttons.get(btn);
                 if pressed {
@@ -180,10 +184,23 @@ impl ComboDetector {
                 }
             }
 
+            // Check configurable play macro button (edge-triggered)
+            {
+                let pressed = buttons.get(self.play_macro_button);
+                let was_pressed = self.prev_buttons.get(self.play_macro_button);
+                if pressed {
+                    suppressed.add(self.play_macro_button);
+                }
+                if pressed && !was_pressed {
+                    action = ComboAction::PlayMacro;
+                }
+            }
+
             // In macro mode, L3+R3 alone toggles recording (rising edge)
             if self.macro_mode && !self.prev_base_held {
-                let any_combo_btn =
-                    dpad_down || INSTANT_COMBOS.iter().any(|&(btn, _)| buttons.get(btn));
+                let any_combo_btn = dpad_down
+                    || FIXED_COMBOS.iter().any(|&(btn, _)| buttons.get(btn))
+                    || buttons.get(self.play_macro_button);
                 if !any_combo_btn {
                     action = ComboAction::ToggleRecording;
                 }

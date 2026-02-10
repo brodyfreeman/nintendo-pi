@@ -38,6 +38,7 @@ pub enum MacroCommand {
     SetRecordingStartDelay(f64),
     SetUiUpdateInterval(u64),
     SetCalibrationSamples(u32),
+    SetPlayMacroButton(String),
 }
 
 /// Side effects produced by executing a command.
@@ -78,6 +79,7 @@ pub struct MacroController {
     pub recording_start_delay: f64,
     pub ui_update_interval_ms: u64,
     pub calibration_samples: u32,
+    pub play_macro_button: crate::input::Button,
     macros_dir: PathBuf,
 }
 
@@ -105,6 +107,7 @@ impl MacroController {
             recording_start_delay: 0.0,
             ui_update_interval_ms: 200,
             calibration_samples: 20,
+            play_macro_button: crate::input::Button::A,
             macros_dir,
         }
     }
@@ -134,6 +137,7 @@ impl MacroController {
             MacroCommand::SetRecordingStartDelay(d) => self.set_recording_start_delay(d),
             MacroCommand::SetUiUpdateInterval(ms) => self.set_ui_update_interval(ms),
             MacroCommand::SetCalibrationSamples(n) => self.set_calibration_samples(n),
+            MacroCommand::SetPlayMacroButton(s) => self.set_play_macro_button(&s),
         }
     }
 
@@ -398,6 +402,16 @@ impl MacroController {
             "[SETTINGS] Calibration samples set to {}",
             self.calibration_samples
         );
+        MacroEffect::none()
+    }
+
+    fn set_play_macro_button(&mut self, name: &str) -> MacroEffect {
+        if let Some(btn) = crate::input::Button::from_str_name(name) {
+            self.play_macro_button = btn;
+            info!("[SETTINGS] Play macro button set to {}", btn.display_name());
+        } else {
+            warn!("[SETTINGS] Unknown button name: {name}");
+        }
         MacroEffect::none()
     }
 

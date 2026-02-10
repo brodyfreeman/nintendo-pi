@@ -30,6 +30,7 @@ pub enum WebCommand {
     SetRecordingStartDelay(f64),
     SetUiUpdateInterval(u64),
     SetCalibrationSamples(u32),
+    SetPlayMacroButton(String),
 }
 
 impl From<WebCommand> for crate::macro_engine::controller::MacroCommand {
@@ -57,6 +58,7 @@ impl From<WebCommand> for crate::macro_engine::controller::MacroCommand {
             WebCommand::SetRecordingStartDelay(d) => Self::SetRecordingStartDelay(d),
             WebCommand::SetUiUpdateInterval(ms) => Self::SetUiUpdateInterval(ms),
             WebCommand::SetCalibrationSamples(n) => Self::SetCalibrationSamples(n),
+            WebCommand::SetPlayMacroButton(s) => Self::SetPlayMacroButton(s),
         }
     }
 }
@@ -142,6 +144,7 @@ pub struct StateSnapshot {
     pub recording_start_delay: f64,
     pub ui_update_interval_ms: u64,
     pub calibration_samples: u32,
+    pub play_macro_button: String,
 }
 
 impl Default for StateSnapshot {
@@ -172,6 +175,9 @@ impl Default for StateSnapshot {
             recording_start_delay: 0.0,
             ui_update_interval_ms: 200,
             calibration_samples: 20,
+            play_macro_button: crate::combo::DEFAULT_PLAY_MACRO_BUTTON
+                .display_name()
+                .to_string(),
         }
     }
 }

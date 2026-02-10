@@ -493,6 +493,16 @@
     display: flex; justify-content: space-between;
     font-size: 0.65rem; color: var(--muted); font-weight: 600; margin-top: 0.3rem;
   }
+  .setting-select {
+    width: 100%; padding: 0.5rem 0.7rem; border-radius: 8px;
+    background: rgba(255,255,255,0.08); color: #fff; font-size: 0.85rem;
+    font-weight: 700; border: 1px solid rgba(255,255,255,0.1);
+    outline: none; cursor: pointer; -webkit-appearance: none; appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23888' stroke-width='2' fill='none'/%3E%3C/svg%3E");
+    background-repeat: no-repeat; background-position: right 0.7rem center;
+  }
+  .setting-select:focus { border-color: var(--blue); }
+  .setting-select option { background: #1a1a2e; color: #fff; }
 
   /* === Switch-style entrance animations === */
   @keyframes section-in {
@@ -818,6 +828,20 @@
       <span>0.1s (fast)</span>
       <span>2.0s (slow)</span>
     </div>
+  </div>
+  <div class="setting-row">
+    <div class="setting-label">
+      <span class="setting-name">Play Macro Button</span>
+      <span class="setting-value" id="playBtnValue">A</span>
+    </div>
+    <select class="setting-select" id="playBtnSelect">
+      <option value="A">A</option>
+      <option value="X">X</option>
+      <option value="L">L</option>
+      <option value="R">R</option>
+      <option value="ZL">ZL</option>
+      <option value="ZR">ZR</option>
+    </select>
   </div>
   <div class="setting-row">
     <div class="setting-label">
@@ -1229,6 +1253,7 @@
     // Sync settings
     syncDeadzone();
     syncHoldTime();
+    syncPlayBtn();
     syncAutoLoop();
     syncSpeedDefault();
     syncStartDelay();
@@ -1587,6 +1612,30 @@
       holdTimeValue.textContent = val.toFixed(1) + 's';
       if (document.activeElement !== holdTimeSlider) {
         holdTimeSlider.value = val;
+      }
+    }
+  }
+
+  // === Play macro button select ===
+  var playBtnSelect = document.getElementById('playBtnSelect');
+  var playBtnValue = document.getElementById('playBtnValue');
+  var PLAY_BTN_LABELS = {
+    'A': 'A', 'X': 'X', 'L': 'L', 'R': 'R', 'ZL': 'ZL', 'ZR': 'ZR'
+  };
+
+  playBtnSelect.addEventListener('change', function() {
+    var val = playBtnSelect.value;
+    playBtnValue.textContent = PLAY_BTN_LABELS[val] || val;
+    sfx.nav();
+    sendCmd('SET_PLAY_MACRO_BUTTON', val);
+  });
+
+  function syncPlayBtn() {
+    if (state.play_macro_button !== undefined) {
+      var val = state.play_macro_button;
+      playBtnValue.textContent = PLAY_BTN_LABELS[val] || val;
+      if (document.activeElement !== playBtnSelect) {
+        playBtnSelect.value = val;
       }
     }
   }
