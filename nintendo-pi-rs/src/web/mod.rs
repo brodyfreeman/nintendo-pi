@@ -235,6 +235,11 @@ fn parse_web_command(val: &serde_json::Value, _macros_dir: &std::path::Path) -> 
             debug!("[WEB] Set toggle loop button: {s}");
             Some(WebCommand::SetToggleLoopButton(s))
         }
+        "SET_CYCLE_SPEED_BUTTON" => {
+            let s = val.get("data")?.as_str()?.to_string();
+            debug!("[WEB] Set cycle speed button: {s}");
+            Some(WebCommand::SetCycleSpeedButton(s))
+        }
         _ => {
             warn!("[WEB] Unknown command: {cmd}");
             None

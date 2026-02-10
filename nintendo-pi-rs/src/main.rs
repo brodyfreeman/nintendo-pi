@@ -370,6 +370,7 @@ fn usb_processing_loop(
             combo.stop_playback_button = ctrl.stop_playback_button;
             combo.toggle_macro_mode_button = ctrl.toggle_macro_mode_button;
             combo.toggle_loop_button = ctrl.toggle_loop_button;
+            combo.cycle_speed_button = ctrl.cycle_speed_button;
             // Sync stick deadzone to calibrators
             main_cal.deadzone = ctrl.stick_deadzone;
             c_cal.deadzone = ctrl.stick_deadzone;
@@ -544,5 +545,6 @@ fn update_state(
         stop_playback_button: ctrl.stop_playback_button.display_name().to_string(),
         toggle_macro_mode_button: ctrl.toggle_macro_mode_button.display_name().to_string(),
         toggle_loop_button: ctrl.toggle_loop_button.display_name().to_string(),
+        cycle_speed_button: ctrl.cycle_speed_button.display_name().to_string(),
     });
 }

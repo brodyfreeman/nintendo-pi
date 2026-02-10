@@ -892,6 +892,23 @@
   </div>
   <div class="setting-row">
     <div class="setting-label">
+      <span class="setting-name">Cycle Speed Button</span>
+      <span class="setting-value" id="cycleSpeedBtnValue">DpadUp</span>
+    </div>
+    <select class="setting-select" id="cycleSpeedBtnSelect">
+      <option value="DpadUp">DpadUp</option>
+      <option value="A">A</option>
+      <option value="B">B</option>
+      <option value="X">X</option>
+      <option value="Y">Y</option>
+      <option value="L">L</option>
+      <option value="R">R</option>
+      <option value="ZL">ZL</option>
+      <option value="ZR">ZR</option>
+    </select>
+  </div>
+  <div class="setting-row">
+    <div class="setting-label">
       <span class="setting-name">Default Playback Speed</span>
       <span class="setting-value" id="speedDefaultValue">1.0x</span>
     </div>
@@ -1304,6 +1321,7 @@
     syncStopBtn();
     syncToggleModeBtn();
     syncToggleLoopBtn();
+    syncCycleSpeedBtn();
     syncAutoLoop();
     syncSpeedDefault();
     syncStartDelay();
@@ -1758,6 +1776,30 @@
       toggleLoopBtnValue.textContent = TOGGLE_LOOP_BTN_LABELS[val] || val;
       if (document.activeElement !== toggleLoopBtnSelect) {
         toggleLoopBtnSelect.value = val;
+      }
+    }
+  }
+
+  // === Cycle speed button select ===
+  var cycleSpeedBtnSelect = document.getElementById('cycleSpeedBtnSelect');
+  var cycleSpeedBtnValue = document.getElementById('cycleSpeedBtnValue');
+  var CYCLE_SPEED_BTN_LABELS = {
+    'DpadUp': 'DpadUp', 'A': 'A', 'B': 'B', 'X': 'X', 'Y': 'Y', 'L': 'L', 'R': 'R', 'ZL': 'ZL', 'ZR': 'ZR'
+  };
+
+  cycleSpeedBtnSelect.addEventListener('change', function() {
+    var val = cycleSpeedBtnSelect.value;
+    cycleSpeedBtnValue.textContent = CYCLE_SPEED_BTN_LABELS[val] || val;
+    sfx.nav();
+    sendCmd('SET_CYCLE_SPEED_BUTTON', val);
+  });
+
+  function syncCycleSpeedBtn() {
+    if (state.cycle_speed_button !== undefined) {
+      var val = state.cycle_speed_button;
+      cycleSpeedBtnValue.textContent = CYCLE_SPEED_BTN_LABELS[val] || val;
+      if (document.activeElement !== cycleSpeedBtnSelect) {
+        cycleSpeedBtnSelect.value = val;
       }
     }
   }
