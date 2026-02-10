@@ -175,8 +175,7 @@
   }
   .rec-status.active { background: var(--red); animation: pulse 1s infinite; }
   @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.5; } }
-  .viz-section { display: none; }
-  .viz-section.show { display: block; }
+  /* viz-section show/hide handled by max-height transition below */
   .progress-bar-outer {
     width: 100%; height: 6px; background: rgba(255,255,255,0.08);
     border-radius: 3px; overflow: hidden; margin-bottom: 0.3rem;
@@ -253,6 +252,78 @@
   .modal input:focus { outline: none; border-color: var(--accent); }
   .modal-btns { display: flex; gap: 0.5rem; }
   .modal-btns .btn { flex: 1; }
+
+  /* === Switch-style entrance animations === */
+  @keyframes section-in {
+    from { opacity: 0; transform: translateY(18px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .section, .status-bar {
+    animation: section-in 0.35s cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+  .status-bar { animation-delay: 0s; }
+  .section:nth-child(2) { animation-delay: 0.04s; }
+  .section:nth-child(3) { animation-delay: 0.08s; }
+  .section:nth-child(4) { animation-delay: 0.12s; }
+  .section:nth-child(5) { animation-delay: 0.16s; }
+  .section:nth-child(6) { animation-delay: 0.20s; }
+
+  /* === Smooth viz section slide === */
+  .viz-section {
+    max-height: 0; overflow: hidden; opacity: 0;
+    transition: max-height 0.4s cubic-bezier(0.22, 1, 0.36, 1),
+                opacity 0.3s ease,
+                margin 0.4s cubic-bezier(0.22, 1, 0.36, 1),
+                padding 0.4s cubic-bezier(0.22, 1, 0.36, 1);
+    margin-top: 0; margin-bottom: 0; padding-top: 0; padding-bottom: 0;
+    display: block;
+  }
+  .viz-section.show {
+    max-height: 400px; opacity: 1;
+    margin: 0.6rem 0.75rem; padding: 1rem;
+  }
+
+  /* === Slot number pop on change === */
+  @keyframes slot-pop {
+    0% { transform: scale(1); }
+    40% { transform: scale(1.15); }
+    100% { transform: scale(1); }
+  }
+  .slot-num.pop { animation: slot-pop 0.25s cubic-bezier(0.22, 1, 0.36, 1); }
+
+  /* === Switch-style slide toggle for macro mode === */
+  .switch-toggle {
+    width: 58px; height: 30px; border-radius: 15px; padding: 2px;
+    background: rgba(255,255,255,0.12); border: none; cursor: pointer;
+    position: relative; transition: background 0.25s ease;
+    box-shadow: inset 0 1px 3px rgba(0,0,0,0.3);
+    -webkit-tap-highlight-color: transparent;
+  }
+  .switch-toggle.on { background: var(--green); }
+  .switch-toggle .knob {
+    width: 26px; height: 26px; border-radius: 50%;
+    background: #fff; display: block;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.3);
+    transition: transform 0.25s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  .switch-toggle.on .knob { transform: translateX(28px); }
+
+  /* === Recording glow ring === */
+  @keyframes rec-ring {
+    0%, 100% { box-shadow: 0 4px 0 rgba(0,0,0,0.3), 0 0 0 3px rgba(0,0,0,0.15), inset 0 1px 1px rgba(255,255,255,0.15), 0 0 0 0 rgba(230,0,18,0); }
+    50% { box-shadow: 0 4px 0 rgba(0,0,0,0.3), 0 0 0 3px rgba(0,0,0,0.15), inset 0 1px 1px rgba(255,255,255,0.15), 0 0 0 10px rgba(230,0,18,0.25); }
+  }
+  .btn-face.recording {
+    animation: rec-ring 1.2s ease-in-out infinite;
+  }
+
+  /* === Button press feedback === */
+  .btn-face { transition: transform 0.12s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.12s ease, background 0.2s ease, opacity 0.2s ease; }
+  .dpad-btn { transition: transform 0.12s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.12s ease; }
+
+  /* === Slot name fade === */
+  .slot-name { transition: opacity 0.2s ease; }
+  .slot-name.fading { opacity: 0; }
 </style>
 </head>
 <body>
@@ -270,8 +341,9 @@
   <div class="section-title">Macro Mode</div>
   <div class="toggle-row">
     <span class="label">Macro Mode</span>
-    <button class="btn btn-home" id="btnMacroMode" onclick="sendCmd('TOGGLE_MACRO_MODE')">
-      <span class="toggle-status off" id="macroModeStatus">OFF</span>
+    <span class="toggle-status off" id="macroModeStatus">OFF</span>
+    <button class="switch-toggle" id="btnMacroMode" onclick="sendCmd('TOGGLE_MACRO_MODE')">
+      <span class="knob"></span>
     </button>
   </div>
 </div>
@@ -396,24 +468,34 @@
     setStatusDot('ctrlDot', state.usb_connected ? 'green' : 'yellow');
     setStatusDot('switchDot', state.bt_connected ? 'green' : 'red');
     var modeEl = document.getElementById('macroModeStatus');
+    var toggleBtn = document.getElementById('btnMacroMode');
     if (state.macro_mode) {
       modeEl.textContent = 'ON';
       modeEl.className = 'toggle-status on';
+      toggleBtn.classList.add('on');
     } else {
       modeEl.textContent = 'OFF';
       modeEl.className = 'toggle-status off';
+      toggleBtn.classList.remove('on');
     }
 
-    document.getElementById('slotNum').textContent = state.slot_count > 0
+    var slotEl = document.getElementById('slotNum');
+    var newSlotText = state.slot_count > 0
       ? (state.current_slot + 1) + ' / ' + state.slot_count
       : '0 / 0';
+    if (slotEl.textContent !== newSlotText) {
+      slotEl.textContent = newSlotText;
+      slotEl.classList.remove('pop');
+      void slotEl.offsetWidth; // reflow to restart animation
+      slotEl.classList.add('pop');
+    }
     updateSlotName();
 
     var recBtn = document.getElementById('btnRecord');
     var recStatus = document.getElementById('recStatus');
     if (state.recording) {
       recBtn.textContent = 'STOP';
-      recBtn.className = 'btn btn-yellow btn-face';
+      recBtn.className = 'btn btn-yellow btn-face recording';
       recBtn.style.width = '68px'; recBtn.style.height = '68px'; recBtn.style.fontSize = '0.75rem';
       recStatus.style.display = '';
       recStatus.className = 'rec-status active';
@@ -492,12 +574,20 @@
 
   function updateSlotName() {
     var nameEl = document.getElementById('slotName');
+    var newName;
     if (state.current_macro_name) {
-      nameEl.textContent = state.current_macro_name;
+      newName = state.current_macro_name;
     } else if (macros.length > 0 && state.current_slot < macros.length) {
-      nameEl.textContent = macros[state.current_slot].name;
+      newName = macros[state.current_slot].name;
     } else {
-      nameEl.textContent = '--';
+      newName = '--';
+    }
+    if (nameEl.textContent !== newName) {
+      nameEl.classList.add('fading');
+      setTimeout(function() {
+        nameEl.textContent = newName;
+        nameEl.classList.remove('fading');
+      }, 150);
     }
   }
 
