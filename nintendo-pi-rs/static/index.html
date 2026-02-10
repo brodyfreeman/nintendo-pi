@@ -909,6 +909,40 @@
   </div>
   <div class="setting-row">
     <div class="setting-label">
+      <span class="setting-name">Prev Slot Button</span>
+      <span class="setting-value" id="prevSlotBtnValue">D-pad Left</span>
+    </div>
+    <select class="setting-select" id="prevSlotBtnSelect">
+      <option value="DpadLeft">D-pad Left</option>
+      <option value="A">A</option>
+      <option value="B">B</option>
+      <option value="X">X</option>
+      <option value="Y">Y</option>
+      <option value="L">L</option>
+      <option value="R">R</option>
+      <option value="ZL">ZL</option>
+      <option value="ZR">ZR</option>
+    </select>
+  </div>
+  <div class="setting-row">
+    <div class="setting-label">
+      <span class="setting-name">Next Slot Button</span>
+      <span class="setting-value" id="nextSlotBtnValue">D-pad Right</span>
+    </div>
+    <select class="setting-select" id="nextSlotBtnSelect">
+      <option value="DpadRight">D-pad Right</option>
+      <option value="A">A</option>
+      <option value="B">B</option>
+      <option value="X">X</option>
+      <option value="Y">Y</option>
+      <option value="L">L</option>
+      <option value="R">R</option>
+      <option value="ZL">ZL</option>
+      <option value="ZR">ZR</option>
+    </select>
+  </div>
+  <div class="setting-row">
+    <div class="setting-label">
       <span class="setting-name">Default Playback Speed</span>
       <span class="setting-value" id="speedDefaultValue">1.0x</span>
     </div>
@@ -1322,6 +1356,8 @@
     syncToggleModeBtn();
     syncToggleLoopBtn();
     syncCycleSpeedBtn();
+    syncPrevSlotBtn();
+    syncNextSlotBtn();
     syncAutoLoop();
     syncSpeedDefault();
     syncStartDelay();
@@ -1800,6 +1836,54 @@
       cycleSpeedBtnValue.textContent = CYCLE_SPEED_BTN_LABELS[val] || val;
       if (document.activeElement !== cycleSpeedBtnSelect) {
         cycleSpeedBtnSelect.value = val;
+      }
+    }
+  }
+
+  // === Prev slot button select ===
+  var prevSlotBtnSelect = document.getElementById('prevSlotBtnSelect');
+  var prevSlotBtnValue = document.getElementById('prevSlotBtnValue');
+  var PREV_SLOT_BTN_LABELS = {
+    'DpadLeft': 'D-pad Left', 'A': 'A', 'B': 'B', 'X': 'X', 'Y': 'Y', 'L': 'L', 'R': 'R', 'ZL': 'ZL', 'ZR': 'ZR'
+  };
+
+  prevSlotBtnSelect.addEventListener('change', function() {
+    var val = prevSlotBtnSelect.value;
+    prevSlotBtnValue.textContent = PREV_SLOT_BTN_LABELS[val] || val;
+    sfx.nav();
+    sendCmd('SET_PREV_SLOT_BUTTON', val);
+  });
+
+  function syncPrevSlotBtn() {
+    if (state.prev_slot_button !== undefined) {
+      var val = state.prev_slot_button;
+      prevSlotBtnValue.textContent = PREV_SLOT_BTN_LABELS[val] || val;
+      if (document.activeElement !== prevSlotBtnSelect) {
+        prevSlotBtnSelect.value = val;
+      }
+    }
+  }
+
+  // === Next slot button select ===
+  var nextSlotBtnSelect = document.getElementById('nextSlotBtnSelect');
+  var nextSlotBtnValue = document.getElementById('nextSlotBtnValue');
+  var NEXT_SLOT_BTN_LABELS = {
+    'DpadRight': 'D-pad Right', 'A': 'A', 'B': 'B', 'X': 'X', 'Y': 'Y', 'L': 'L', 'R': 'R', 'ZL': 'ZL', 'ZR': 'ZR'
+  };
+
+  nextSlotBtnSelect.addEventListener('change', function() {
+    var val = nextSlotBtnSelect.value;
+    nextSlotBtnValue.textContent = NEXT_SLOT_BTN_LABELS[val] || val;
+    sfx.nav();
+    sendCmd('SET_NEXT_SLOT_BUTTON', val);
+  });
+
+  function syncNextSlotBtn() {
+    if (state.next_slot_button !== undefined) {
+      var val = state.next_slot_button;
+      nextSlotBtnValue.textContent = NEXT_SLOT_BTN_LABELS[val] || val;
+      if (document.activeElement !== nextSlotBtnSelect) {
+        nextSlotBtnSelect.value = val;
       }
     }
   }

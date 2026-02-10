@@ -43,6 +43,8 @@ pub enum MacroCommand {
     SetToggleMacroModeButton(String),
     SetToggleLoopButton(String),
     SetCycleSpeedButton(String),
+    SetPrevSlotButton(String),
+    SetNextSlotButton(String),
 }
 
 /// Side effects produced by executing a command.
@@ -88,6 +90,8 @@ pub struct MacroController {
     pub toggle_macro_mode_button: crate::input::Button,
     pub toggle_loop_button: crate::input::Button,
     pub cycle_speed_button: crate::input::Button,
+    pub prev_slot_button: crate::input::Button,
+    pub next_slot_button: crate::input::Button,
     macros_dir: PathBuf,
 }
 
@@ -120,6 +124,8 @@ impl MacroController {
             toggle_macro_mode_button: crate::combo::DEFAULT_TOGGLE_MACRO_MODE_BUTTON,
             toggle_loop_button: crate::combo::DEFAULT_TOGGLE_LOOP_BUTTON,
             cycle_speed_button: crate::combo::DEFAULT_CYCLE_SPEED_BUTTON,
+            prev_slot_button: crate::combo::DEFAULT_PREV_SLOT_BUTTON,
+            next_slot_button: crate::combo::DEFAULT_NEXT_SLOT_BUTTON,
             macros_dir,
         }
     }
@@ -154,6 +160,8 @@ impl MacroController {
             MacroCommand::SetToggleMacroModeButton(s) => self.set_toggle_macro_mode_button(&s),
             MacroCommand::SetToggleLoopButton(s) => self.set_toggle_loop_button(&s),
             MacroCommand::SetCycleSpeedButton(s) => self.set_cycle_speed_button(&s),
+            MacroCommand::SetPrevSlotButton(s) => self.set_prev_slot_button(&s),
+            MacroCommand::SetNextSlotButton(s) => self.set_next_slot_button(&s),
         }
     }
 
@@ -477,6 +485,26 @@ impl MacroController {
                 "[SETTINGS] Cycle speed button set to {}",
                 btn.display_name()
             );
+        } else {
+            warn!("[SETTINGS] Unknown button name: {name}");
+        }
+        MacroEffect::none()
+    }
+
+    fn set_prev_slot_button(&mut self, name: &str) -> MacroEffect {
+        if let Some(btn) = crate::input::Button::from_str_name(name) {
+            self.prev_slot_button = btn;
+            info!("[SETTINGS] Prev slot button set to {}", btn.display_name());
+        } else {
+            warn!("[SETTINGS] Unknown button name: {name}");
+        }
+        MacroEffect::none()
+    }
+
+    fn set_next_slot_button(&mut self, name: &str) -> MacroEffect {
+        if let Some(btn) = crate::input::Button::from_str_name(name) {
+            self.next_slot_button = btn;
+            info!("[SETTINGS] Next slot button set to {}", btn.display_name());
         } else {
             warn!("[SETTINGS] Unknown button name: {name}");
         }

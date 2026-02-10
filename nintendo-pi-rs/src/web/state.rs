@@ -35,6 +35,8 @@ pub enum WebCommand {
     SetToggleMacroModeButton(String),
     SetToggleLoopButton(String),
     SetCycleSpeedButton(String),
+    SetPrevSlotButton(String),
+    SetNextSlotButton(String),
 }
 
 impl From<WebCommand> for crate::macro_engine::controller::MacroCommand {
@@ -67,6 +69,8 @@ impl From<WebCommand> for crate::macro_engine::controller::MacroCommand {
             WebCommand::SetToggleMacroModeButton(s) => Self::SetToggleMacroModeButton(s),
             WebCommand::SetToggleLoopButton(s) => Self::SetToggleLoopButton(s),
             WebCommand::SetCycleSpeedButton(s) => Self::SetCycleSpeedButton(s),
+            WebCommand::SetPrevSlotButton(s) => Self::SetPrevSlotButton(s),
+            WebCommand::SetNextSlotButton(s) => Self::SetNextSlotButton(s),
         }
     }
 }
@@ -157,6 +161,8 @@ pub struct StateSnapshot {
     pub toggle_macro_mode_button: String,
     pub toggle_loop_button: String,
     pub cycle_speed_button: String,
+    pub prev_slot_button: String,
+    pub next_slot_button: String,
 }
 
 impl Default for StateSnapshot {
@@ -200,6 +206,12 @@ impl Default for StateSnapshot {
                 .display_name()
                 .to_string(),
             cycle_speed_button: crate::combo::DEFAULT_CYCLE_SPEED_BUTTON
+                .display_name()
+                .to_string(),
+            prev_slot_button: crate::combo::DEFAULT_PREV_SLOT_BUTTON
+                .display_name()
+                .to_string(),
+            next_slot_button: crate::combo::DEFAULT_NEXT_SLOT_BUTTON
                 .display_name()
                 .to_string(),
         }

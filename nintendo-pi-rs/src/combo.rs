@@ -74,11 +74,11 @@ pub const DEFAULT_TOGGLE_LOOP_BUTTON: Button = Button::Y;
 /// Default cycle speed button.
 pub const DEFAULT_CYCLE_SPEED_BUTTON: Button = Button::DpadUp;
 
-/// Fixed instant combos (not configurable).
-const FIXED_COMBOS: &[(Button, ComboAction)] = &[
-    (Button::DpadLeft, ComboAction::PrevSlot),
-    (Button::DpadRight, ComboAction::NextSlot),
-];
+/// Default prev slot button.
+pub const DEFAULT_PREV_SLOT_BUTTON: Button = Button::DpadLeft;
+
+/// Default next slot button.
+pub const DEFAULT_NEXT_SLOT_BUTTON: Button = Button::DpadRight;
 
 /// Set of buttons to suppress (smallvec would be overkill, just use a fixed array).
 #[derive(Debug, Clone, Default)]
@@ -126,6 +126,8 @@ pub struct ComboDetector {
     pub toggle_macro_mode_button: Button,
     pub toggle_loop_button: Button,
     pub cycle_speed_button: Button,
+    pub prev_slot_button: Button,
+    pub next_slot_button: Button,
     hold_button_start: Option<Instant>,
     prev_buttons: ButtonState,
     prev_base_held: bool,
@@ -141,6 +143,8 @@ impl ComboDetector {
             toggle_macro_mode_button: DEFAULT_TOGGLE_MACRO_MODE_BUTTON,
             toggle_loop_button: DEFAULT_TOGGLE_LOOP_BUTTON,
             cycle_speed_button: DEFAULT_CYCLE_SPEED_BUTTON,
+            prev_slot_button: DEFAULT_PREV_SLOT_BUTTON,
+            next_slot_button: DEFAULT_NEXT_SLOT_BUTTON,
             hold_button_start: None,
             prev_buttons: ButtonState::default(),
             prev_base_held: false,
@@ -193,15 +197,27 @@ impl ComboDetector {
                 self.hold_button_start = None;
             }
 
-            // Check fixed instant combos (edge-triggered)
-            for &(btn, combo_action) in FIXED_COMBOS {
-                let pressed = buttons.get(btn);
-                let was_pressed = self.prev_buttons.get(btn);
+            // Check configurable prev slot button (edge-triggered)
+            {
+                let pressed = buttons.get(self.prev_slot_button);
+                let was_pressed = self.prev_buttons.get(self.prev_slot_button);
                 if pressed {
-                    suppressed.add(btn);
+                    suppressed.add(self.prev_slot_button);
                 }
                 if pressed && !was_pressed {
-                    action = combo_action;
+                    action = ComboAction::PrevSlot;
+                }
+            }
+
+            // Check configurable next slot button (edge-triggered)
+            {
+                let pressed = buttons.get(self.next_slot_button);
+                let was_pressed = self.prev_buttons.get(self.next_slot_button);
+                if pressed {
+                    suppressed.add(self.next_slot_button);
+                }
+                if pressed && !was_pressed {
+                    action = ComboAction::NextSlot;
                 }
             }
 
@@ -256,7 +272,8 @@ impl ComboDetector {
             // In macro mode, L3+R3 alone toggles recording (rising edge)
             if self.macro_mode && !self.prev_base_held {
                 let any_combo_btn = hold_btn_pressed
-                    || FIXED_COMBOS.iter().any(|&(btn, _)| buttons.get(btn))
+                    || buttons.get(self.prev_slot_button)
+                    || buttons.get(self.next_slot_button)
                     || buttons.get(self.play_macro_button)
                     || buttons.get(self.stop_playback_button)
                     || buttons.get(self.toggle_loop_button)
