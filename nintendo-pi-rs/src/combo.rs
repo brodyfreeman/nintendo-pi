@@ -248,87 +248,35 @@ impl ComboDetector {
                 }
             }
 
-            // Check configurable prev slot button (edge-triggered)
-            {
-                let pressed = buttons.get(config.prev_slot_button);
-                let was_pressed = self.prev_buttons.get(config.prev_slot_button);
-                if pressed {
-                    suppressed.add(config.prev_slot_button);
-                }
-                if pressed && !was_pressed {
-                    action = ComboAction::PrevSlot;
-                }
-            }
+            // Edge-triggered combo buttons: suppress while held, fire on rising edge.
+            let edge_combos: [(Button, ComboAction, bool); 7] = [
+                (config.prev_slot_button, ComboAction::PrevSlot, false),
+                (config.next_slot_button, ComboAction::NextSlot, false),
+                (config.play_macro_button, ComboAction::PlayMacro, false),
+                (
+                    config.stop_playback_button,
+                    ComboAction::StopPlayback,
+                    false,
+                ),
+                (config.toggle_loop_button, ComboAction::ToggleLoop, false),
+                (config.cycle_speed_button, ComboAction::CycleSpeed, false),
+                (
+                    config.toggle_recording_button,
+                    ComboAction::ToggleRecording,
+                    true,
+                ),
+            ];
 
-            // Check configurable next slot button (edge-triggered)
-            {
-                let pressed = buttons.get(config.next_slot_button);
-                let was_pressed = self.prev_buttons.get(config.next_slot_button);
+            for (btn, combo_action, requires_macro_mode) in edge_combos {
+                if requires_macro_mode && !self.macro_mode {
+                    continue;
+                }
+                let pressed = buttons.get(btn);
                 if pressed {
-                    suppressed.add(config.next_slot_button);
-                }
-                if pressed && !was_pressed {
-                    action = ComboAction::NextSlot;
-                }
-            }
-
-            // Check configurable play macro button (edge-triggered)
-            {
-                let pressed = buttons.get(config.play_macro_button);
-                let was_pressed = self.prev_buttons.get(config.play_macro_button);
-                if pressed {
-                    suppressed.add(config.play_macro_button);
-                }
-                if pressed && !was_pressed {
-                    action = ComboAction::PlayMacro;
-                }
-            }
-
-            // Check configurable stop playback button (edge-triggered)
-            {
-                let pressed = buttons.get(config.stop_playback_button);
-                let was_pressed = self.prev_buttons.get(config.stop_playback_button);
-                if pressed {
-                    suppressed.add(config.stop_playback_button);
-                }
-                if pressed && !was_pressed {
-                    action = ComboAction::StopPlayback;
-                }
-            }
-
-            // Check configurable toggle loop button (edge-triggered)
-            {
-                let pressed = buttons.get(config.toggle_loop_button);
-                let was_pressed = self.prev_buttons.get(config.toggle_loop_button);
-                if pressed {
-                    suppressed.add(config.toggle_loop_button);
-                }
-                if pressed && !was_pressed {
-                    action = ComboAction::ToggleLoop;
-                }
-            }
-
-            // Check configurable cycle speed button (edge-triggered)
-            {
-                let pressed = buttons.get(config.cycle_speed_button);
-                let was_pressed = self.prev_buttons.get(config.cycle_speed_button);
-                if pressed {
-                    suppressed.add(config.cycle_speed_button);
-                }
-                if pressed && !was_pressed {
-                    action = ComboAction::CycleSpeed;
-                }
-            }
-
-            // Check configurable toggle recording button (edge-triggered, macro mode only)
-            if self.macro_mode {
-                let pressed = buttons.get(config.toggle_recording_button);
-                let was_pressed = self.prev_buttons.get(config.toggle_recording_button);
-                if pressed {
-                    suppressed.add(config.toggle_recording_button);
-                }
-                if pressed && !was_pressed {
-                    action = ComboAction::ToggleRecording;
+                    suppressed.add(btn);
+                    if !self.prev_buttons.get(btn) {
+                        action = combo_action;
+                    }
                 }
             }
         } else {
