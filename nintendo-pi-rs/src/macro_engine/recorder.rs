@@ -39,11 +39,6 @@ impl MacroRecorder {
         }
     }
 
-    #[cfg(test)]
-    pub fn start(&mut self) {
-        self.start_with_delay(0.0);
-    }
-
     /// Whether the recorder is in countdown (delay not yet elapsed).
     pub fn in_countdown(&self) -> bool {
         self.delay_until

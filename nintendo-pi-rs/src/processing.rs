@@ -110,11 +110,11 @@ impl Processor {
     /// Handle macro playback. Returns `true` if a playback frame was sent
     /// (caller should skip normal input processing).
     fn process_playback(&mut self, raw_report: &[u8; 64]) -> bool {
-        if !self.ctrl.player.playing {
+        if !self.ctrl.is_playing() {
             return false;
         }
 
-        if let Some(macro_frame) = self.ctrl.player.get_frame() {
+        if let Some(macro_frame) = self.ctrl.get_playback_frame() {
             let parsed = parse_hid_report(&macro_frame);
             let bt_report = self.build_calibrated_report(&parsed);
             let _ = self.io.report_tx.try_send(bt_report);
@@ -131,7 +131,7 @@ impl Processor {
             return true;
         }
 
-        if !self.ctrl.player.playing {
+        if !self.ctrl.is_playing() {
             // Playback finished naturally
             let effect = self.ctrl.execute(MacroCommand::StopPlayback);
             self.apply_effect(effect);
@@ -159,8 +159,8 @@ impl Processor {
             suppressed.filter_raw_report(&mut filtered_report);
         }
 
-        if self.ctrl.recorder.recording {
-            self.ctrl.recorder.add_frame(&filtered_report);
+        if self.ctrl.is_recording() {
+            self.ctrl.add_recording_frame(&filtered_report);
         }
 
         let bt_report = self.build_calibrated_report(&parsed);
@@ -211,18 +211,18 @@ impl Processor {
     fn update_state(&self, playback_input: Option<&InputState>, live_input: Option<&InputState>) {
         self.io.mitm_state.update(StateSnapshot {
             macro_mode: self.ctrl.macro_mode,
-            recording: self.ctrl.recorder.recording,
-            recording_countdown: self.ctrl.recorder.in_countdown(),
-            playing: self.ctrl.player.playing,
+            recording: self.ctrl.is_recording(),
+            recording_countdown: self.ctrl.recording_in_countdown(),
+            playing: self.ctrl.is_playing(),
             current_slot: self.ctrl.current_slot,
             slot_count: self.ctrl.cached_slot_count,
             current_macro_name: self.ctrl.cached_macro_name.clone(),
             usb_connected: true,
             bt_connected: self.io.bt_connected.load(Ordering::Relaxed),
-            playback_speed: self.ctrl.player.speed,
-            looping: self.ctrl.player.looping,
-            playback_frame: self.ctrl.player.frame_index(),
-            playback_frame_count: self.ctrl.player.frame_count(),
+            playback_speed: self.ctrl.playback_speed(),
+            looping: self.ctrl.looping(),
+            playback_frame: self.ctrl.playback_frame(),
+            playback_frame_count: self.ctrl.playback_frame_count(),
             playback_input: playback_input.map(PlaybackInput::from_input_state),
             live_input: live_input.map(PlaybackInput::from_input_state),
             config: self.ctrl.config.clone(),

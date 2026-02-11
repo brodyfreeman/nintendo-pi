@@ -55,12 +55,12 @@ impl MacroEffect {
 /// Owns all macro state and provides a single `execute()` entry point.
 pub struct MacroController {
     pub macro_mode: bool,
-    pub recorder: MacroRecorder,
-    pub player: MacroPlayer,
     pub current_slot: usize,
     pub cached_slot_count: usize,
     pub cached_macro_name: Option<String>,
     pub config: Config,
+    recorder: MacroRecorder,
+    player: MacroPlayer,
     macros_dir: PathBuf,
 }
 
@@ -118,6 +118,46 @@ impl MacroController {
         } else {
             &led::LED_NORMAL
         }
+    }
+
+    // --- Delegating accessors (keep player/recorder private) ---
+
+    pub fn is_playing(&self) -> bool {
+        self.player.playing
+    }
+
+    pub fn is_recording(&self) -> bool {
+        self.recorder.recording
+    }
+
+    pub fn recording_in_countdown(&self) -> bool {
+        self.recorder.in_countdown()
+    }
+
+    pub fn playback_speed(&self) -> f64 {
+        self.player.speed
+    }
+
+    pub fn looping(&self) -> bool {
+        self.player.looping
+    }
+
+    pub fn playback_frame(&self) -> usize {
+        self.player.frame_index()
+    }
+
+    pub fn playback_frame_count(&self) -> usize {
+        self.player.frame_count()
+    }
+
+    /// Get the next playback frame if its timestamp has been reached.
+    pub fn get_playback_frame(&mut self) -> Option<[u8; 64]> {
+        self.player.get_frame()
+    }
+
+    /// Add a raw HID frame to the active recording.
+    pub fn add_recording_frame(&mut self, raw_report: &[u8; 64]) {
+        self.recorder.add_frame(raw_report);
     }
 
     fn refresh_cache(&mut self) {
@@ -352,11 +392,11 @@ mod tests {
     fn test_toggle_macro_mode_off_stops_recording() {
         let (mut ctrl, _dir) = make_controller();
         ctrl.execute(MacroCommand::ToggleMacroMode); // ON
-        ctrl.recorder.start();
-        assert!(ctrl.recorder.recording);
+        ctrl.execute(MacroCommand::ToggleRecording); // start recording
+        assert!(ctrl.is_recording());
 
         let effect = ctrl.execute(MacroCommand::ToggleMacroMode); // OFF
-        assert!(!ctrl.recorder.recording);
+        assert!(!ctrl.is_recording());
         assert!(effect.broadcast_macros); // saved macro triggers broadcast
     }
 
@@ -403,7 +443,7 @@ mod tests {
 
         // Start recording
         let effect = ctrl.execute(MacroCommand::ToggleRecording);
-        assert!(ctrl.recorder.recording);
+        assert!(ctrl.is_recording());
         assert_eq!(
             effect.led.unwrap() as *const _,
             &led::LED_RECORDING as *const _
@@ -412,7 +452,7 @@ mod tests {
 
         // Stop recording
         let effect = ctrl.execute(MacroCommand::ToggleRecording);
-        assert!(!ctrl.recorder.recording);
+        assert!(!ctrl.is_recording());
         assert_eq!(
             effect.led.unwrap() as *const _,
             &led::LED_MACRO_MODE as *const _
@@ -480,25 +520,25 @@ mod tests {
     #[test]
     fn test_cycle_speed() {
         let (mut ctrl, _dir) = make_controller();
-        assert!((ctrl.player.speed - 1.0).abs() < f64::EPSILON);
+        assert!((ctrl.playback_speed() - 1.0).abs() < f64::EPSILON);
 
         ctrl.execute(MacroCommand::CycleSpeed);
-        assert!((ctrl.player.speed - 2.0).abs() < f64::EPSILON);
+        assert!((ctrl.playback_speed() - 2.0).abs() < f64::EPSILON);
 
         ctrl.execute(MacroCommand::CycleSpeed);
-        assert!((ctrl.player.speed - 4.0).abs() < f64::EPSILON);
+        assert!((ctrl.playback_speed() - 4.0).abs() < f64::EPSILON);
     }
 
     #[test]
     fn test_toggle_loop() {
         let (mut ctrl, _dir) = make_controller();
-        assert!(!ctrl.player.looping);
+        assert!(!ctrl.looping());
 
         ctrl.execute(MacroCommand::ToggleLoop);
-        assert!(ctrl.player.looping);
+        assert!(ctrl.looping());
 
         ctrl.execute(MacroCommand::ToggleLoop);
-        assert!(!ctrl.player.looping);
+        assert!(!ctrl.looping());
     }
 
     #[test]
@@ -506,11 +546,11 @@ mod tests {
         let (mut ctrl, _dir) = make_controller();
 
         ctrl.execute(MacroCommand::SetPlaybackSpeed(0.5));
-        assert!((ctrl.player.speed - 0.5).abs() < f64::EPSILON);
+        assert!((ctrl.playback_speed() - 0.5).abs() < f64::EPSILON);
 
         // Clamped to max
         ctrl.execute(MacroCommand::SetPlaybackSpeed(100.0));
-        assert!((ctrl.player.speed - 4.0).abs() < f64::EPSILON);
+        assert!((ctrl.playback_speed() - 4.0).abs() < f64::EPSILON);
     }
 
     #[test]
@@ -539,11 +579,11 @@ mod tests {
         }));
         assert_eq!(ctrl.config.play_macro_button, crate::input::Button::X);
 
-        // Loop restart delay syncs to player
+        // Loop restart delay syncs to config
         ctrl.execute(MacroCommand::UpdateConfig(ConfigUpdate {
             field: "loop_restart_delay".into(),
             value: serde_json::json!(1.5),
         }));
-        assert!((ctrl.player.loop_restart_delay - 1.5).abs() < f64::EPSILON);
+        assert!((ctrl.config.loop_restart_delay - 1.5).abs() < f64::EPSILON);
     }
 }
