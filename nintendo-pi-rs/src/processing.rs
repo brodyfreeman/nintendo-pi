@@ -12,9 +12,10 @@ use std::time::Duration;
 use tokio::sync::{broadcast, mpsc};
 use tracing::info;
 
+use crate::bt::report::build_bt_report;
 use crate::calibration::StickCalibrator;
 use crate::combo::{ComboAction, ComboDetector};
-use crate::input::{build_bt_report, parse_hid_report, InputState};
+use crate::input::{parse_hid_report, InputState};
 use crate::led;
 use crate::macro_engine::controller::{MacroCommand, MacroController, MacroEffect};
 use crate::macro_engine::storage;
