@@ -23,8 +23,8 @@
     font-family: 'Nunito', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     background: var(--bg); color: var(--text);
     min-height: 100vh;
-    padding: 0 var(--rail-width) 130px;
-    padding: 0 var(--rail-width) calc(130px + env(safe-area-inset-bottom, 0px));
+    padding: 0 var(--rail-width) 80px;
+    padding: 0 var(--rail-width) calc(80px + env(safe-area-inset-bottom, 0px));
     -webkit-tap-highlight-color: transparent;
   }
   .content-wrap {
@@ -380,8 +380,37 @@
     from { transform: translateY(100%); }
     to { transform: translateY(0); }
   }
-  .transport-dock .controls-playback-progress { margin: 0 0 0.2rem; }
-  .transport-dock .transport-area { margin-bottom: 0; }
+  .transport-dock .controls-playback-progress { margin: 0 0 0.25rem; }
+  .transport-dock .controls-playback-progress.show { max-height: 8px; }
+  .transport-dock .progress-label { display: none; }
+  .transport-dock .transport-area {
+    flex-direction: row; align-items: center; gap: 0.4rem; margin-bottom: 0;
+  }
+  .transport-dock .slot-info-compact {
+    flex: 1; min-width: 0; text-align: left; padding: 0 0.15rem;
+  }
+  .transport-dock .slot-info-compact .slot-name {
+    font-size: 0.85rem; color: var(--text); font-weight: 700;
+  }
+  .transport-dock .slot-info-compact .slot-num {
+    font-size: 0.6rem; font-weight: 700; line-height: 1.2;
+  }
+  .dock-nav {
+    width: 30px; height: 30px; font-size: 0.8rem;
+    min-height: unset; flex-shrink: 0; padding: 0;
+    box-shadow: 0 2px 0 rgba(0,0,0,0.25);
+  }
+  .dock-nav::after { display: none; }
+  .transport-dock #btnPlay,
+  .transport-dock #btnStop {
+    width: 44px !important; height: 44px !important; flex-shrink: 0;
+  }
+  .transport-dock #btnLoop {
+    width: 34px !important; height: 34px !important; flex-shrink: 0;
+    font-size: 0.45rem !important; opacity: 0.7;
+    border-width: 1.5px;
+    box-shadow: 0 2px 0 rgba(0,0,0,0.2), 0 0 0 2px rgba(0,0,0,0.1), inset 0 1px 1px rgba(255,255,255,0.1);
+  }
 
   /* === Unified Controls Section === */
   .controls-section.recording-active {
@@ -682,10 +711,7 @@
     .macro-list-grid { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 0.75rem; }
     .controller-svg-wrap { max-width: 380px; }
     .controller-section { padding: 1rem 0.5rem 0.8rem; margin: 0.75rem 0.5rem; }
-    /* On desktop, put slot nav and playback on single row */
-    .transport-area { flex-direction: row; align-items: center; }
-    .slot-nav-row { flex: 1; }
-    .playback-row { flex: 0 0 auto; }
+    .transport-dock { padding: 0.3rem 1rem; }
   }
 
   /* Wide desktop: 3-column — controls | library | controller+settings */
@@ -1216,19 +1242,15 @@
     <div class="progress-label" id="controlsProgressLabel">0 / 0</div>
   </div>
   <div class="transport-area">
-    <div class="slot-nav-row">
-      <button class="btn dpad-btn dpad-sm" onclick="sendCmd('PREV_SLOT')">&larr;</button>
-      <div class="slot-info-compact">
-        <div class="slot-num" id="slotNum">0</div>
-        <div class="slot-name" id="slotName">--</div>
-      </div>
-      <button class="btn dpad-btn dpad-sm" onclick="sendCmd('NEXT_SLOT')">&rarr;</button>
+    <button class="btn dpad-btn dock-nav" onclick="sendCmd('PREV_SLOT')">&larr;</button>
+    <button class="btn dpad-btn dock-nav" onclick="sendCmd('NEXT_SLOT')">&rarr;</button>
+    <div class="slot-info-compact">
+      <div class="slot-name" id="slotName">--</div>
+      <div class="slot-num" id="slotNum">0</div>
     </div>
-    <div class="playback-row">
-      <button class="btn btn-green btn-face btn-face-sm" id="btnPlay" onclick="sendCmd('PLAY_MACRO')">PLAY</button>
-      <button class="btn btn-red btn-face btn-face-sm" id="btnStop" onclick="sendCmd('STOP_PLAYBACK')">STOP</button>
-      <button class="btn btn-dark btn-face btn-face-sm" id="btnLoop" onclick="sendCmd('TOGGLE_LOOP')" style="font-size:0.6rem">LOOP<br>OFF</button>
-    </div>
+    <button class="btn btn-green btn-face btn-face-sm" id="btnPlay" onclick="sendCmd('PLAY_MACRO')">PLAY</button>
+    <button class="btn btn-red btn-face btn-face-sm" id="btnStop" onclick="sendCmd('STOP_PLAYBACK')">STOP</button>
+    <button class="btn btn-dark btn-face btn-face-sm" id="btnLoop" onclick="sendCmd('TOGGLE_LOOP')" style="font-size:0.6rem">LOOP<br>OFF</button>
   </div>
 </div>
 
