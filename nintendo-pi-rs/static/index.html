@@ -23,8 +23,8 @@
     font-family: 'Nunito', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     background: var(--bg); color: var(--text);
     min-height: 100vh;
-    padding: 0 var(--rail-width) 2rem;
-    padding: 0 var(--rail-width) calc(2rem + env(safe-area-inset-bottom, 0px));
+    padding: 0 var(--rail-width) 130px;
+    padding: 0 var(--rail-width) calc(130px + env(safe-area-inset-bottom, 0px));
     -webkit-tap-highlight-color: transparent;
   }
   .content-wrap {
@@ -361,6 +361,28 @@
     max-height: 50px; opacity: 1; margin: 0.5rem 0 0.2rem;
   }
 
+  /* === Transport dock (fixed bottom bar) === */
+  .transport-dock {
+    position: fixed;
+    bottom: 0;
+    left: var(--rail-width);
+    right: var(--rail-width);
+    z-index: 90;
+    background: linear-gradient(180deg, #353535 0%, #2e2e2e 100%);
+    border-top: 1px solid rgba(255,255,255,0.1);
+    padding: 0.3rem 0.8rem;
+    padding-bottom: calc(0.4rem + env(safe-area-inset-bottom, 0px));
+    box-shadow: 0 -4px 16px rgba(0,0,0,0.35);
+    animation: dock-in 0.3s cubic-bezier(0.22, 1, 0.36, 1) both;
+    animation-delay: 0.1s;
+  }
+  @keyframes dock-in {
+    from { transform: translateY(100%); }
+    to { transform: translateY(0); }
+  }
+  .transport-dock .controls-playback-progress { margin: 0 0 0.2rem; }
+  .transport-dock .transport-area { margin-bottom: 0; }
+
   /* === Unified Controls Section === */
   .controls-section.recording-active {
     border-color: rgba(230,0,18,0.3);
@@ -696,29 +718,6 @@
 <div class="grid-area">
 
 <div class="section controls-section" id="controlsSection">
-  <!-- Transport: slot nav + playback (primary actions, top of card) -->
-  <div class="transport-area">
-    <div class="slot-nav-row">
-      <button class="btn dpad-btn dpad-sm" onclick="sendCmd('PREV_SLOT')">&larr;</button>
-      <div class="slot-info-compact">
-        <div class="slot-num" id="slotNum">0</div>
-        <div class="slot-name" id="slotName">--</div>
-      </div>
-      <button class="btn dpad-btn dpad-sm" onclick="sendCmd('NEXT_SLOT')">&rarr;</button>
-    </div>
-    <div class="playback-row">
-      <button class="btn btn-green btn-face btn-face-sm" id="btnPlay" onclick="sendCmd('PLAY_MACRO')">PLAY</button>
-      <button class="btn btn-red btn-face btn-face-sm" id="btnStop" onclick="sendCmd('STOP_PLAYBACK')">STOP</button>
-      <button class="btn btn-dark btn-face btn-face-sm" id="btnLoop" onclick="sendCmd('TOGGLE_LOOP')" style="font-size:0.6rem">LOOP<br>OFF</button>
-    </div>
-  </div>
-
-  <!-- Playback progress (visible during playback, right near the transport) -->
-  <div class="controls-playback-progress" id="controlsPlaybackProgress">
-    <div class="progress-bar-outer"><div class="progress-bar-inner" id="controlsProgress"></div></div>
-    <div class="progress-label" id="controlsProgressLabel">0 / 0</div>
-  </div>
-
   <!-- Speed controls (collapsible on mobile) -->
   <div class="speed-toggle" id="speedToggle" onclick="toggleSpeed()">
     <span class="speed-toggle-label">Speed</span>
@@ -1207,6 +1206,28 @@
     <div class="modal-btns">
       <button class="btn btn-dark" onclick="closeDelete()">Cancel</button>
       <button class="btn btn-red" onclick="confirmDelete()">Delete</button>
+    </div>
+  </div>
+</div>
+
+<div class="transport-dock">
+  <div class="controls-playback-progress" id="controlsPlaybackProgress">
+    <div class="progress-bar-outer"><div class="progress-bar-inner" id="controlsProgress"></div></div>
+    <div class="progress-label" id="controlsProgressLabel">0 / 0</div>
+  </div>
+  <div class="transport-area">
+    <div class="slot-nav-row">
+      <button class="btn dpad-btn dpad-sm" onclick="sendCmd('PREV_SLOT')">&larr;</button>
+      <div class="slot-info-compact">
+        <div class="slot-num" id="slotNum">0</div>
+        <div class="slot-name" id="slotName">--</div>
+      </div>
+      <button class="btn dpad-btn dpad-sm" onclick="sendCmd('NEXT_SLOT')">&rarr;</button>
+    </div>
+    <div class="playback-row">
+      <button class="btn btn-green btn-face btn-face-sm" id="btnPlay" onclick="sendCmd('PLAY_MACRO')">PLAY</button>
+      <button class="btn btn-red btn-face btn-face-sm" id="btnStop" onclick="sendCmd('STOP_PLAYBACK')">STOP</button>
+      <button class="btn btn-dark btn-face btn-face-sm" id="btnLoop" onclick="sendCmd('TOGGLE_LOOP')" style="font-size:0.6rem">LOOP<br>OFF</button>
     </div>
   </div>
 </div>
