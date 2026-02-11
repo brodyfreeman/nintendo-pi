@@ -86,183 +86,124 @@ impl Default for Config {
 }
 
 /// A single config field update from the web UI.
+///
+/// The field name matches the Config struct field (e.g. "stick_deadzone"),
+/// and value is the JSON value to apply.
 #[derive(Debug, Clone, PartialEq)]
-pub enum ConfigUpdate {
-    StickDeadzone(f64),
-    ComboHoldTime(f64),
-    AutoLoopDefault(bool),
-    PlaybackSpeedDefault(f64),
-    PlaybackStartDelay(f64),
-    LoopRestartDelay(f64),
-    RecordingTrimEnd(f64),
-    RecordingStartDelay(f64),
-    UiUpdateInterval(u64),
-    CalibrationSamples(u32),
-    PlayMacroButton(String),
-    StopPlaybackButton(String),
-    ToggleMacroModeButton(String),
-    ToggleLoopButton(String),
-    CycleSpeedButton(String),
-    PrevSlotButton(String),
-    NextSlotButton(String),
-    ToggleRecordingButton(String),
-    BaseComboButton1(String),
-    BaseComboButton2(String),
-    ToggleMacroModeTrigger(String),
-}
-
-/// Try to parse a button name, logging a warning on failure.
-fn parse_button(name: &str, label: &str) -> Option<Button> {
-    match Button::from_str_name(name) {
-        Some(btn) => {
-            info!("[SETTINGS] {label} set to {}", btn.display_name());
-            Some(btn)
-        }
-        None => {
-            warn!("[SETTINGS] Unknown button name: {name}");
-            None
-        }
-    }
+pub struct ConfigUpdate {
+    pub field: String,
+    pub value: serde_json::Value,
 }
 
 impl Config {
-    /// Apply a config update, clamping values and validating names.
-    pub fn apply(&mut self, update: ConfigUpdate) {
+    /// Apply a config update by field name, clamping values and validating names.
+    /// Returns false if the field name is unknown or the value is invalid.
+    pub fn apply(&mut self, update: &ConfigUpdate) -> bool {
         use crate::macro_engine::player::SPEED_PRESETS;
 
-        match update {
-            ConfigUpdate::StickDeadzone(v) => {
-                self.stick_deadzone = v.clamp(0.0, 50.0);
-                info!(
-                    "[SETTINGS] Stick deadzone set to {:.1}",
-                    self.stick_deadzone
-                );
+        let field = update.field.as_str();
+        let val = &update.value;
+
+        // f64 fields with (min, max) clamping
+        let f64_result = match field {
+            "stick_deadzone" => Some((&mut self.stick_deadzone, 0.0_f64, 50.0)),
+            "combo_hold_time" => Some((&mut self.combo_hold_time, 0.1, 2.0)),
+            "playback_speed_default" => Some((
+                &mut self.playback_speed_default,
+                SPEED_PRESETS[0],
+                SPEED_PRESETS[SPEED_PRESETS.len() - 1],
+            )),
+            "playback_start_delay" => Some((&mut self.playback_start_delay, 0.0, 5.0)),
+            "loop_restart_delay" => Some((&mut self.loop_restart_delay, 0.0, 5.0)),
+            "recording_trim_end" => Some((&mut self.recording_trim_end, 0.0, 2.0)),
+            "recording_start_delay" => Some((&mut self.recording_start_delay, 0.0, 5.0)),
+            _ => None,
+        };
+        if let Some((target, min, max)) = f64_result {
+            if let Some(v) = val.as_f64() {
+                *target = v.clamp(min, max);
+                info!("[SETTINGS] {field} set to {target}");
+                return true;
             }
-            ConfigUpdate::ComboHoldTime(v) => {
-                self.combo_hold_time = v.clamp(0.1, 2.0);
-                info!(
-                    "[SETTINGS] Combo hold time set to {:.1}s",
-                    self.combo_hold_time
-                );
-            }
-            ConfigUpdate::AutoLoopDefault(v) => {
-                self.auto_loop_default = v;
-                info!(
-                    "[SETTINGS] Auto-loop default: {}",
-                    if v { "ON" } else { "OFF" }
-                );
-            }
-            ConfigUpdate::PlaybackSpeedDefault(v) => {
-                self.playback_speed_default =
-                    v.clamp(SPEED_PRESETS[0], SPEED_PRESETS[SPEED_PRESETS.len() - 1]);
-                info!(
-                    "[SETTINGS] Playback speed default set to {:.2}x",
-                    self.playback_speed_default
-                );
-            }
-            ConfigUpdate::PlaybackStartDelay(v) => {
-                self.playback_start_delay = v.clamp(0.0, 5.0);
-                info!(
-                    "[SETTINGS] Playback start delay set to {:.1}s",
-                    self.playback_start_delay
-                );
-            }
-            ConfigUpdate::LoopRestartDelay(v) => {
-                self.loop_restart_delay = v.clamp(0.0, 5.0);
-                info!(
-                    "[SETTINGS] Loop restart delay set to {:.1}s",
-                    self.loop_restart_delay
-                );
-            }
-            ConfigUpdate::RecordingTrimEnd(v) => {
-                self.recording_trim_end = v.clamp(0.0, 2.0);
-                info!(
-                    "[SETTINGS] Recording trim end set to {:.1}s",
-                    self.recording_trim_end
-                );
-            }
-            ConfigUpdate::RecordingStartDelay(v) => {
-                self.recording_start_delay = v.clamp(0.0, 5.0);
-                info!(
-                    "[SETTINGS] Recording start delay set to {:.1}s",
-                    self.recording_start_delay
-                );
-            }
-            ConfigUpdate::UiUpdateInterval(v) => {
-                self.ui_update_interval_ms = v.clamp(50, 500);
-                info!(
-                    "[SETTINGS] UI update interval set to {}ms",
-                    self.ui_update_interval_ms
-                );
-            }
-            ConfigUpdate::CalibrationSamples(v) => {
-                self.calibration_samples = v.clamp(5, 100);
-                info!(
-                    "[SETTINGS] Calibration samples set to {}",
-                    self.calibration_samples
-                );
-            }
-            ConfigUpdate::PlayMacroButton(ref s) => {
-                if let Some(btn) = parse_button(s, "Play macro button") {
-                    self.play_macro_button = btn;
+            warn!("[SETTINGS] {field}: expected number, got {val}");
+            return false;
+        }
+
+        // Button binding fields
+        let button_result = match field {
+            "play_macro_button" => Some(&mut self.play_macro_button),
+            "stop_playback_button" => Some(&mut self.stop_playback_button),
+            "toggle_macro_mode_button" => Some(&mut self.toggle_macro_mode_button),
+            "toggle_loop_button" => Some(&mut self.toggle_loop_button),
+            "cycle_speed_button" => Some(&mut self.cycle_speed_button),
+            "prev_slot_button" => Some(&mut self.prev_slot_button),
+            "next_slot_button" => Some(&mut self.next_slot_button),
+            "toggle_recording_button" => Some(&mut self.toggle_recording_button),
+            "base_combo_button_1" => Some(&mut self.base_combo_button_1),
+            "base_combo_button_2" => Some(&mut self.base_combo_button_2),
+            _ => None,
+        };
+        if let Some(target) = button_result {
+            if let Some(name) = val.as_str() {
+                if let Some(btn) = Button::from_str_name(name) {
+                    *target = btn;
+                    info!("[SETTINGS] {field} set to {}", btn.display_name());
+                    return true;
                 }
+                warn!("[SETTINGS] Unknown button name: {name}");
             }
-            ConfigUpdate::StopPlaybackButton(ref s) => {
-                if let Some(btn) = parse_button(s, "Stop playback button") {
-                    self.stop_playback_button = btn;
-                }
-            }
-            ConfigUpdate::ToggleMacroModeButton(ref s) => {
-                if let Some(btn) = parse_button(s, "Toggle macro mode button") {
-                    self.toggle_macro_mode_button = btn;
-                }
-            }
-            ConfigUpdate::ToggleLoopButton(ref s) => {
-                if let Some(btn) = parse_button(s, "Toggle loop button") {
-                    self.toggle_loop_button = btn;
-                }
-            }
-            ConfigUpdate::CycleSpeedButton(ref s) => {
-                if let Some(btn) = parse_button(s, "Cycle speed button") {
-                    self.cycle_speed_button = btn;
-                }
-            }
-            ConfigUpdate::PrevSlotButton(ref s) => {
-                if let Some(btn) = parse_button(s, "Prev slot button") {
-                    self.prev_slot_button = btn;
-                }
-            }
-            ConfigUpdate::NextSlotButton(ref s) => {
-                if let Some(btn) = parse_button(s, "Next slot button") {
-                    self.next_slot_button = btn;
-                }
-            }
-            ConfigUpdate::ToggleRecordingButton(ref s) => {
-                if let Some(btn) = parse_button(s, "Toggle recording button") {
-                    self.toggle_recording_button = btn;
-                }
-            }
-            ConfigUpdate::BaseComboButton1(ref s) => {
-                if let Some(btn) = parse_button(s, "Base combo button 1") {
-                    self.base_combo_button_1 = btn;
-                }
-            }
-            ConfigUpdate::BaseComboButton2(ref s) => {
-                if let Some(btn) = parse_button(s, "Base combo button 2") {
-                    self.base_combo_button_2 = btn;
-                }
-            }
-            ConfigUpdate::ToggleMacroModeTrigger(ref s) => {
-                if let Some(mode) = TriggerMode::from_str_name(s) {
-                    self.toggle_macro_mode_trigger = mode;
+            return false;
+        }
+
+        // Remaining one-off fields
+        match field {
+            "auto_loop_default" => {
+                if let Some(v) = val.as_bool() {
+                    self.auto_loop_default = v;
                     info!(
-                        "[SETTINGS] Toggle macro mode trigger set to {}",
-                        mode.as_str()
+                        "[SETTINGS] auto_loop_default: {}",
+                        if v { "ON" } else { "OFF" }
                     );
-                } else {
+                    return true;
+                }
+            }
+            "ui_update_interval_ms" => {
+                if let Some(v) = val.as_u64() {
+                    self.ui_update_interval_ms = v.clamp(50, 500);
+                    info!(
+                        "[SETTINGS] ui_update_interval_ms set to {}",
+                        self.ui_update_interval_ms
+                    );
+                    return true;
+                }
+            }
+            "calibration_samples" => {
+                if let Some(v) = val.as_u64() {
+                    self.calibration_samples = (v as u32).clamp(5, 100);
+                    info!(
+                        "[SETTINGS] calibration_samples set to {}",
+                        self.calibration_samples
+                    );
+                    return true;
+                }
+            }
+            "toggle_macro_mode_trigger" => {
+                if let Some(s) = val.as_str() {
+                    if let Some(mode) = TriggerMode::from_str_name(s) {
+                        self.toggle_macro_mode_trigger = mode;
+                        info!(
+                            "[SETTINGS] toggle_macro_mode_trigger set to {}",
+                            mode.as_str()
+                        );
+                        return true;
+                    }
                     warn!("[SETTINGS] Unknown trigger mode: {s}");
                 }
             }
+            _ => {
+                warn!("[SETTINGS] Unknown config field: {field}");
+            }
         }
+        false
     }
 }

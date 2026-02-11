@@ -11,7 +11,7 @@ use tracing::{info, warn};
 use super::player::MacroPlayer;
 use super::recorder::MacroRecorder;
 use super::storage;
-use crate::config::{Config, ConfigUpdate};
+use crate::config::Config;
 use crate::led;
 
 /// Unified command enum — covers both combo actions and web commands.
@@ -29,7 +29,7 @@ pub enum MacroCommand {
     CycleSpeed,
     SetPlaybackSpeed(f64),
     ToggleLoop,
-    UpdateConfig(ConfigUpdate),
+    UpdateConfig(crate::config::ConfigUpdate),
 }
 
 /// Side effects produced by executing a command.
@@ -98,7 +98,7 @@ impl MacroController {
             MacroCommand::CycleSpeed => self.cycle_speed(),
             MacroCommand::SetPlaybackSpeed(speed) => self.set_playback_speed(speed),
             MacroCommand::ToggleLoop => self.toggle_loop(),
-            MacroCommand::UpdateConfig(update) => {
+            MacroCommand::UpdateConfig(ref update) => {
                 self.config.apply(update);
                 self.player.loop_restart_delay = self.config.loop_restart_delay;
                 MacroEffect::none()
@@ -515,29 +515,35 @@ mod tests {
 
     #[test]
     fn test_update_config() {
+        use crate::config::ConfigUpdate;
+
         let (mut ctrl, _dir) = make_controller();
 
-        ctrl.execute(MacroCommand::UpdateConfig(ConfigUpdate::StickDeadzone(
-            25.0,
-        )));
+        ctrl.execute(MacroCommand::UpdateConfig(ConfigUpdate {
+            field: "stick_deadzone".into(),
+            value: serde_json::json!(25.0),
+        }));
         assert!((ctrl.config.stick_deadzone - 25.0).abs() < f64::EPSILON);
 
         // Clamping
-        ctrl.execute(MacroCommand::UpdateConfig(ConfigUpdate::StickDeadzone(
-            100.0,
-        )));
+        ctrl.execute(MacroCommand::UpdateConfig(ConfigUpdate {
+            field: "stick_deadzone".into(),
+            value: serde_json::json!(100.0),
+        }));
         assert!((ctrl.config.stick_deadzone - 50.0).abs() < f64::EPSILON);
 
         // Button binding
-        ctrl.execute(MacroCommand::UpdateConfig(ConfigUpdate::PlayMacroButton(
-            "X".to_string(),
-        )));
+        ctrl.execute(MacroCommand::UpdateConfig(ConfigUpdate {
+            field: "play_macro_button".into(),
+            value: serde_json::json!("X"),
+        }));
         assert_eq!(ctrl.config.play_macro_button, crate::input::Button::X);
 
         // Loop restart delay syncs to player
-        ctrl.execute(MacroCommand::UpdateConfig(ConfigUpdate::LoopRestartDelay(
-            1.5,
-        )));
+        ctrl.execute(MacroCommand::UpdateConfig(ConfigUpdate {
+            field: "loop_restart_delay".into(),
+            value: serde_json::json!(1.5),
+        }));
         assert!((ctrl.player.loop_restart_delay - 1.5).abs() < f64::EPSILON);
     }
 }

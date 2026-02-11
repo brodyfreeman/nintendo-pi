@@ -16,7 +16,6 @@ use tokio_stream::{wrappers::BroadcastStream, Stream, StreamExt};
 use tracing::{debug, error, info, warn};
 
 use self::state::MitmState;
-use crate::config::ConfigUpdate;
 use crate::macro_engine::controller::MacroCommand;
 use crate::macro_engine::storage::{self, MacroEntry};
 
@@ -129,9 +128,10 @@ async fn cmd_handler(
 }
 
 fn parse_web_command(val: &serde_json::Value) -> Option<MacroCommand> {
+    use crate::config::ConfigUpdate;
+
     let cmd = val.get("cmd")?.as_str()?;
     match cmd {
-        // Macro actions
         "TOGGLE_MACRO_MODE" => Some(MacroCommand::ToggleMacroMode),
         "TOGGLE_RECORDING" => Some(MacroCommand::ToggleRecording),
         "PREV_SLOT" => Some(MacroCommand::PrevSlot),
@@ -164,76 +164,15 @@ fn parse_web_command(val: &serde_json::Value) -> Option<MacroCommand> {
             let speed = val.get("data")?.as_f64()?;
             Some(MacroCommand::SetPlaybackSpeed(speed))
         }
-
-        // Config updates — all route through UpdateConfig
-        "SET_STICK_DEADZONE" => config_cmd(ConfigUpdate::StickDeadzone(val.get("data")?.as_f64()?)),
-        "SET_COMBO_HOLD_TIME" => {
-            config_cmd(ConfigUpdate::ComboHoldTime(val.get("data")?.as_f64()?))
+        // All config updates: strip "SET_" prefix, lowercase to field name
+        _ if cmd.starts_with("SET_") => {
+            let field = cmd[4..].to_ascii_lowercase();
+            let value = val.get("data")?.clone();
+            Some(MacroCommand::UpdateConfig(ConfigUpdate { field, value }))
         }
-        "SET_AUTO_LOOP_DEFAULT" => {
-            config_cmd(ConfigUpdate::AutoLoopDefault(val.get("data")?.as_bool()?))
-        }
-        "SET_PLAYBACK_SPEED_DEFAULT" => config_cmd(ConfigUpdate::PlaybackSpeedDefault(
-            val.get("data")?.as_f64()?,
-        )),
-        "SET_PLAYBACK_START_DELAY" => {
-            config_cmd(ConfigUpdate::PlaybackStartDelay(val.get("data")?.as_f64()?))
-        }
-        "SET_LOOP_RESTART_DELAY" => {
-            config_cmd(ConfigUpdate::LoopRestartDelay(val.get("data")?.as_f64()?))
-        }
-        "SET_RECORDING_TRIM_END" => {
-            config_cmd(ConfigUpdate::RecordingTrimEnd(val.get("data")?.as_f64()?))
-        }
-        "SET_RECORDING_START_DELAY" => config_cmd(ConfigUpdate::RecordingStartDelay(
-            val.get("data")?.as_f64()?,
-        )),
-        "SET_UI_UPDATE_INTERVAL" => {
-            config_cmd(ConfigUpdate::UiUpdateInterval(val.get("data")?.as_u64()?))
-        }
-        "SET_CALIBRATION_SAMPLES" => config_cmd(ConfigUpdate::CalibrationSamples(
-            val.get("data")?.as_u64()? as u32,
-        )),
-        "SET_PLAY_MACRO_BUTTON" => config_cmd(ConfigUpdate::PlayMacroButton(
-            val.get("data")?.as_str()?.to_string(),
-        )),
-        "SET_STOP_PLAYBACK_BUTTON" => config_cmd(ConfigUpdate::StopPlaybackButton(
-            val.get("data")?.as_str()?.to_string(),
-        )),
-        "SET_TOGGLE_MACRO_MODE_BUTTON" => config_cmd(ConfigUpdate::ToggleMacroModeButton(
-            val.get("data")?.as_str()?.to_string(),
-        )),
-        "SET_TOGGLE_LOOP_BUTTON" => config_cmd(ConfigUpdate::ToggleLoopButton(
-            val.get("data")?.as_str()?.to_string(),
-        )),
-        "SET_CYCLE_SPEED_BUTTON" => config_cmd(ConfigUpdate::CycleSpeedButton(
-            val.get("data")?.as_str()?.to_string(),
-        )),
-        "SET_PREV_SLOT_BUTTON" => config_cmd(ConfigUpdate::PrevSlotButton(
-            val.get("data")?.as_str()?.to_string(),
-        )),
-        "SET_NEXT_SLOT_BUTTON" => config_cmd(ConfigUpdate::NextSlotButton(
-            val.get("data")?.as_str()?.to_string(),
-        )),
-        "SET_TOGGLE_RECORDING_BUTTON" => config_cmd(ConfigUpdate::ToggleRecordingButton(
-            val.get("data")?.as_str()?.to_string(),
-        )),
-        "SET_BASE_COMBO_BUTTON_1" => config_cmd(ConfigUpdate::BaseComboButton1(
-            val.get("data")?.as_str()?.to_string(),
-        )),
-        "SET_BASE_COMBO_BUTTON_2" => config_cmd(ConfigUpdate::BaseComboButton2(
-            val.get("data")?.as_str()?.to_string(),
-        )),
-        "SET_TOGGLE_MACRO_MODE_TRIGGER" => config_cmd(ConfigUpdate::ToggleMacroModeTrigger(
-            val.get("data")?.as_str()?.to_string(),
-        )),
         _ => {
             warn!("[WEB] Unknown command: {cmd}");
             None
         }
     }
-}
-
-fn config_cmd(update: ConfigUpdate) -> Option<MacroCommand> {
-    Some(MacroCommand::UpdateConfig(update))
 }
