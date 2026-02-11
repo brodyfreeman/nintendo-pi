@@ -16,7 +16,7 @@ use tokio_stream::{wrappers::BroadcastStream, Stream, StreamExt};
 use tracing::{debug, error, info, warn};
 
 use self::state::MitmState;
-use crate::macro_engine::controller::MacroCommand;
+use crate::macro_engine::command::MacroCommand;
 use crate::macro_engine::storage::{self, MacroEntry};
 
 /// Shared state for the web server.

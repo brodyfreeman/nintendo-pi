@@ -1,3 +1,4 @@
+pub mod command;
 pub mod controller;
 pub mod player;
 pub mod recorder;

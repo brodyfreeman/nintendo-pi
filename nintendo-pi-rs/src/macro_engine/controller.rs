@@ -8,49 +8,12 @@ use std::path::{Path, PathBuf};
 
 use tracing::{info, warn};
 
+use super::command::{MacroCommand, MacroEffect};
 use super::player::MacroPlayer;
 use super::recorder::MacroRecorder;
 use super::storage;
 use crate::config::Config;
 use crate::led;
-
-/// Unified command enum — covers both combo actions and web commands.
-#[derive(Debug, Clone, PartialEq)]
-pub enum MacroCommand {
-    ToggleMacroMode,
-    ToggleRecording,
-    PrevSlot,
-    NextSlot,
-    SelectSlot(usize),
-    PlayMacro,
-    StopPlayback,
-    RenameMacro(u32, String),
-    DeleteMacro(u32),
-    CycleSpeed,
-    SetPlaybackSpeed(f64),
-    ToggleLoop,
-    UpdateConfig(crate::config::ConfigUpdate),
-}
-
-/// Side effects produced by executing a command.
-///
-/// The caller is responsible for applying these (setting LEDs, broadcasting
-/// macro list updates) so that `MacroController` stays free of I/O.
-pub struct MacroEffect {
-    /// LED pattern to set, if any.
-    pub led: Option<&'static [u8; 16]>,
-    /// Whether the macro list should be broadcast to web clients.
-    pub broadcast_macros: bool,
-}
-
-impl MacroEffect {
-    fn none() -> Self {
-        Self {
-            led: None,
-            broadcast_macros: false,
-        }
-    }
-}
 
 /// Owns all macro state and provides a single `execute()` entry point.
 pub struct MacroController {

@@ -10,7 +10,7 @@ use tracing::{debug, info};
 
 use crate::config::Config;
 use crate::input::{Button, ButtonState};
-use crate::macro_engine::controller::MacroCommand;
+use crate::macro_engine::command::MacroCommand;
 
 /// Whether the toggle-macro-mode combo is hold-triggered or edge-triggered.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

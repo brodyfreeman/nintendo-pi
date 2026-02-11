@@ -26,7 +26,7 @@ use tracing::{error, info, warn};
 use calibration::{
     auto_calibrate_centers, StickCalibrator, StickPair, C_STICK_CAL, MAIN_STICK_CAL,
 };
-use macro_engine::controller::MacroCommand;
+use macro_engine::command::MacroCommand;
 use processing::{Processor, ProcessorIO};
 use web::state::{MitmState, StateSnapshot};
 
