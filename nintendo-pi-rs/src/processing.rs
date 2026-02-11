@@ -14,7 +14,7 @@ use tracing::info;
 
 use crate::bt::report::build_bt_report;
 use crate::calibration::StickCalibrator;
-use crate::combo::{ComboAction, ComboDetector};
+use crate::combo::ComboDetector;
 use crate::input::{parse_hid_report, InputState};
 use crate::led;
 use crate::macro_engine::controller::{MacroCommand, MacroController, MacroEffect};
@@ -121,8 +121,8 @@ impl Processor {
 
             // Check for abort combo on live input
             let live_parsed = parse_hid_report(raw_report);
-            let (action, _) = self.combo.update(&live_parsed.buttons, &self.ctrl.config);
-            if action == ComboAction::StopPlayback {
+            let (command, _) = self.combo.update(&live_parsed.buttons, &self.ctrl.config);
+            if command == Some(MacroCommand::StopPlayback) {
                 let effect = self.ctrl.execute(MacroCommand::StopPlayback);
                 self.apply_effect(effect);
             }
@@ -145,9 +145,9 @@ impl Processor {
     /// Process live controller input: combo detection, recording, BT forwarding.
     fn process_live_input(&mut self, raw_report: &[u8; 64]) {
         let mut parsed = parse_hid_report(raw_report);
-        let (action, suppressed) = self.combo.update(&parsed.buttons, &self.ctrl.config);
+        let (command, suppressed) = self.combo.update(&parsed.buttons, &self.ctrl.config);
 
-        if let Some(cmd) = Option::from(action) {
+        if let Some(cmd) = command {
             let effect = self.ctrl.execute(cmd);
             self.combo.macro_mode = self.ctrl.macro_mode;
             self.apply_effect(effect);
