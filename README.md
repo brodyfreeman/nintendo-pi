@@ -1,16 +1,20 @@
 # Nintendo Switch 2 Pro Controller on Raspberry Pi Zero 2 W
 
-USB driver for using a Nintendo Switch 2 Pro Controller (vendor `057e`, product `2069`) as a standard Linux gamepad on a Raspberry Pi Zero 2 W.
+MITM bridge for using a Nintendo Switch 2 Pro Controller (vendor `057e`, product `2069`) through a Raspberry Pi Zero 2 W. The Pi sits between the physical controller (USB) and the Switch console (Bluetooth), enabling macro recording/playback while forwarding all normal input transparently.
 
-Bluetooth is not currently supported — USB only.
+Single Rust binary with an embedded web UI. Cross-compiled for aarch64.
 
 ## How it works
 
-The `hid-generic` kernel driver can detect the controller but doesn't understand its HID report format, so buttons don't work natively. The `enable_procon2.py` script handles this in two phases:
+1. **USB initialization** — Detaches the kernel HID driver, sends a 17-command init sequence over raw USB bulk transfer to put the controller into its full input reporting mode, then reattaches the kernel driver so hidapi can read reports.
 
-1. **USB initialization** — Detaches the kernel driver, sends a 17-command init sequence over raw USB to put the controller into its full input reporting mode (without this, buttons are not reported), then reattaches the kernel driver.
+2. **HID reading** — Opens the controller via hidapi on a dedicated OS thread. Parses the raw 64-byte reports (buttons, sticks, triggers) and applies stick calibration (auto-centered on startup with radial correction and deadzone).
 
-2. **HID reading + virtual gamepad** — Opens the controller via HID, parses the raw reports (buttons, sticks, triggers), applies stick calibration, and emits events through a `uinput` virtual device (`Nintendo Switch 2 Pro Controller` on `/dev/input/js0`).
+3. **Bluetooth emulation** — Registers as a Pro Controller over L2CAP (HID interrupt + control channels), handles the Switch's pairing handshake and subcommand protocol, and forwards calibrated input reports in the NXBT-compatible 0x30 format.
+
+4. **Macro engine** — Records timestamped HID frames to a binary format (MAC2), plays them back with memory-mapped I/O and timestamp chasing. Supports looping, speed control (0.25x–4x), configurable start delays, and end trimming.
+
+5. **Web UI** — Axum HTTP server with SSE for real-time state updates. Provides macro mode toggle, recording, playback controls, slot management, macro library (rename/delete), and full configuration of button bindings and timing values.
 
 ### HID report format
 
@@ -37,67 +41,99 @@ The partial init (3 commands) results in mode byte `0x20` where buttons and trig
 - Shoulder buttons (L, R, ZL, ZR)
 - Stick clicks (L3, R3)
 - Start, Select, Home
-- Left and right analog sticks (calibrated)
+- Left and right analog sticks (auto-calibrated with radial correction)
 - Left and right analog triggers
+
+## Macro combos
+
+All combos require holding the base combo buttons (default: L3+R3) plus an action button. Button bindings are configurable via the web UI.
+
+| Default combo | Action |
+|---------------|--------|
+| L3+R3+D-pad Down (hold 0.5s) | Toggle macro mode on/off |
+| L3+R3+Minus | Toggle recording start/stop |
+| L3+R3+D-pad Left/Right | Switch macro slot |
+| L3+R3+A | Play selected macro |
+| L3+R3+B | Stop playback |
+| L3+R3+Y | Toggle loop mode |
+| L3+R3+D-pad Up | Cycle playback speed |
+
+The macro mode toggle uses a hold trigger by default (0.5s) to prevent accidental activation. This can be changed to edge (instant) triggering via the web UI.
+
+Controller LEDs change to indicate state (macro mode, recording, playback).
+
+## Web UI
+
+Available at `http://Nintendo-Pi:8080` when the service is running. Provides:
+- Real-time state display (USB/BT connection, macro mode, recording, playback, current slot)
+- Buttons to toggle macro mode, start/stop recording, play/stop macros, switch slots
+- Macro library with rename and delete
+- Configuration panel for all button bindings, timing values, and calibration settings
+
+The web server starts before hardware init, so it's available even when the controller isn't plugged in.
 
 ## Setup
 
-### Prerequisites
+### Build
+
+Requires `cross` for cross-compilation to aarch64:
 
 ```bash
-sudo apt install python3-pip
-pip3 install hidapi python-uinput pyusb
+cargo install cross --git https://github.com/cross-rs/cross
 ```
 
-### Files on the Pi
+First-time setup — build the Docker image (includes libudev-dev for arm64):
+
+```bash
+cd nintendo-pi-rs && docker build -t cross-aarch64-libudev -f Dockerfile.aarch64 .
+```
+
+Build release binary:
+
+```bash
+cd nintendo-pi-rs && cross build --release --target aarch64-unknown-linux-gnu
+```
+
+The binary is at `nintendo-pi-rs/target/aarch64-unknown-linux-gnu/release/nintendo-pi`.
+
+### Deployment
+
+```bash
+rsync -avz nintendo-pi-rs/target/aarch64-unknown-linux-gnu/release/nintendo-pi brody@Nintendo-Pi:~/nintendo-pi/
+```
+
+### Service
+
+The binary runs as a systemd service that auto-starts when the controller is plugged in via udev.
 
 | Path | Purpose |
 |------|---------|
-| `~/enable_procon2.py` | Main driver script |
-| `/etc/modules-load.d/uinput.conf` | Loads `uinput` kernel module at boot |
-| `/etc/udev/rules.d/99-switch2-procon.rules` | Triggers service on controller plug/unplug |
-| `/etc/systemd/system/switch2-procon.service` | Runs the driver script as a system service |
-
-### Auto-start on plug-in
-
-The controller driver starts automatically when the controller is plugged in and stops when unplugged. This is handled by a udev rule that triggers a systemd service.
-
-To check status:
+| `/etc/systemd/system/switch2-procon.service` | Runs the binary as a system service |
+| `/etc/udev/rules.d/` | Triggers service on USB plug/unplug of 057e:2069 |
 
 ```bash
-sudo systemctl status switch2-procon.service
+# View logs
+sudo journalctl -u switch2-procon.service -f
+
+# Restart
+sudo systemctl restart switch2-procon.service
+
+# Stop (to run manually)
+sudo systemctl stop switch2-procon.service
 ```
 
-To view logs:
+### CLI options
 
-```bash
-sudo journalctl -u switch2-procon.service
 ```
-
-### Manual usage
-
-```bash
-sudo python3 ~/enable_procon2.py
-```
-
-### Testing
-
-Verify the virtual gamepad is working:
-
-```bash
-# Check the device exists
-sudo cat /proc/bus/input/devices | grep -A4 'Switch 2'
-
-# Test button input
-sudo evtest /dev/input/event0  # event number may vary
-
-# Test joystick input
-jstest /dev/input/js0
+nintendo-pi [OPTIONS]
+  --macros-dir <PATH>   Macros directory path [default: /root/macros]
+  --port <PORT>         Web UI port [default: 8080]
+  -v, --verbose         Verbose logging
 ```
 
 ## Known issues
 
-- Bluetooth is not supported; USB connection only.
-- The `uinput` kernel module can get unloaded between sessions. The `/etc/modules-load.d/uinput.conf` file ensures it loads at boot.
-- The controller must be unplugged and replugged if a previous driver session was killed uncleanly (stale `usbfs` claim).
-- Stick calibration values are hardcoded in the script for a specific controller. Other units may need recalibration.
+- On first BT connection, the Switch must be on the "Change Grip/Order" screen to pair with the Pi's virtual Pro Controller.
+- Don't touch the sticks during the first ~1s after USB init — stick centers are auto-calibrated from initial samples.
+- Bluetooth must have `AutoEnable=true` in `/etc/bluetooth/main.conf` (uncommented). Without this, BT stays off after reboot and the service will crash at BT init.
+- The controller must be unplugged and replugged if a previous session was killed uncleanly (stale `usbfs` claim).

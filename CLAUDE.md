@@ -65,26 +65,31 @@ nintendo-pi [OPTIONS]
 
 ## Macro Combos
 
-All combos use the physical controller's stick clicks (L3/R3).
+All combos require holding the base combo buttons (default: L3+R3) plus an action button. All bindings are configurable via the web UI.
 
-| Combo | Action |
-|-------|--------|
+| Default Combo | Action |
+|---------------|--------|
 | L3+R3+D-pad Down (hold 0.5s) | Toggle macro mode on/off |
-| L3+R3 (in macro mode) | Toggle recording start/stop |
+| L3+R3+Minus | Toggle recording start/stop |
 | L3+R3+D-pad Left/Right | Switch macro slot |
 | L3+R3+A | Play selected macro |
 | L3+R3+B | Stop playback |
+| L3+R3+Y | Toggle loop mode |
+| L3+R3+D-pad Up | Cycle playback speed |
+
+The macro mode toggle uses a hold trigger by default (0.5s) to prevent accidental activation. This can be changed to edge (instant) triggering via the web UI.
 
 Controller LEDs change to indicate state (macro mode, recording, playback).
 
 ## Web UI
 
 A phone-friendly web interface is available at `http://Nintendo-Pi:8080` when the service is running. It provides:
-- Real-time state display (macro mode, recording, playback, current slot)
+- Real-time state display (USB/BT connection, macro mode, recording, playback, current slot)
 - Buttons to toggle macro mode, start/stop recording, play/stop macros, switch slots
 - Macro library with rename and delete
+- Configuration panel for all button bindings, timing values, and calibration settings
 
-The web server (Axum with WebSocket) starts before hardware init, so it's available even when the controller isn't plugged in. USB init retries every 5s until the controller appears.
+The web server (Axum with SSE) starts before hardware init, so it's available even when the controller isn't plugged in. USB init retries every 5s until the controller appears.
 
 ## Notes
 
