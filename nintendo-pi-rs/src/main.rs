@@ -26,7 +26,7 @@ use combo::{ComboAction, ComboDetector};
 use input::{build_bt_report, parse_hid_report};
 use macro_engine::controller::{MacroCommand, MacroController};
 use macro_engine::storage;
-use web::state::{MitmState, PlaybackInput, StateSnapshot, WebCommand};
+use web::state::{MitmState, PlaybackInput, StateSnapshot};
 
 #[derive(Parser)]
 #[command(
@@ -70,7 +70,7 @@ async fn main() -> anyhow::Result<()> {
 
     // --- Web UI setup (start early so it's available during hardware init) ---
     let mitm_state = Arc::new(MitmState::new());
-    let (cmd_tx, mut cmd_rx) = mpsc::channel::<WebCommand>(32);
+    let (cmd_tx, mut cmd_rx) = mpsc::channel::<MacroCommand>(32);
     let (state_broadcast, _) = broadcast::channel::<String>(16);
 
     // Spawn web server
@@ -319,7 +319,7 @@ async fn main() -> anyhow::Result<()> {
 #[allow(clippy::too_many_arguments)]
 fn usb_processing_loop(
     hid_rx: std::sync::mpsc::Receiver<usb::hid::HidReport>,
-    mut cmd_rx: mpsc::Receiver<WebCommand>,
+    mut cmd_rx: mpsc::Receiver<MacroCommand>,
     report_tx: mpsc::Sender<[u8; 50]>,
     mitm_state: Arc<MitmState>,
     state_broadcast: broadcast::Sender<String>,
@@ -330,7 +330,7 @@ fn usb_processing_loop(
     left_center: (u16, u16),
     right_center: (u16, u16),
     calibration_samples: Arc<AtomicU32>,
-) -> mpsc::Receiver<WebCommand> {
+) -> mpsc::Receiver<MacroCommand> {
     let mut combo = ComboDetector::new();
     let mut ctrl = MacroController::new(macros_dir);
     ctrl.calibration_samples = calibration_samples.load(Ordering::Relaxed);
@@ -362,7 +362,7 @@ fn usb_processing_loop(
     loop {
         // --- Drain web command queue ---
         while let Ok(web_cmd) = cmd_rx.try_recv() {
-            let effect = ctrl.execute(web_cmd.into());
+            let effect = ctrl.execute(web_cmd);
             // Keep combo detector in sync with controller state
             combo.macro_mode = ctrl.macro_mode;
             combo.hold_duration = ctrl.combo_hold_time;
