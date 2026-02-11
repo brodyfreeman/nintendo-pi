@@ -13,7 +13,7 @@ use tokio::sync::{broadcast, mpsc};
 use tracing::info;
 
 use crate::bt::report::build_bt_report;
-use crate::calibration::StickCalibrator;
+use crate::calibration::StickPair;
 use crate::combo::ComboDetector;
 use crate::input::{parse_hid_report, InputState};
 use crate::led;
@@ -33,24 +33,16 @@ pub struct ProcessorIO {
     pub calibration_samples: Arc<AtomicU32>,
 }
 
-/// Stick calibration state.
-pub struct StickCalibration {
-    pub main_cal: StickCalibrator,
-    pub c_cal: StickCalibrator,
-    pub left_center: (u16, u16),
-    pub right_center: (u16, u16),
-}
-
 /// Owns all state needed for the USB processing loop.
 pub struct Processor {
     io: ProcessorIO,
-    sticks: StickCalibration,
+    sticks: StickPair,
     combo: ComboDetector,
     ctrl: MacroController,
 }
 
 impl Processor {
-    pub fn new(io: ProcessorIO, sticks: StickCalibration, macros_dir: PathBuf) -> Self {
+    pub fn new(io: ProcessorIO, sticks: StickPair, macros_dir: PathBuf) -> Self {
         let combo = ComboDetector::new();
         let mut ctrl = MacroController::new(macros_dir);
         ctrl.config.calibration_samples = io.calibration_samples.load(Ordering::Relaxed);
@@ -171,16 +163,9 @@ impl Processor {
 
     /// Calibrate sticks and build a BT report from parsed input.
     fn build_calibrated_report(&self, parsed: &InputState) -> [u8; 50] {
-        let left = calibrate_stick(
-            &self.sticks.main_cal,
-            parsed.left_stick_raw,
-            self.sticks.left_center,
-        );
-        let right = calibrate_stick(
-            &self.sticks.c_cal,
-            parsed.right_stick_raw,
-            self.sticks.right_center,
-        );
+        let (left, right) = self
+            .sticks
+            .calibrate(parsed.left_stick_raw, parsed.right_stick_raw);
         build_bt_report(parsed, left, right, 0)
     }
 
@@ -188,8 +173,7 @@ impl Processor {
     /// changed config.
     fn sync_after_command(&mut self) {
         self.combo.macro_mode = self.ctrl.macro_mode;
-        self.sticks.main_cal.deadzone = self.ctrl.config.stick_deadzone;
-        self.sticks.c_cal.deadzone = self.ctrl.config.stick_deadzone;
+        self.sticks.set_deadzone(self.ctrl.config.stick_deadzone);
         self.io
             .calibration_samples
             .store(self.ctrl.config.calibration_samples, Ordering::Relaxed);
@@ -228,14 +212,4 @@ impl Processor {
             config: self.ctrl.config.clone(),
         });
     }
-}
-
-fn calibrate_stick(cal: &StickCalibrator, raw: (u16, u16), center: (u16, u16)) -> (f64, f64) {
-    let x_c = raw.0 as f64 - center.0 as f64;
-    let y_c = raw.1 as f64 - center.1 as f64;
-    let (x_cal, y_cal) = cal.calibrate(x_c, y_c);
-    (
-        (x_cal * 100.0 / 2048.0).clamp(-100.0, 100.0),
-        (y_cal * 100.0 / 2048.0).clamp(-100.0, 100.0),
-    )
 }

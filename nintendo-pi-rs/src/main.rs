@@ -23,9 +23,11 @@ use clap::Parser;
 use tokio::sync::{broadcast, mpsc};
 use tracing::{error, info, warn};
 
-use calibration::{auto_calibrate_centers, StickCalibrator, C_STICK_CAL, MAIN_STICK_CAL};
+use calibration::{
+    auto_calibrate_centers, StickCalibrator, StickPair, C_STICK_CAL, MAIN_STICK_CAL,
+};
 use macro_engine::controller::MacroCommand;
-use processing::{Processor, ProcessorIO, StickCalibration};
+use processing::{Processor, ProcessorIO};
 use web::state::{MitmState, StateSnapshot};
 
 #[derive(Parser)]
@@ -189,8 +191,12 @@ async fn main() -> anyhow::Result<()> {
             left_center.0, left_center.1, right_center.0, right_center.1
         );
 
-        let main_cal = StickCalibrator::new(MAIN_STICK_CAL, 10.0);
-        let c_cal = StickCalibrator::new(C_STICK_CAL, 10.0);
+        let sticks = StickPair::new(
+            StickCalibrator::new(MAIN_STICK_CAL, 10.0),
+            StickCalibrator::new(C_STICK_CAL, 10.0),
+            left_center,
+            right_center,
+        );
 
         // --- Spawn USB processing on a blocking thread ---
         let (report_tx, mut report_rx) = mpsc::channel::<[u8; 50]>(4);
@@ -203,12 +209,6 @@ async fn main() -> anyhow::Result<()> {
             state_broadcast: state_broadcast.clone(),
             bt_connected: bt_connected.clone(),
             calibration_samples: calibration_samples.clone(),
-        };
-        let sticks = StickCalibration {
-            main_cal,
-            c_cal,
-            left_center,
-            right_center,
         };
         let processor = Processor::new(io, sticks, args.macros_dir.clone());
 

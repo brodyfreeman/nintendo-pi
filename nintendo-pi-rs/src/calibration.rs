@@ -1,6 +1,7 @@
-//! 32-point radial stick calibration.
+//! Stick calibration: centering, radial correction, deadzone, and normalization.
 //!
-//! Ported directly from enable_procon2.py StickCalibrator.
+//! `StickPair` is the main entry point — it owns calibrators and centers for
+//! both sticks and produces values ready for the BT report builder.
 
 use tracing::{debug, trace, warn};
 
@@ -83,6 +84,62 @@ impl StickCalibrator {
 
         (corrected_x, corrected_y)
     }
+}
+
+/// Both sticks with their calibrators and auto-calibrated centers.
+///
+/// Full pipeline: raw 12-bit stick → centered → radial calibration → normalized to [-100, 100].
+pub struct StickPair {
+    left: StickCalibrator,
+    right: StickCalibrator,
+    left_center: (u16, u16),
+    right_center: (u16, u16),
+}
+
+impl StickPair {
+    pub fn new(
+        left: StickCalibrator,
+        right: StickCalibrator,
+        left_center: (u16, u16),
+        right_center: (u16, u16),
+    ) -> Self {
+        Self {
+            left,
+            right,
+            left_center,
+            right_center,
+        }
+    }
+
+    /// Calibrate both sticks from raw 12-bit values.
+    ///
+    /// Returns (left, right) as (x, y) in [-100, 100], ready for the BT report.
+    pub fn calibrate(
+        &self,
+        left_raw: (u16, u16),
+        right_raw: (u16, u16),
+    ) -> ((f64, f64), (f64, f64)) {
+        (
+            calibrate_one(&self.left, left_raw, self.left_center),
+            calibrate_one(&self.right, right_raw, self.right_center),
+        )
+    }
+
+    pub fn set_deadzone(&mut self, deadzone: f64) {
+        self.left.deadzone = deadzone;
+        self.right.deadzone = deadzone;
+    }
+}
+
+/// Center, calibrate, and normalize a single stick.
+fn calibrate_one(cal: &StickCalibrator, raw: (u16, u16), center: (u16, u16)) -> (f64, f64) {
+    let x_c = raw.0 as f64 - center.0 as f64;
+    let y_c = raw.1 as f64 - center.1 as f64;
+    let (x_cal, y_cal) = cal.calibrate(x_c, y_c);
+    (
+        (x_cal * 100.0 / 2048.0).clamp(-100.0, 100.0),
+        (y_cal * 100.0 / 2048.0).clamp(-100.0, 100.0),
+    )
 }
 
 /// Auto-calibrate stick centers from a set of idle reports.
@@ -276,5 +333,70 @@ mod tests {
         // Average: X=(100+200)/2=150, Y=(200+100)/2=150
         assert_eq!(left.0, 150);
         assert_eq!(left.1, 150);
+    }
+
+    #[test]
+    fn test_stick_pair_center_returns_zero() {
+        let pair = StickPair::new(
+            StickCalibrator::new(MAIN_STICK_CAL, 10.0),
+            StickCalibrator::new(C_STICK_CAL, 10.0),
+            (2048, 2048),
+            (2048, 2048),
+        );
+        let (left, right) = pair.calibrate((2048, 2048), (2048, 2048));
+        assert_eq!(left, (0.0, 0.0));
+        assert_eq!(right, (0.0, 0.0));
+    }
+
+    #[test]
+    fn test_stick_pair_full_tilt() {
+        let pair = StickPair::new(
+            StickCalibrator::new(MAIN_STICK_CAL, 10.0),
+            StickCalibrator::new(C_STICK_CAL, 10.0),
+            (2048, 2048),
+            (2048, 2048),
+        );
+        // Full tilt right on left stick
+        let (left, _) = pair.calibrate((4095, 2048), (2048, 2048));
+        assert!(left.0 > 50.0, "Expected large positive X, got {}", left.0);
+        assert!(left.1.abs() < 1.0, "Expected near-zero Y, got {}", left.1);
+    }
+
+    #[test]
+    fn test_stick_pair_set_deadzone() {
+        let mut pair = StickPair::new(
+            StickCalibrator::new(MAIN_STICK_CAL, 10.0),
+            StickCalibrator::new(C_STICK_CAL, 10.0),
+            (2048, 2048),
+            (2048, 2048),
+        );
+        // Small movement with default deadzone (10) → zero
+        let (left, _) = pair.calibrate((2058, 2048), (2048, 2048));
+        assert_eq!(left, (0.0, 0.0));
+
+        // Lower deadzone → same input now registers
+        pair.set_deadzone(1.0);
+        let (left, _) = pair.calibrate((2058, 2048), (2048, 2048));
+        assert!(
+            left.0 > 0.0,
+            "Expected non-zero with low deadzone, got {}",
+            left.0
+        );
+    }
+
+    #[test]
+    fn test_stick_pair_output_clamped() {
+        let pair = StickPair::new(
+            StickCalibrator::new(MAIN_STICK_CAL, 10.0),
+            StickCalibrator::new(C_STICK_CAL, 10.0),
+            (0, 0),
+            (0, 0),
+        );
+        // Extreme raw values with center at 0 → output should be clamped to [-100, 100]
+        let (left, right) = pair.calibrate((4095, 4095), (4095, 4095));
+        assert!(left.0 <= 100.0 && left.0 >= -100.0);
+        assert!(left.1 <= 100.0 && left.1 >= -100.0);
+        assert!(right.0 <= 100.0 && right.0 >= -100.0);
+        assert!(right.1 <= 100.0 && right.1 >= -100.0);
     }
 }
