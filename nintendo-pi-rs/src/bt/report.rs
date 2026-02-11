@@ -44,9 +44,9 @@ fn encode_bt_buttons(buttons: &ButtonState) -> [u8; 3] {
 }
 
 /// Pack a calibrated stick (x, y in ~[-100, 100]) into 3 bytes of 12-bit packed format.
-fn pack_stick_12bit(out: &mut [u8], cal: (f64, f64)) {
-    let x = ((cal.0 * 2048.0 / 100.0) + 2048.0).clamp(0.0, 4095.0) as u16;
-    let y = ((cal.1 * 2048.0 / 100.0) + 2048.0).clamp(0.0, 4095.0) as u16;
+fn pack_stick_12bit(out: &mut [u8], calibrated_stick: (f64, f64)) {
+    let x = ((calibrated_stick.0 * 2048.0 / 100.0) + 2048.0).clamp(0.0, 4095.0) as u16;
+    let y = ((calibrated_stick.1 * 2048.0 / 100.0) + 2048.0).clamp(0.0, 4095.0) as u16;
     out[0] = (x & 0xFF) as u8;
     out[1] = ((x >> 8) & 0x0F) as u8 | (((y & 0x0F) as u8) << 4);
     out[2] = ((y >> 4) & 0xFF) as u8;
@@ -69,8 +69,8 @@ fn pack_stick_12bit(out: &mut [u8], cal: (f64, f64)) {
 /// Stick encoding: 12-bit packed, center = 0x800 (2048), range 0-4095.
 pub fn build_bt_report(
     input: &InputState,
-    left_cal: (f64, f64),
-    right_cal: (f64, f64),
+    left_calibrated: (f64, f64),
+    right_calibrated: (f64, f64),
     timer: u8,
 ) -> [u8; 50] {
     let mut report = [0u8; 50];
@@ -89,8 +89,8 @@ pub fn build_bt_report(
 
     // --- Stick encoding ---
     // Calibrated values are in range ~[-100, 100], map to 12-bit [0, 4095] with center 2048
-    pack_stick_12bit(&mut report[7..10], left_cal);
-    pack_stick_12bit(&mut report[10..13], right_cal);
+    pack_stick_12bit(&mut report[7..10], left_calibrated);
+    pack_stick_12bit(&mut report[10..13], right_calibrated);
 
     // Vibrator byte
     report[13] = 0xB0;

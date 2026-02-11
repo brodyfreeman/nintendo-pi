@@ -43,17 +43,17 @@ impl PlaybackInput {
             .map(|(_, name)| *name)
             .collect();
 
-        let normalize = |raw: u16| ((raw as f64 - 2048.0) / 2048.0).clamp(-1.0, 1.0);
+        let normalize_to_unit_range = |raw: u16| ((raw as f64 - 2048.0) / 2048.0).clamp(-1.0, 1.0);
 
         Self {
             buttons,
             left_stick: (
-                normalize(input.left_stick_raw.0),
-                normalize(input.left_stick_raw.1),
+                normalize_to_unit_range(input.left_stick_raw.0),
+                normalize_to_unit_range(input.left_stick_raw.1),
             ),
             right_stick: (
-                normalize(input.right_stick_raw.0),
-                normalize(input.right_stick_raw.1),
+                normalize_to_unit_range(input.right_stick_raw.0),
+                normalize_to_unit_range(input.right_stick_raw.1),
             ),
         }
     }

@@ -32,9 +32,9 @@ pub struct ButtonState {
 
 /// Unpack two 12-bit values from 3 bytes (little-endian nibble packing).
 /// Byte layout: [lo8_a] [hi4_a | lo4_b] [hi8_b]
-fn unpack_12bit_triplet(data: &[u8]) -> (u16, u16) {
-    let a = (data[0] as u16) | (((data[1] & 0x0F) as u16) << 8);
-    let b = ((data[1] >> 4) as u16) | ((data[2] as u16) << 4);
+fn unpack_12bit_triplet(packed_bytes: &[u8]) -> (u16, u16) {
+    let a = (packed_bytes[0] as u16) | (((packed_bytes[1] & 0x0F) as u16) << 8);
+    let b = ((packed_bytes[1] >> 4) as u16) | ((packed_bytes[2] as u16) << 4);
     (a, b)
 }
 
@@ -167,9 +167,9 @@ impl ButtonState {
         self.bytes[byte_idx] & mask != 0
     }
 
-    pub fn set(&mut self, btn: Button, val: bool) {
+    pub fn set(&mut self, btn: Button, pressed: bool) {
         let (byte_idx, mask) = btn.position();
-        if val {
+        if pressed {
             self.bytes[byte_idx] |= mask;
         } else {
             self.bytes[byte_idx] &= !mask;

@@ -40,7 +40,7 @@ pub struct BtSession {
     /// Held open to keep the L2CAP control channel alive (PSM 17).
     _control: L2capSocket,
     interrupt: L2capSocket,
-    timer: u8,
+    report_timer: u8,
 }
 
 impl BtSession {
@@ -83,7 +83,7 @@ impl BtSession {
         Ok(Self {
             _control: control,
             interrupt,
-            timer: 0,
+            report_timer: 0,
         })
     }
 
@@ -95,19 +95,20 @@ impl BtSession {
         info!("[BT] Starting pairing handshake...");
 
         let pairing_start = Instant::now();
-        let mut itr_buf = [0u8; 512];
+        let mut interrupt_buffer = [0u8; 512];
         let mut progress = PairingProgress::default();
         let mut subcmd_count: u32 = 0;
 
         // Send an initial empty report to prompt the Switch (like NXBT)
-        let initial_report = build_empty_input_report(self.timer, progress.device_info_queried);
+        let initial_report =
+            build_empty_input_report(self.report_timer, progress.device_info_queried);
         self.interrupt.write_all(&initial_report).await?;
-        self.timer = self.timer.wrapping_add(1);
+        self.report_timer = self.report_timer.wrapping_add(1);
         debug!("[BT] Sent initial empty report to prompt Switch");
 
         loop {
             let reply_data = tokio::select! {
-                result = self.interrupt.read(&mut itr_buf) => {
+                result = self.interrupt.read(&mut interrupt_buffer) => {
                     match result {
                         Ok(0) => {
                             warn!(
@@ -131,7 +132,7 @@ impl BtSession {
             };
 
             if let Some(n) = reply_data {
-                let data = &itr_buf[..n];
+                let data = &interrupt_buffer[..n];
                 debug!("[BT] Pairing recv ({n} bytes): {:02X?}", &data[..n.min(30)]);
 
                 if !progress.received_first_message {
@@ -145,9 +146,13 @@ impl BtSession {
                 if let Some((subcmd_id, subcmd_data)) = extract_subcommand(data) {
                     subcmd_count += 1;
                     let (ack, reply_data) = protocol::handle_subcommand(subcmd_id, subcmd_data);
-                    let reply =
-                        protocol::build_subcommand_reply(self.timer, subcmd_id, ack, &reply_data);
-                    self.timer = self.timer.wrapping_add(1);
+                    let reply = protocol::build_subcommand_reply(
+                        self.report_timer,
+                        subcmd_id,
+                        ack,
+                        &reply_data,
+                    );
+                    self.report_timer = self.report_timer.wrapping_add(1);
 
                     let name = subcmd_name(subcmd_id);
                     info!(
@@ -171,8 +176,8 @@ impl BtSession {
             }
 
             // Send a standard input report every cycle (like NXBT)
-            let report = build_empty_input_report(self.timer, progress.device_info_queried);
-            self.timer = self.timer.wrapping_add(1);
+            let report = build_empty_input_report(self.report_timer, progress.device_info_queried);
+            self.report_timer = self.report_timer.wrapping_add(1);
             if let Err(e) = self.interrupt.write_all(&report).await {
                 warn!("[BT] Pairing: failed to send keepalive report: {e}");
             }
@@ -191,8 +196,8 @@ impl BtSession {
         loop {
             match report_rx.recv().await {
                 Some(mut report) => {
-                    report[2] = self.timer;
-                    self.timer = self.timer.wrapping_add(1);
+                    report[2] = self.report_timer;
+                    self.report_timer = self.report_timer.wrapping_add(1);
 
                     if let Err(e) = self.interrupt.write_all(&report).await {
                         warn!("[BT] Send error: {e}");
@@ -210,17 +215,17 @@ impl BtSession {
 
     /// Non-blocking check for incoming subcommands. Returns `true` on disconnect.
     async fn poll_and_handle_subcommands(&mut self) -> bool {
-        let mut itr_buf = [0u8; 512];
+        let mut interrupt_buffer = [0u8; 512];
 
         tokio::select! {
-            result = self.interrupt.read(&mut itr_buf) => {
+            result = self.interrupt.read(&mut interrupt_buffer) => {
                 match result {
                     Ok(0) => {
                         info!("[BT] Interrupt channel closed by Switch");
                         return true;
                     }
                     Ok(n) => {
-                        let data = &itr_buf[..n];
+                        let data = &interrupt_buffer[..n];
                         debug!("[BT] Interrupt recv ({n} bytes): {:02X?}", &data[..n.min(20)]);
                         self.reply_to_subcommand(data).await;
                     }
@@ -243,8 +248,9 @@ impl BtSession {
     async fn reply_to_subcommand(&mut self, data: &[u8]) {
         if let Some((subcmd_id, subcmd_data)) = extract_subcommand(data) {
             let (ack, reply_data) = protocol::handle_subcommand(subcmd_id, subcmd_data);
-            let reply = protocol::build_subcommand_reply(self.timer, subcmd_id, ack, &reply_data);
-            self.timer = self.timer.wrapping_add(1);
+            let reply =
+                protocol::build_subcommand_reply(self.report_timer, subcmd_id, ack, &reply_data);
+            self.report_timer = self.report_timer.wrapping_add(1);
             debug!(
                 "[BT] Subcmd {} (0x{subcmd_id:02X}) -> ACK 0x{ack:02X}",
                 subcmd_name(subcmd_id)

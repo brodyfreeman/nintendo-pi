@@ -67,9 +67,9 @@ fn reader_loop(tx: &mpsc::SyncSender<HidReport>) -> anyhow::Result<()> {
 
     info!("[HID] HID device connected. Reading reports...");
 
-    let mut buf = [0u8; 64];
+    let mut report_buffer = [0u8; 64];
     loop {
-        match device.read_timeout(&mut buf, 100) {
+        match device.read_timeout(&mut report_buffer, 100) {
             Ok(0) => {
                 // Timeout, no data -- just loop again
                 continue;
@@ -80,7 +80,7 @@ fn reader_loop(tx: &mpsc::SyncSender<HidReport>) -> anyhow::Result<()> {
                     continue;
                 }
                 let mut report = [0u8; 64];
-                report.copy_from_slice(&buf[..64]);
+                report.copy_from_slice(&report_buffer[..64]);
                 if tx.send(report).is_err() {
                     info!("[HID] Channel closed, exiting reader thread.");
                     return Ok(());

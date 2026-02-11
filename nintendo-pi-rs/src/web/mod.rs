@@ -166,9 +166,12 @@ fn parse_web_command(val: &serde_json::Value) -> Option<MacroCommand> {
         }
         // All config updates: strip "SET_" prefix, lowercase to field name
         _ if cmd.starts_with("SET_") => {
-            let field = cmd[4..].to_ascii_lowercase();
+            let field_name = cmd[4..].to_ascii_lowercase();
             let value = val.get("data")?.clone();
-            Some(MacroCommand::UpdateConfig(ConfigUpdate { field, value }))
+            Some(MacroCommand::UpdateConfig(ConfigUpdate {
+                field_name,
+                value,
+            }))
         }
         _ => {
             warn!("[WEB] Unknown command: {cmd}");

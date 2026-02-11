@@ -39,20 +39,20 @@ pub struct Processor {
     io: ProcessorIO,
     sticks: StickPair,
     combo: ComboDetector,
-    ctrl: MacroController,
+    macro_ctrl: MacroController,
 }
 
 impl Processor {
     pub fn new(io: ProcessorIO, sticks: StickPair, macros_dir: PathBuf) -> Self {
         let combo = ComboDetector::new();
-        let mut ctrl = MacroController::new(macros_dir);
-        ctrl.config.calibration_samples = io.calibration_samples.load(Ordering::Relaxed);
+        let mut macro_ctrl = MacroController::new(macros_dir);
+        macro_ctrl.config.calibration_samples = io.calibration_samples.load(Ordering::Relaxed);
 
         Self {
             io,
             sticks,
             combo,
-            ctrl,
+            macro_ctrl,
         }
     }
 
@@ -94,7 +94,7 @@ impl Processor {
     /// Drain and execute all pending web commands.
     fn drain_web_commands(&mut self) {
         while let Ok(web_cmd) = self.io.cmd_rx.try_recv() {
-            let effect = self.ctrl.execute(web_cmd);
+            let effect = self.macro_ctrl.execute(web_cmd);
             self.sync_config_to_hardware();
             self.apply_effect(effect);
         }
@@ -103,11 +103,11 @@ impl Processor {
     /// Handle macro playback. Returns `true` if a playback frame was sent
     /// (caller should skip normal input processing).
     fn process_playback(&mut self, raw_report: &[u8; 64]) -> bool {
-        if !self.ctrl.is_playing() {
+        if !self.macro_ctrl.is_playing() {
             return false;
         }
 
-        if let Some(macro_frame) = self.ctrl.get_playback_frame() {
+        if let Some(macro_frame) = self.macro_ctrl.get_playback_frame() {
             let parsed = parse_hid_report(&macro_frame);
             let bt_report = self.build_calibrated_report(&parsed);
             let _ = self.io.report_tx.try_send(bt_report);
@@ -116,11 +116,11 @@ impl Processor {
             let live_parsed = parse_hid_report(raw_report);
             let (command, _) = self.combo.update(
                 &live_parsed.buttons,
-                &self.ctrl.config,
-                self.ctrl.macro_mode,
+                &self.macro_ctrl.config,
+                self.macro_ctrl.macro_mode,
             );
             if command == Some(MacroCommand::StopPlayback) {
-                let effect = self.ctrl.execute(MacroCommand::StopPlayback);
+                let effect = self.macro_ctrl.execute(MacroCommand::StopPlayback);
                 self.apply_effect(effect);
             }
 
@@ -128,9 +128,9 @@ impl Processor {
             return true;
         }
 
-        if !self.ctrl.is_playing() {
+        if !self.macro_ctrl.is_playing() {
             // Playback finished naturally
-            let effect = self.ctrl.execute(MacroCommand::StopPlayback);
+            let effect = self.macro_ctrl.execute(MacroCommand::StopPlayback);
             self.apply_effect(effect);
             info!("[MACRO] Playback finished.");
         }
@@ -142,12 +142,14 @@ impl Processor {
     /// Process live controller input: combo detection, recording, BT forwarding.
     fn process_live_input(&mut self, raw_report: &[u8; 64]) {
         let mut parsed = parse_hid_report(raw_report);
-        let (command, suppressed) =
-            self.combo
-                .update(&parsed.buttons, &self.ctrl.config, self.ctrl.macro_mode);
+        let (command, suppressed) = self.combo.update(
+            &parsed.buttons,
+            &self.macro_ctrl.config,
+            self.macro_ctrl.macro_mode,
+        );
 
         if let Some(cmd) = command {
-            let effect = self.ctrl.execute(cmd);
+            let effect = self.macro_ctrl.execute(cmd);
             self.apply_effect(effect);
         }
 
@@ -157,8 +159,8 @@ impl Processor {
             suppressed.filter_raw_report(&mut filtered_report);
         }
 
-        if self.ctrl.is_recording() {
-            self.ctrl.add_recording_frame(&filtered_report);
+        if self.macro_ctrl.is_recording() {
+            self.macro_ctrl.add_recording_frame(&filtered_report);
         }
 
         let bt_report = self.build_calibrated_report(&parsed);
@@ -177,10 +179,12 @@ impl Processor {
 
     /// Push config changes to hardware-facing state (stick deadzone, calibration).
     fn sync_config_to_hardware(&mut self) {
-        self.sticks.set_deadzone(self.ctrl.config.stick_deadzone);
-        self.io
-            .calibration_samples
-            .store(self.ctrl.config.calibration_samples, Ordering::Relaxed);
+        self.sticks
+            .set_deadzone(self.macro_ctrl.config.stick_deadzone);
+        self.io.calibration_samples.store(
+            self.macro_ctrl.config.calibration_samples,
+            Ordering::Relaxed,
+        );
     }
 
     /// Apply side effects from a macro command (LED, broadcast).
@@ -189,7 +193,7 @@ impl Processor {
             led::set_led(pattern);
         }
         if effect.broadcast_macros {
-            let macros = storage::list_macros(self.ctrl.macros_dir());
+            let macros = storage::list_macros(self.macro_ctrl.macros_dir());
             let msg = serde_json::json!({ "type": "macro_list", "macros": macros });
             let _ = self.io.state_broadcast.send(msg.to_string());
         }
@@ -198,22 +202,22 @@ impl Processor {
     /// Push current state to the web UI.
     fn update_state(&self, playback_input: Option<&InputState>, live_input: Option<&InputState>) {
         self.io.mitm_state.update(StateSnapshot {
-            macro_mode: self.ctrl.macro_mode,
-            recording: self.ctrl.is_recording(),
-            recording_countdown: self.ctrl.recording_in_countdown(),
-            playing: self.ctrl.is_playing(),
-            current_slot: self.ctrl.current_slot,
-            slot_count: self.ctrl.cached_slot_count,
-            current_macro_name: self.ctrl.cached_macro_name.clone(),
+            macro_mode: self.macro_ctrl.macro_mode,
+            recording: self.macro_ctrl.is_recording(),
+            recording_countdown: self.macro_ctrl.recording_in_countdown(),
+            playing: self.macro_ctrl.is_playing(),
+            current_slot: self.macro_ctrl.current_slot,
+            slot_count: self.macro_ctrl.cached_slot_count,
+            current_macro_name: self.macro_ctrl.cached_macro_name.clone(),
             usb_connected: true,
             bt_connected: self.io.bt_connected.load(Ordering::Relaxed),
-            playback_speed: self.ctrl.playback_speed(),
-            looping: self.ctrl.looping(),
-            playback_frame: self.ctrl.playback_frame(),
-            playback_frame_count: self.ctrl.playback_frame_count(),
+            playback_speed: self.macro_ctrl.playback_speed(),
+            looping: self.macro_ctrl.looping(),
+            playback_frame: self.macro_ctrl.playback_frame(),
+            playback_frame_count: self.macro_ctrl.playback_frame_count(),
             playback_input: playback_input.map(PlaybackInput::from_input_state),
             live_input: live_input.map(PlaybackInput::from_input_state),
-            config: self.ctrl.config.clone(),
+            config: self.macro_ctrl.config.clone(),
         });
     }
 }

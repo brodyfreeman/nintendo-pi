@@ -94,7 +94,7 @@ impl Default for Config {
 /// and value is the JSON value to apply.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ConfigUpdate {
-    pub field: String,
+    pub field_name: String,
     pub value: serde_json::Value,
 }
 
@@ -102,7 +102,7 @@ impl Config {
     /// Apply a config update by field name, clamping values and validating names.
     /// Returns false if the field name is unknown or the value is invalid.
     pub fn apply(&mut self, update: &ConfigUpdate) -> bool {
-        let field = update.field.as_str();
+        let field = update.field_name.as_str();
         let val = &update.value;
 
         // f64 fields with (min, max) clamping
