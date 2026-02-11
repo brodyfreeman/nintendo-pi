@@ -16,6 +16,7 @@ use tokio_stream::{wrappers::BroadcastStream, Stream, StreamExt};
 use tracing::{debug, error, info, warn};
 
 use self::state::MitmState;
+use crate::config::ConfigUpdate;
 use crate::macro_engine::controller::MacroCommand;
 use crate::macro_engine::storage::{self, MacroEntry};
 
@@ -110,7 +111,7 @@ async fn cmd_handler(
     State(state): State<Arc<WebState>>,
     axum::Json(val): axum::Json<serde_json::Value>,
 ) -> axum::http::StatusCode {
-    match parse_web_command(&val, &state.macros_dir) {
+    match parse_web_command(&val) {
         Some(cmd) => {
             debug!("[WEB] Command received: {cmd:?}");
             if let Err(e) = state.cmd_tx.send(cmd).await {
@@ -127,21 +128,20 @@ async fn cmd_handler(
     }
 }
 
-fn parse_web_command(
-    val: &serde_json::Value,
-    _macros_dir: &std::path::Path,
-) -> Option<MacroCommand> {
+fn parse_web_command(val: &serde_json::Value) -> Option<MacroCommand> {
     let cmd = val.get("cmd")?.as_str()?;
     match cmd {
+        // Macro actions
         "TOGGLE_MACRO_MODE" => Some(MacroCommand::ToggleMacroMode),
         "TOGGLE_RECORDING" => Some(MacroCommand::ToggleRecording),
         "PREV_SLOT" => Some(MacroCommand::PrevSlot),
         "NEXT_SLOT" => Some(MacroCommand::NextSlot),
         "PLAY_MACRO" => Some(MacroCommand::PlayMacro),
         "STOP_PLAYBACK" => Some(MacroCommand::StopPlayback),
+        "CYCLE_SPEED" => Some(MacroCommand::CycleSpeed),
+        "TOGGLE_LOOP" => Some(MacroCommand::ToggleLoop),
         "SELECT_SLOT" => {
             let slot = val.get("data")?.as_u64()? as usize;
-            debug!("[WEB] Select slot {slot}");
             Some(MacroCommand::SelectSlot(slot))
         }
         "RENAME_MACRO" => {
@@ -150,7 +150,6 @@ fn parse_web_command(
             if arr.len() >= 2 {
                 let id = arr[0].as_u64()? as u32;
                 let name = arr[1].as_str()?.to_string();
-                debug!("[WEB] Rename macro {id} -> \"{name}\"");
                 Some(MacroCommand::RenameMacro(id, name))
             } else {
                 warn!("[WEB] RENAME_MACRO: expected [id, name], got {data}");
@@ -159,124 +158,82 @@ fn parse_web_command(
         }
         "DELETE_MACRO" => {
             let id = val.get("data")?.as_u64()? as u32;
-            debug!("[WEB] Delete macro {id}");
             Some(MacroCommand::DeleteMacro(id))
         }
-        "CYCLE_SPEED" => Some(MacroCommand::CycleSpeed),
-        "TOGGLE_LOOP" => Some(MacroCommand::ToggleLoop),
         "SET_PLAYBACK_SPEED" => {
             let speed = val.get("data")?.as_f64()?;
-            debug!("[WEB] Set playback speed: {speed}x");
             Some(MacroCommand::SetPlaybackSpeed(speed))
         }
-        "SET_STICK_DEADZONE" => {
-            let dz = val.get("data")?.as_f64()?;
-            debug!("[WEB] Set stick deadzone: {dz}");
-            Some(MacroCommand::SetStickDeadzone(dz))
-        }
+
+        // Config updates — all route through UpdateConfig
+        "SET_STICK_DEADZONE" => config_cmd(ConfigUpdate::StickDeadzone(val.get("data")?.as_f64()?)),
         "SET_COMBO_HOLD_TIME" => {
-            let t = val.get("data")?.as_f64()?;
-            debug!("[WEB] Set combo hold time: {t}s");
-            Some(MacroCommand::SetComboHoldTime(t))
+            config_cmd(ConfigUpdate::ComboHoldTime(val.get("data")?.as_f64()?))
         }
         "SET_AUTO_LOOP_DEFAULT" => {
-            let v = val.get("data")?.as_bool()?;
-            debug!("[WEB] Set auto-loop default: {v}");
-            Some(MacroCommand::SetAutoLoopDefault(v))
+            config_cmd(ConfigUpdate::AutoLoopDefault(val.get("data")?.as_bool()?))
         }
-        "SET_PLAYBACK_SPEED_DEFAULT" => {
-            let s = val.get("data")?.as_f64()?;
-            debug!("[WEB] Set playback speed default: {s}x");
-            Some(MacroCommand::SetPlaybackSpeedDefault(s))
-        }
+        "SET_PLAYBACK_SPEED_DEFAULT" => config_cmd(ConfigUpdate::PlaybackSpeedDefault(
+            val.get("data")?.as_f64()?,
+        )),
         "SET_PLAYBACK_START_DELAY" => {
-            let d = val.get("data")?.as_f64()?;
-            debug!("[WEB] Set playback start delay: {d}s");
-            Some(MacroCommand::SetPlaybackStartDelay(d))
+            config_cmd(ConfigUpdate::PlaybackStartDelay(val.get("data")?.as_f64()?))
         }
         "SET_LOOP_RESTART_DELAY" => {
-            let d = val.get("data")?.as_f64()?;
-            debug!("[WEB] Set loop restart delay: {d}s");
-            Some(MacroCommand::SetLoopRestartDelay(d))
+            config_cmd(ConfigUpdate::LoopRestartDelay(val.get("data")?.as_f64()?))
         }
         "SET_RECORDING_TRIM_END" => {
-            let d = val.get("data")?.as_f64()?;
-            debug!("[WEB] Set recording trim end: {d}s");
-            Some(MacroCommand::SetRecordingTrimEnd(d))
+            config_cmd(ConfigUpdate::RecordingTrimEnd(val.get("data")?.as_f64()?))
         }
-        "SET_RECORDING_START_DELAY" => {
-            let d = val.get("data")?.as_f64()?;
-            debug!("[WEB] Set recording start delay: {d}s");
-            Some(MacroCommand::SetRecordingStartDelay(d))
-        }
+        "SET_RECORDING_START_DELAY" => config_cmd(ConfigUpdate::RecordingStartDelay(
+            val.get("data")?.as_f64()?,
+        )),
         "SET_UI_UPDATE_INTERVAL" => {
-            let ms = val.get("data")?.as_u64()?;
-            debug!("[WEB] Set UI update interval: {ms}ms");
-            Some(MacroCommand::SetUiUpdateInterval(ms))
+            config_cmd(ConfigUpdate::UiUpdateInterval(val.get("data")?.as_u64()?))
         }
-        "SET_CALIBRATION_SAMPLES" => {
-            let n = val.get("data")?.as_u64()? as u32;
-            debug!("[WEB] Set calibration samples: {n}");
-            Some(MacroCommand::SetCalibrationSamples(n))
-        }
-        "SET_PLAY_MACRO_BUTTON" => {
-            let s = val.get("data")?.as_str()?.to_string();
-            debug!("[WEB] Set play macro button: {s}");
-            Some(MacroCommand::SetPlayMacroButton(s))
-        }
-        "SET_STOP_PLAYBACK_BUTTON" => {
-            let s = val.get("data")?.as_str()?.to_string();
-            debug!("[WEB] Set stop playback button: {s}");
-            Some(MacroCommand::SetStopPlaybackButton(s))
-        }
-        "SET_TOGGLE_MACRO_MODE_BUTTON" => {
-            let s = val.get("data")?.as_str()?.to_string();
-            debug!("[WEB] Set toggle macro mode button: {s}");
-            Some(MacroCommand::SetToggleMacroModeButton(s))
-        }
-        "SET_TOGGLE_LOOP_BUTTON" => {
-            let s = val.get("data")?.as_str()?.to_string();
-            debug!("[WEB] Set toggle loop button: {s}");
-            Some(MacroCommand::SetToggleLoopButton(s))
-        }
-        "SET_CYCLE_SPEED_BUTTON" => {
-            let s = val.get("data")?.as_str()?.to_string();
-            debug!("[WEB] Set cycle speed button: {s}");
-            Some(MacroCommand::SetCycleSpeedButton(s))
-        }
-        "SET_PREV_SLOT_BUTTON" => {
-            let s = val.get("data")?.as_str()?.to_string();
-            debug!("[WEB] Set prev slot button: {s}");
-            Some(MacroCommand::SetPrevSlotButton(s))
-        }
-        "SET_NEXT_SLOT_BUTTON" => {
-            let s = val.get("data")?.as_str()?.to_string();
-            debug!("[WEB] Set next slot button: {s}");
-            Some(MacroCommand::SetNextSlotButton(s))
-        }
-        "SET_TOGGLE_RECORDING_BUTTON" => {
-            let s = val.get("data")?.as_str()?.to_string();
-            debug!("[WEB] Set toggle recording button: {s}");
-            Some(MacroCommand::SetToggleRecordingButton(s))
-        }
-        "SET_BASE_COMBO_BUTTON_1" => {
-            let s = val.get("data")?.as_str()?.to_string();
-            debug!("[WEB] Set base combo button 1: {s}");
-            Some(MacroCommand::SetBaseComboButton1(s))
-        }
-        "SET_BASE_COMBO_BUTTON_2" => {
-            let s = val.get("data")?.as_str()?.to_string();
-            debug!("[WEB] Set base combo button 2: {s}");
-            Some(MacroCommand::SetBaseComboButton2(s))
-        }
-        "SET_TOGGLE_MACRO_MODE_TRIGGER" => {
-            let s = val.get("data")?.as_str()?.to_string();
-            debug!("[WEB] Set toggle macro mode trigger: {s}");
-            Some(MacroCommand::SetToggleMacroModeTrigger(s))
-        }
+        "SET_CALIBRATION_SAMPLES" => config_cmd(ConfigUpdate::CalibrationSamples(
+            val.get("data")?.as_u64()? as u32,
+        )),
+        "SET_PLAY_MACRO_BUTTON" => config_cmd(ConfigUpdate::PlayMacroButton(
+            val.get("data")?.as_str()?.to_string(),
+        )),
+        "SET_STOP_PLAYBACK_BUTTON" => config_cmd(ConfigUpdate::StopPlaybackButton(
+            val.get("data")?.as_str()?.to_string(),
+        )),
+        "SET_TOGGLE_MACRO_MODE_BUTTON" => config_cmd(ConfigUpdate::ToggleMacroModeButton(
+            val.get("data")?.as_str()?.to_string(),
+        )),
+        "SET_TOGGLE_LOOP_BUTTON" => config_cmd(ConfigUpdate::ToggleLoopButton(
+            val.get("data")?.as_str()?.to_string(),
+        )),
+        "SET_CYCLE_SPEED_BUTTON" => config_cmd(ConfigUpdate::CycleSpeedButton(
+            val.get("data")?.as_str()?.to_string(),
+        )),
+        "SET_PREV_SLOT_BUTTON" => config_cmd(ConfigUpdate::PrevSlotButton(
+            val.get("data")?.as_str()?.to_string(),
+        )),
+        "SET_NEXT_SLOT_BUTTON" => config_cmd(ConfigUpdate::NextSlotButton(
+            val.get("data")?.as_str()?.to_string(),
+        )),
+        "SET_TOGGLE_RECORDING_BUTTON" => config_cmd(ConfigUpdate::ToggleRecordingButton(
+            val.get("data")?.as_str()?.to_string(),
+        )),
+        "SET_BASE_COMBO_BUTTON_1" => config_cmd(ConfigUpdate::BaseComboButton1(
+            val.get("data")?.as_str()?.to_string(),
+        )),
+        "SET_BASE_COMBO_BUTTON_2" => config_cmd(ConfigUpdate::BaseComboButton2(
+            val.get("data")?.as_str()?.to_string(),
+        )),
+        "SET_TOGGLE_MACRO_MODE_TRIGGER" => config_cmd(ConfigUpdate::ToggleMacroModeTrigger(
+            val.get("data")?.as_str()?.to_string(),
+        )),
         _ => {
             warn!("[WEB] Unknown command: {cmd}");
             None
         }
     }
+}
+
+fn config_cmd(update: ConfigUpdate) -> Option<MacroCommand> {
+    Some(MacroCommand::UpdateConfig(update))
 }

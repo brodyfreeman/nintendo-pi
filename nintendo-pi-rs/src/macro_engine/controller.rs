@@ -11,6 +11,7 @@ use tracing::{info, warn};
 use super::player::MacroPlayer;
 use super::recorder::MacroRecorder;
 use super::storage;
+use crate::config::{Config, ConfigUpdate};
 use crate::led;
 
 /// Unified command enum — covers both combo actions and web commands.
@@ -28,27 +29,7 @@ pub enum MacroCommand {
     CycleSpeed,
     SetPlaybackSpeed(f64),
     ToggleLoop,
-    SetStickDeadzone(f64),
-    SetComboHoldTime(f64),
-    SetAutoLoopDefault(bool),
-    SetPlaybackSpeedDefault(f64),
-    SetPlaybackStartDelay(f64),
-    SetLoopRestartDelay(f64),
-    SetRecordingTrimEnd(f64),
-    SetRecordingStartDelay(f64),
-    SetUiUpdateInterval(u64),
-    SetCalibrationSamples(u32),
-    SetPlayMacroButton(String),
-    SetStopPlaybackButton(String),
-    SetToggleMacroModeButton(String),
-    SetToggleLoopButton(String),
-    SetCycleSpeedButton(String),
-    SetPrevSlotButton(String),
-    SetNextSlotButton(String),
-    SetToggleRecordingButton(String),
-    SetBaseComboButton1(String),
-    SetBaseComboButton2(String),
-    SetToggleMacroModeTrigger(String),
+    UpdateConfig(ConfigUpdate),
 }
 
 /// Side effects produced by executing a command.
@@ -79,27 +60,7 @@ pub struct MacroController {
     pub current_slot: usize,
     pub cached_slot_count: usize,
     pub cached_macro_name: Option<String>,
-    pub stick_deadzone: f64,
-    pub combo_hold_time: f64,
-    pub auto_loop_default: bool,
-    pub playback_speed_default: f64,
-    pub playback_start_delay: f64,
-    pub loop_restart_delay: f64,
-    pub recording_trim_end: f64,
-    pub recording_start_delay: f64,
-    pub ui_update_interval_ms: u64,
-    pub calibration_samples: u32,
-    pub play_macro_button: crate::input::Button,
-    pub stop_playback_button: crate::input::Button,
-    pub toggle_macro_mode_button: crate::input::Button,
-    pub toggle_loop_button: crate::input::Button,
-    pub cycle_speed_button: crate::input::Button,
-    pub prev_slot_button: crate::input::Button,
-    pub next_slot_button: crate::input::Button,
-    pub toggle_recording_button: crate::input::Button,
-    pub base_combo_button_1: crate::input::Button,
-    pub base_combo_button_2: crate::input::Button,
-    pub toggle_macro_mode_trigger: crate::combo::TriggerMode,
+    pub config: Config,
     macros_dir: PathBuf,
 }
 
@@ -117,27 +78,7 @@ impl MacroController {
             current_slot: 0,
             cached_slot_count: slot_count,
             cached_macro_name: macro_name,
-            stick_deadzone: crate::calibration::DEFAULT_DEADZONE,
-            combo_hold_time: crate::combo::DEFAULT_HOLD_DURATION,
-            auto_loop_default: false,
-            playback_speed_default: 1.0,
-            playback_start_delay: 0.0,
-            loop_restart_delay: 0.0,
-            recording_trim_end: 0.0,
-            recording_start_delay: 0.0,
-            ui_update_interval_ms: 200,
-            calibration_samples: 20,
-            play_macro_button: crate::input::Button::A,
-            stop_playback_button: crate::input::Button::B,
-            toggle_macro_mode_button: crate::combo::DEFAULT_TOGGLE_MACRO_MODE_BUTTON,
-            toggle_loop_button: crate::combo::DEFAULT_TOGGLE_LOOP_BUTTON,
-            cycle_speed_button: crate::combo::DEFAULT_CYCLE_SPEED_BUTTON,
-            prev_slot_button: crate::combo::DEFAULT_PREV_SLOT_BUTTON,
-            next_slot_button: crate::combo::DEFAULT_NEXT_SLOT_BUTTON,
-            toggle_recording_button: crate::combo::DEFAULT_TOGGLE_RECORDING_BUTTON,
-            base_combo_button_1: crate::combo::DEFAULT_BASE_COMBO_BUTTON_1,
-            base_combo_button_2: crate::combo::DEFAULT_BASE_COMBO_BUTTON_2,
-            toggle_macro_mode_trigger: crate::combo::DEFAULT_TOGGLE_MACRO_MODE_TRIGGER,
+            config: Config::default(),
             macros_dir,
         }
     }
@@ -157,27 +98,11 @@ impl MacroController {
             MacroCommand::CycleSpeed => self.cycle_speed(),
             MacroCommand::SetPlaybackSpeed(speed) => self.set_playback_speed(speed),
             MacroCommand::ToggleLoop => self.toggle_loop(),
-            MacroCommand::SetStickDeadzone(dz) => self.set_stick_deadzone(dz),
-            MacroCommand::SetComboHoldTime(t) => self.set_combo_hold_time(t),
-            MacroCommand::SetAutoLoopDefault(v) => self.set_auto_loop_default(v),
-            MacroCommand::SetPlaybackSpeedDefault(s) => self.set_playback_speed_default(s),
-            MacroCommand::SetPlaybackStartDelay(d) => self.set_playback_start_delay(d),
-            MacroCommand::SetLoopRestartDelay(d) => self.set_loop_restart_delay(d),
-            MacroCommand::SetRecordingTrimEnd(d) => self.set_recording_trim_end(d),
-            MacroCommand::SetRecordingStartDelay(d) => self.set_recording_start_delay(d),
-            MacroCommand::SetUiUpdateInterval(ms) => self.set_ui_update_interval(ms),
-            MacroCommand::SetCalibrationSamples(n) => self.set_calibration_samples(n),
-            MacroCommand::SetPlayMacroButton(s) => self.set_play_macro_button(&s),
-            MacroCommand::SetStopPlaybackButton(s) => self.set_stop_playback_button(&s),
-            MacroCommand::SetToggleMacroModeButton(s) => self.set_toggle_macro_mode_button(&s),
-            MacroCommand::SetToggleLoopButton(s) => self.set_toggle_loop_button(&s),
-            MacroCommand::SetCycleSpeedButton(s) => self.set_cycle_speed_button(&s),
-            MacroCommand::SetPrevSlotButton(s) => self.set_prev_slot_button(&s),
-            MacroCommand::SetNextSlotButton(s) => self.set_next_slot_button(&s),
-            MacroCommand::SetToggleRecordingButton(s) => self.set_toggle_recording_button(&s),
-            MacroCommand::SetBaseComboButton1(s) => self.set_base_combo_button_1(&s),
-            MacroCommand::SetBaseComboButton2(s) => self.set_base_combo_button_2(&s),
-            MacroCommand::SetToggleMacroModeTrigger(s) => self.set_toggle_macro_mode_trigger(&s),
+            MacroCommand::UpdateConfig(update) => {
+                self.config.apply(update);
+                self.player.loop_restart_delay = self.config.loop_restart_delay;
+                MacroEffect::none()
+            }
         }
     }
 
@@ -217,7 +142,7 @@ impl MacroController {
         } else {
             let mut broadcast = false;
             if self.recorder.recording {
-                let (frame_count, duration_us) = self.recorder.stop(self.recording_trim_end);
+                let (frame_count, duration_us) = self.recorder.stop(self.config.recording_trim_end);
                 if let Some(id) = self.recorder.save(&self.macros_dir, None) {
                     info!(
                         "[MACRO] Auto-saved recording as macro {id} ({frame_count} frames, {}ms)",
@@ -236,7 +161,7 @@ impl MacroController {
 
     fn toggle_recording(&mut self) -> MacroEffect {
         if self.recorder.recording {
-            let (frame_count, duration_us) = self.recorder.stop(self.recording_trim_end);
+            let (frame_count, duration_us) = self.recorder.stop(self.config.recording_trim_end);
             if let Some(id) = self.recorder.save(&self.macros_dir, None) {
                 info!(
                     "[MACRO] Recording saved as macro {id} ({frame_count} frames, {}ms)",
@@ -253,7 +178,8 @@ impl MacroController {
                 broadcast_macros: true,
             }
         } else {
-            self.recorder.start_with_delay(self.recording_start_delay);
+            self.recorder
+                .start_with_delay(self.config.recording_start_delay);
             MacroEffect {
                 led: Some(&led::LED_RECORDING),
                 broadcast_macros: false,
@@ -300,11 +226,11 @@ impl MacroController {
     fn play_macro(&mut self) -> MacroEffect {
         if let Some(macro_id) = storage::get_macro_id_by_slot(&self.macros_dir, self.current_slot) {
             if self.player.load(&self.macros_dir, macro_id) {
-                let should_loop = self.player.looping || self.auto_loop_default;
-                self.player.set_speed(self.playback_speed_default);
-                self.player.loop_restart_delay = self.loop_restart_delay;
+                let should_loop = self.player.looping || self.config.auto_loop_default;
+                self.player.set_speed(self.config.playback_speed_default);
+                self.player.loop_restart_delay = self.config.loop_restart_delay;
                 self.player
-                    .start_with_delay(should_loop, self.playback_start_delay);
+                    .start_with_delay(should_loop, self.config.playback_start_delay);
                 info!(
                     "[MACRO] Playing macro {} (slot {}, loop={}).",
                     macro_id, self.current_slot, self.player.looping
@@ -349,233 +275,6 @@ impl MacroController {
             "[MACRO] Loop mode: {}",
             if self.player.looping { "ON" } else { "OFF" }
         );
-        MacroEffect::none()
-    }
-
-    fn set_stick_deadzone(&mut self, dz: f64) -> MacroEffect {
-        self.stick_deadzone = dz.clamp(0.0, 50.0);
-        info!(
-            "[SETTINGS] Stick deadzone set to {:.1}",
-            self.stick_deadzone
-        );
-        MacroEffect::none()
-    }
-
-    fn set_combo_hold_time(&mut self, t: f64) -> MacroEffect {
-        self.combo_hold_time = t.clamp(0.1, 2.0);
-        info!(
-            "[SETTINGS] Combo hold time set to {:.1}s",
-            self.combo_hold_time
-        );
-        MacroEffect::none()
-    }
-
-    fn set_auto_loop_default(&mut self, enabled: bool) -> MacroEffect {
-        self.auto_loop_default = enabled;
-        info!(
-            "[SETTINGS] Auto-loop default: {}",
-            if enabled { "ON" } else { "OFF" }
-        );
-        MacroEffect::none()
-    }
-
-    fn set_playback_speed_default(&mut self, speed: f64) -> MacroEffect {
-        use super::player::SPEED_PRESETS;
-        self.playback_speed_default =
-            speed.clamp(SPEED_PRESETS[0], SPEED_PRESETS[SPEED_PRESETS.len() - 1]);
-        info!(
-            "[SETTINGS] Playback speed default set to {:.2}x",
-            self.playback_speed_default
-        );
-        MacroEffect::none()
-    }
-
-    fn set_playback_start_delay(&mut self, delay: f64) -> MacroEffect {
-        self.playback_start_delay = delay.clamp(0.0, 5.0);
-        info!(
-            "[SETTINGS] Playback start delay set to {:.1}s",
-            self.playback_start_delay
-        );
-        MacroEffect::none()
-    }
-
-    fn set_loop_restart_delay(&mut self, delay: f64) -> MacroEffect {
-        self.loop_restart_delay = delay.clamp(0.0, 5.0);
-        self.player.loop_restart_delay = self.loop_restart_delay;
-        info!(
-            "[SETTINGS] Loop restart delay set to {:.1}s",
-            self.loop_restart_delay
-        );
-        MacroEffect::none()
-    }
-
-    fn set_recording_trim_end(&mut self, delay: f64) -> MacroEffect {
-        self.recording_trim_end = delay.clamp(0.0, 2.0);
-        info!(
-            "[SETTINGS] Recording trim end set to {:.1}s",
-            self.recording_trim_end
-        );
-        MacroEffect::none()
-    }
-
-    fn set_recording_start_delay(&mut self, delay: f64) -> MacroEffect {
-        self.recording_start_delay = delay.clamp(0.0, 5.0);
-        info!(
-            "[SETTINGS] Recording start delay set to {:.1}s",
-            self.recording_start_delay
-        );
-        MacroEffect::none()
-    }
-
-    fn set_ui_update_interval(&mut self, ms: u64) -> MacroEffect {
-        self.ui_update_interval_ms = ms.clamp(50, 500);
-        info!(
-            "[SETTINGS] UI update interval set to {}ms",
-            self.ui_update_interval_ms
-        );
-        MacroEffect::none()
-    }
-
-    fn set_calibration_samples(&mut self, n: u32) -> MacroEffect {
-        self.calibration_samples = n.clamp(5, 100);
-        info!(
-            "[SETTINGS] Calibration samples set to {}",
-            self.calibration_samples
-        );
-        MacroEffect::none()
-    }
-
-    fn set_play_macro_button(&mut self, name: &str) -> MacroEffect {
-        if let Some(btn) = crate::input::Button::from_str_name(name) {
-            self.play_macro_button = btn;
-            info!("[SETTINGS] Play macro button set to {}", btn.display_name());
-        } else {
-            warn!("[SETTINGS] Unknown button name: {name}");
-        }
-        MacroEffect::none()
-    }
-
-    fn set_stop_playback_button(&mut self, name: &str) -> MacroEffect {
-        if let Some(btn) = crate::input::Button::from_str_name(name) {
-            self.stop_playback_button = btn;
-            info!(
-                "[SETTINGS] Stop playback button set to {}",
-                btn.display_name()
-            );
-        } else {
-            warn!("[SETTINGS] Unknown button name: {name}");
-        }
-        MacroEffect::none()
-    }
-
-    fn set_toggle_macro_mode_button(&mut self, name: &str) -> MacroEffect {
-        if let Some(btn) = crate::input::Button::from_str_name(name) {
-            self.toggle_macro_mode_button = btn;
-            info!(
-                "[SETTINGS] Toggle macro mode button set to {}",
-                btn.display_name()
-            );
-        } else {
-            warn!("[SETTINGS] Unknown button name: {name}");
-        }
-        MacroEffect::none()
-    }
-
-    fn set_toggle_loop_button(&mut self, name: &str) -> MacroEffect {
-        if let Some(btn) = crate::input::Button::from_str_name(name) {
-            self.toggle_loop_button = btn;
-            info!(
-                "[SETTINGS] Toggle loop button set to {}",
-                btn.display_name()
-            );
-        } else {
-            warn!("[SETTINGS] Unknown button name: {name}");
-        }
-        MacroEffect::none()
-    }
-
-    fn set_cycle_speed_button(&mut self, name: &str) -> MacroEffect {
-        if let Some(btn) = crate::input::Button::from_str_name(name) {
-            self.cycle_speed_button = btn;
-            info!(
-                "[SETTINGS] Cycle speed button set to {}",
-                btn.display_name()
-            );
-        } else {
-            warn!("[SETTINGS] Unknown button name: {name}");
-        }
-        MacroEffect::none()
-    }
-
-    fn set_prev_slot_button(&mut self, name: &str) -> MacroEffect {
-        if let Some(btn) = crate::input::Button::from_str_name(name) {
-            self.prev_slot_button = btn;
-            info!("[SETTINGS] Prev slot button set to {}", btn.display_name());
-        } else {
-            warn!("[SETTINGS] Unknown button name: {name}");
-        }
-        MacroEffect::none()
-    }
-
-    fn set_next_slot_button(&mut self, name: &str) -> MacroEffect {
-        if let Some(btn) = crate::input::Button::from_str_name(name) {
-            self.next_slot_button = btn;
-            info!("[SETTINGS] Next slot button set to {}", btn.display_name());
-        } else {
-            warn!("[SETTINGS] Unknown button name: {name}");
-        }
-        MacroEffect::none()
-    }
-
-    fn set_toggle_recording_button(&mut self, name: &str) -> MacroEffect {
-        if let Some(btn) = crate::input::Button::from_str_name(name) {
-            self.toggle_recording_button = btn;
-            info!(
-                "[SETTINGS] Toggle recording button set to {}",
-                btn.display_name()
-            );
-        } else {
-            warn!("[SETTINGS] Unknown button name: {name}");
-        }
-        MacroEffect::none()
-    }
-
-    fn set_base_combo_button_1(&mut self, name: &str) -> MacroEffect {
-        if let Some(btn) = crate::input::Button::from_str_name(name) {
-            self.base_combo_button_1 = btn;
-            info!(
-                "[SETTINGS] Base combo button 1 set to {}",
-                btn.display_name()
-            );
-        } else {
-            warn!("[SETTINGS] Unknown button name: {name}");
-        }
-        MacroEffect::none()
-    }
-
-    fn set_base_combo_button_2(&mut self, name: &str) -> MacroEffect {
-        if let Some(btn) = crate::input::Button::from_str_name(name) {
-            self.base_combo_button_2 = btn;
-            info!(
-                "[SETTINGS] Base combo button 2 set to {}",
-                btn.display_name()
-            );
-        } else {
-            warn!("[SETTINGS] Unknown button name: {name}");
-        }
-        MacroEffect::none()
-    }
-
-    fn set_toggle_macro_mode_trigger(&mut self, name: &str) -> MacroEffect {
-        if let Some(mode) = crate::combo::TriggerMode::from_str_name(name) {
-            self.toggle_macro_mode_trigger = mode;
-            info!(
-                "[SETTINGS] Toggle macro mode trigger set to {}",
-                mode.as_str()
-            );
-        } else {
-            warn!("[SETTINGS] Unknown trigger mode: {name}");
-        }
         MacroEffect::none()
     }
 
@@ -812,5 +511,33 @@ mod tests {
         // Clamped to max
         ctrl.execute(MacroCommand::SetPlaybackSpeed(100.0));
         assert!((ctrl.player.speed - 4.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn test_update_config() {
+        let (mut ctrl, _dir) = make_controller();
+
+        ctrl.execute(MacroCommand::UpdateConfig(ConfigUpdate::StickDeadzone(
+            25.0,
+        )));
+        assert!((ctrl.config.stick_deadzone - 25.0).abs() < f64::EPSILON);
+
+        // Clamping
+        ctrl.execute(MacroCommand::UpdateConfig(ConfigUpdate::StickDeadzone(
+            100.0,
+        )));
+        assert!((ctrl.config.stick_deadzone - 50.0).abs() < f64::EPSILON);
+
+        // Button binding
+        ctrl.execute(MacroCommand::UpdateConfig(ConfigUpdate::PlayMacroButton(
+            "X".to_string(),
+        )));
+        assert_eq!(ctrl.config.play_macro_button, crate::input::Button::X);
+
+        // Loop restart delay syncs to player
+        ctrl.execute(MacroCommand::UpdateConfig(ConfigUpdate::LoopRestartDelay(
+            1.5,
+        )));
+        assert!((ctrl.player.loop_restart_delay - 1.5).abs() < f64::EPSILON);
     }
 }

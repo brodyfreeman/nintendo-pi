@@ -7,6 +7,7 @@ use std::time::Instant;
 
 use tracing::{debug, info};
 
+use crate::config::Config;
 use crate::input::{Button, ButtonState};
 
 /// Whether the toggle-macro-mode combo is hold-triggered or edge-triggered.
@@ -156,20 +157,12 @@ impl SuppressedButtons {
 }
 
 /// Combo detector state machine.
+///
+/// Button bindings and timing come from `Config`, passed to `update()`.
+/// The detector only tracks its own internal state (macro mode, hold timer,
+/// previous buttons).
 pub struct ComboDetector {
     pub macro_mode: bool,
-    pub hold_duration: f64,
-    pub play_macro_button: Button,
-    pub stop_playback_button: Button,
-    pub toggle_macro_mode_button: Button,
-    pub toggle_loop_button: Button,
-    pub cycle_speed_button: Button,
-    pub prev_slot_button: Button,
-    pub next_slot_button: Button,
-    pub toggle_recording_button: Button,
-    pub base_combo_button_1: Button,
-    pub base_combo_button_2: Button,
-    pub toggle_macro_mode_trigger: TriggerMode,
     hold_button_start: Option<Instant>,
     prev_buttons: ButtonState,
     prev_base_held: bool,
@@ -179,18 +172,6 @@ impl ComboDetector {
     pub fn new() -> Self {
         Self {
             macro_mode: false,
-            hold_duration: DEFAULT_HOLD_DURATION,
-            play_macro_button: DEFAULT_PLAY_MACRO_BUTTON,
-            stop_playback_button: DEFAULT_STOP_PLAYBACK_BUTTON,
-            toggle_macro_mode_button: DEFAULT_TOGGLE_MACRO_MODE_BUTTON,
-            toggle_loop_button: DEFAULT_TOGGLE_LOOP_BUTTON,
-            cycle_speed_button: DEFAULT_CYCLE_SPEED_BUTTON,
-            prev_slot_button: DEFAULT_PREV_SLOT_BUTTON,
-            next_slot_button: DEFAULT_NEXT_SLOT_BUTTON,
-            toggle_recording_button: DEFAULT_TOGGLE_RECORDING_BUTTON,
-            base_combo_button_1: DEFAULT_BASE_COMBO_BUTTON_1,
-            base_combo_button_2: DEFAULT_BASE_COMBO_BUTTON_2,
-            toggle_macro_mode_trigger: DEFAULT_TOGGLE_MACRO_MODE_TRIGGER,
             hold_button_start: None,
             prev_buttons: ButtonState::default(),
             prev_base_held: false,
@@ -198,9 +179,15 @@ impl ComboDetector {
     }
 
     /// Process button state. Returns (action, suppressed_buttons).
-    pub fn update(&mut self, buttons: &ButtonState) -> (ComboAction, SuppressedButtons) {
+    ///
+    /// Reads button bindings and timing from `config`.
+    pub fn update(
+        &mut self,
+        buttons: &ButtonState,
+        config: &Config,
+    ) -> (ComboAction, SuppressedButtons) {
         let base_held =
-            buttons.get(self.base_combo_button_1) && buttons.get(self.base_combo_button_2);
+            buttons.get(config.base_combo_button_1) && buttons.get(config.base_combo_button_2);
         let mut action = ComboAction::None;
         let mut suppressed = SuppressedButtons::default();
 
@@ -208,33 +195,33 @@ impl ComboDetector {
         if base_held && !self.prev_base_held {
             debug!(
                 "[COMBO] {}+{} held",
-                self.base_combo_button_1.display_name(),
-                self.base_combo_button_2.display_name()
+                config.base_combo_button_1.display_name(),
+                config.base_combo_button_2.display_name()
             );
         }
 
         if base_held {
             // Always suppress base combo buttons when both held
-            suppressed.add(self.base_combo_button_1);
-            suppressed.add(self.base_combo_button_2);
+            suppressed.add(config.base_combo_button_1);
+            suppressed.add(config.base_combo_button_2);
 
             // Check configurable button for macro mode toggle
-            let toggle_btn_pressed = buttons.get(self.toggle_macro_mode_button);
-            match self.toggle_macro_mode_trigger {
+            let toggle_btn_pressed = buttons.get(config.toggle_macro_mode_button);
+            match config.toggle_macro_mode_trigger {
                 TriggerMode::Hold => {
                     if toggle_btn_pressed {
-                        suppressed.add(self.toggle_macro_mode_button);
+                        suppressed.add(config.toggle_macro_mode_button);
                         match self.hold_button_start {
                             None => {
                                 debug!(
                                     "[COMBO] {} hold started (need {}s for macro mode toggle)",
-                                    self.toggle_macro_mode_button.display_name(),
-                                    self.hold_duration
+                                    config.toggle_macro_mode_button.display_name(),
+                                    config.combo_hold_time
                                 );
                                 self.hold_button_start = Some(Instant::now());
                             }
                             Some(start) => {
-                                if start.elapsed().as_secs_f64() >= self.hold_duration {
+                                if start.elapsed().as_secs_f64() >= config.combo_hold_time {
                                     action = ComboAction::ToggleMacroMode;
                                     self.hold_button_start = None;
                                 }
@@ -244,16 +231,16 @@ impl ComboDetector {
                         if self.hold_button_start.is_some() {
                             debug!(
                                 "[COMBO] {} released before hold threshold",
-                                self.toggle_macro_mode_button.display_name()
+                                config.toggle_macro_mode_button.display_name()
                             );
                         }
                         self.hold_button_start = None;
                     }
                 }
                 TriggerMode::Edge => {
-                    let was_pressed = self.prev_buttons.get(self.toggle_macro_mode_button);
+                    let was_pressed = self.prev_buttons.get(config.toggle_macro_mode_button);
                     if toggle_btn_pressed {
-                        suppressed.add(self.toggle_macro_mode_button);
+                        suppressed.add(config.toggle_macro_mode_button);
                     }
                     if toggle_btn_pressed && !was_pressed {
                         action = ComboAction::ToggleMacroMode;
@@ -263,10 +250,10 @@ impl ComboDetector {
 
             // Check configurable prev slot button (edge-triggered)
             {
-                let pressed = buttons.get(self.prev_slot_button);
-                let was_pressed = self.prev_buttons.get(self.prev_slot_button);
+                let pressed = buttons.get(config.prev_slot_button);
+                let was_pressed = self.prev_buttons.get(config.prev_slot_button);
                 if pressed {
-                    suppressed.add(self.prev_slot_button);
+                    suppressed.add(config.prev_slot_button);
                 }
                 if pressed && !was_pressed {
                     action = ComboAction::PrevSlot;
@@ -275,10 +262,10 @@ impl ComboDetector {
 
             // Check configurable next slot button (edge-triggered)
             {
-                let pressed = buttons.get(self.next_slot_button);
-                let was_pressed = self.prev_buttons.get(self.next_slot_button);
+                let pressed = buttons.get(config.next_slot_button);
+                let was_pressed = self.prev_buttons.get(config.next_slot_button);
                 if pressed {
-                    suppressed.add(self.next_slot_button);
+                    suppressed.add(config.next_slot_button);
                 }
                 if pressed && !was_pressed {
                     action = ComboAction::NextSlot;
@@ -287,10 +274,10 @@ impl ComboDetector {
 
             // Check configurable play macro button (edge-triggered)
             {
-                let pressed = buttons.get(self.play_macro_button);
-                let was_pressed = self.prev_buttons.get(self.play_macro_button);
+                let pressed = buttons.get(config.play_macro_button);
+                let was_pressed = self.prev_buttons.get(config.play_macro_button);
                 if pressed {
-                    suppressed.add(self.play_macro_button);
+                    suppressed.add(config.play_macro_button);
                 }
                 if pressed && !was_pressed {
                     action = ComboAction::PlayMacro;
@@ -299,10 +286,10 @@ impl ComboDetector {
 
             // Check configurable stop playback button (edge-triggered)
             {
-                let pressed = buttons.get(self.stop_playback_button);
-                let was_pressed = self.prev_buttons.get(self.stop_playback_button);
+                let pressed = buttons.get(config.stop_playback_button);
+                let was_pressed = self.prev_buttons.get(config.stop_playback_button);
                 if pressed {
-                    suppressed.add(self.stop_playback_button);
+                    suppressed.add(config.stop_playback_button);
                 }
                 if pressed && !was_pressed {
                     action = ComboAction::StopPlayback;
@@ -311,10 +298,10 @@ impl ComboDetector {
 
             // Check configurable toggle loop button (edge-triggered)
             {
-                let pressed = buttons.get(self.toggle_loop_button);
-                let was_pressed = self.prev_buttons.get(self.toggle_loop_button);
+                let pressed = buttons.get(config.toggle_loop_button);
+                let was_pressed = self.prev_buttons.get(config.toggle_loop_button);
                 if pressed {
-                    suppressed.add(self.toggle_loop_button);
+                    suppressed.add(config.toggle_loop_button);
                 }
                 if pressed && !was_pressed {
                     action = ComboAction::ToggleLoop;
@@ -323,10 +310,10 @@ impl ComboDetector {
 
             // Check configurable cycle speed button (edge-triggered)
             {
-                let pressed = buttons.get(self.cycle_speed_button);
-                let was_pressed = self.prev_buttons.get(self.cycle_speed_button);
+                let pressed = buttons.get(config.cycle_speed_button);
+                let was_pressed = self.prev_buttons.get(config.cycle_speed_button);
                 if pressed {
-                    suppressed.add(self.cycle_speed_button);
+                    suppressed.add(config.cycle_speed_button);
                 }
                 if pressed && !was_pressed {
                     action = ComboAction::CycleSpeed;
@@ -335,10 +322,10 @@ impl ComboDetector {
 
             // Check configurable toggle recording button (edge-triggered, macro mode only)
             if self.macro_mode {
-                let pressed = buttons.get(self.toggle_recording_button);
-                let was_pressed = self.prev_buttons.get(self.toggle_recording_button);
+                let pressed = buttons.get(config.toggle_recording_button);
+                let was_pressed = self.prev_buttons.get(config.toggle_recording_button);
                 if pressed {
-                    suppressed.add(self.toggle_recording_button);
+                    suppressed.add(config.toggle_recording_button);
                 }
                 if pressed && !was_pressed {
                     action = ComboAction::ToggleRecording;
@@ -363,6 +350,10 @@ impl ComboDetector {
 mod tests {
     use super::*;
 
+    fn default_config() -> Config {
+        Config::default()
+    }
+
     fn buttons_with(set: &[Button]) -> ButtonState {
         let mut bs = ButtonState::default();
         for &btn in set {
@@ -374,14 +365,15 @@ mod tests {
     #[test]
     fn test_no_combo_without_l3r3() {
         let mut cd = ComboDetector::new();
+        let cfg = default_config();
 
         // Pressing A alone does nothing
-        let (action, sup) = cd.update(&buttons_with(&[Button::A]));
+        let (action, sup) = cd.update(&buttons_with(&[Button::A]), &cfg);
         assert_eq!(action, ComboAction::None);
         assert!(sup.is_empty());
 
         // DpadDown alone does nothing
-        let (action, sup) = cd.update(&buttons_with(&[Button::DpadDown]));
+        let (action, sup) = cd.update(&buttons_with(&[Button::DpadDown]), &cfg);
         assert_eq!(action, ComboAction::None);
         assert!(sup.is_empty());
     }
@@ -389,7 +381,8 @@ mod tests {
     #[test]
     fn test_l3r3_suppressed() {
         let mut cd = ComboDetector::new();
-        let (_, sup) = cd.update(&buttons_with(&[Button::L3, Button::R3]));
+        let cfg = default_config();
+        let (_, sup) = cd.update(&buttons_with(&[Button::L3, Button::R3]), &cfg);
         assert!(!sup.is_empty());
         assert!(sup.buttons[..sup.count]
             .iter()
@@ -402,12 +395,13 @@ mod tests {
     #[test]
     fn test_instant_combo_play_macro() {
         let mut cd = ComboDetector::new();
+        let cfg = default_config();
 
         // First frame: L3+R3 (rising edge, but no combo button)
-        cd.update(&buttons_with(&[Button::L3, Button::R3]));
+        cd.update(&buttons_with(&[Button::L3, Button::R3]), &cfg);
 
         // Second frame: L3+R3+A (A rising edge → PlayMacro)
-        let (action, sup) = cd.update(&buttons_with(&[Button::L3, Button::R3, Button::A]));
+        let (action, sup) = cd.update(&buttons_with(&[Button::L3, Button::R3, Button::A]), &cfg);
         assert_eq!(action, ComboAction::PlayMacro);
         assert!(sup.buttons[..sup.count]
             .iter()
@@ -417,51 +411,64 @@ mod tests {
     #[test]
     fn test_instant_combo_stop_playback() {
         let mut cd = ComboDetector::new();
-        cd.update(&buttons_with(&[Button::L3, Button::R3]));
+        let cfg = default_config();
+        cd.update(&buttons_with(&[Button::L3, Button::R3]), &cfg);
 
-        let (action, _) = cd.update(&buttons_with(&[Button::L3, Button::R3, Button::B]));
+        let (action, _) = cd.update(&buttons_with(&[Button::L3, Button::R3, Button::B]), &cfg);
         assert_eq!(action, ComboAction::StopPlayback);
     }
 
     #[test]
     fn test_instant_combo_prev_next_slot() {
         let mut cd = ComboDetector::new();
-        cd.update(&buttons_with(&[Button::L3, Button::R3]));
+        let cfg = default_config();
+        cd.update(&buttons_with(&[Button::L3, Button::R3]), &cfg);
 
-        let (action, _) = cd.update(&buttons_with(&[Button::L3, Button::R3, Button::DpadLeft]));
+        let (action, _) = cd.update(
+            &buttons_with(&[Button::L3, Button::R3, Button::DpadLeft]),
+            &cfg,
+        );
         assert_eq!(action, ComboAction::PrevSlot);
 
         // Release DpadLeft
-        cd.update(&buttons_with(&[Button::L3, Button::R3]));
+        cd.update(&buttons_with(&[Button::L3, Button::R3]), &cfg);
 
-        let (action, _) = cd.update(&buttons_with(&[Button::L3, Button::R3, Button::DpadRight]));
+        let (action, _) = cd.update(
+            &buttons_with(&[Button::L3, Button::R3, Button::DpadRight]),
+            &cfg,
+        );
         assert_eq!(action, ComboAction::NextSlot);
     }
 
     #[test]
     fn test_combo_not_retriggered_on_hold() {
         let mut cd = ComboDetector::new();
-        cd.update(&buttons_with(&[Button::L3, Button::R3]));
+        let cfg = default_config();
+        cd.update(&buttons_with(&[Button::L3, Button::R3]), &cfg);
 
         // First press: triggers
-        let (action, _) = cd.update(&buttons_with(&[Button::L3, Button::R3, Button::A]));
+        let (action, _) = cd.update(&buttons_with(&[Button::L3, Button::R3, Button::A]), &cfg);
         assert_eq!(action, ComboAction::PlayMacro);
 
         // Held: doesn't retrigger
-        let (action, _) = cd.update(&buttons_with(&[Button::L3, Button::R3, Button::A]));
+        let (action, _) = cd.update(&buttons_with(&[Button::L3, Button::R3, Button::A]), &cfg);
         assert_eq!(action, ComboAction::None);
     }
 
     #[test]
     fn test_toggle_recording_in_macro_mode() {
         let mut cd = ComboDetector::new();
+        let cfg = default_config();
         cd.macro_mode = true;
 
         // L3+R3 first (no combo button)
-        cd.update(&buttons_with(&[Button::L3, Button::R3]));
+        cd.update(&buttons_with(&[Button::L3, Button::R3]), &cfg);
 
         // L3+R3+Minus rising edge in macro mode → ToggleRecording
-        let (action, sup) = cd.update(&buttons_with(&[Button::L3, Button::R3, Button::Minus]));
+        let (action, sup) = cd.update(
+            &buttons_with(&[Button::L3, Button::R3, Button::Minus]),
+            &cfg,
+        );
         assert_eq!(action, ComboAction::ToggleRecording);
         assert!(sup.buttons[..sup.count]
             .iter()
@@ -471,50 +478,72 @@ mod tests {
     #[test]
     fn test_no_recording_without_macro_mode() {
         let mut cd = ComboDetector::new();
+        let cfg = default_config();
         assert!(!cd.macro_mode);
 
-        cd.update(&buttons_with(&[Button::L3, Button::R3]));
+        cd.update(&buttons_with(&[Button::L3, Button::R3]), &cfg);
 
         // L3+R3+Minus without macro mode → no recording (button suppressed but no action)
-        let (action, _) = cd.update(&buttons_with(&[Button::L3, Button::R3, Button::Minus]));
+        let (action, _) = cd.update(
+            &buttons_with(&[Button::L3, Button::R3, Button::Minus]),
+            &cfg,
+        );
         assert_eq!(action, ComboAction::None);
     }
 
     #[test]
     fn test_dpad_down_hold_toggle() {
         let mut cd = ComboDetector::new();
+        let cfg = default_config();
 
         // Hold L3+R3+DpadDown for > 0.5s
-        cd.update(&buttons_with(&[Button::L3, Button::R3, Button::DpadDown]));
+        cd.update(
+            &buttons_with(&[Button::L3, Button::R3, Button::DpadDown]),
+            &cfg,
+        );
 
         // Sleep just over the hold duration
         std::thread::sleep(std::time::Duration::from_millis(550));
 
-        let (action, _) = cd.update(&buttons_with(&[Button::L3, Button::R3, Button::DpadDown]));
+        let (action, _) = cd.update(
+            &buttons_with(&[Button::L3, Button::R3, Button::DpadDown]),
+            &cfg,
+        );
         assert_eq!(action, ComboAction::ToggleMacroMode);
     }
 
     #[test]
     fn test_dpad_down_short_press_no_toggle() {
         let mut cd = ComboDetector::new();
+        let cfg = default_config();
 
         // Press briefly
-        cd.update(&buttons_with(&[Button::L3, Button::R3, Button::DpadDown]));
+        cd.update(
+            &buttons_with(&[Button::L3, Button::R3, Button::DpadDown]),
+            &cfg,
+        );
         std::thread::sleep(std::time::Duration::from_millis(100));
-        let (action, _) = cd.update(&buttons_with(&[Button::L3, Button::R3, Button::DpadDown]));
+        let (action, _) = cd.update(
+            &buttons_with(&[Button::L3, Button::R3, Button::DpadDown]),
+            &cfg,
+        );
         assert_eq!(action, ComboAction::None);
     }
 
     #[test]
     fn test_edge_trigger_mode_instant_toggle() {
         let mut cd = ComboDetector::new();
-        cd.toggle_macro_mode_trigger = TriggerMode::Edge;
+        let mut cfg = default_config();
+        cfg.toggle_macro_mode_trigger = TriggerMode::Edge;
 
         // First frame: L3+R3 (no combo button)
-        cd.update(&buttons_with(&[Button::L3, Button::R3]));
+        cd.update(&buttons_with(&[Button::L3, Button::R3]), &cfg);
 
         // Second frame: L3+R3+DpadDown rising edge → instant ToggleMacroMode
-        let (action, sup) = cd.update(&buttons_with(&[Button::L3, Button::R3, Button::DpadDown]));
+        let (action, sup) = cd.update(
+            &buttons_with(&[Button::L3, Button::R3, Button::DpadDown]),
+            &cfg,
+        );
         assert_eq!(action, ComboAction::ToggleMacroMode);
         assert!(sup.buttons[..sup.count]
             .iter()
@@ -524,16 +553,23 @@ mod tests {
     #[test]
     fn test_edge_trigger_mode_no_retrigger_on_hold() {
         let mut cd = ComboDetector::new();
-        cd.toggle_macro_mode_trigger = TriggerMode::Edge;
+        let mut cfg = default_config();
+        cfg.toggle_macro_mode_trigger = TriggerMode::Edge;
 
-        cd.update(&buttons_with(&[Button::L3, Button::R3]));
+        cd.update(&buttons_with(&[Button::L3, Button::R3]), &cfg);
 
         // First press: triggers
-        let (action, _) = cd.update(&buttons_with(&[Button::L3, Button::R3, Button::DpadDown]));
+        let (action, _) = cd.update(
+            &buttons_with(&[Button::L3, Button::R3, Button::DpadDown]),
+            &cfg,
+        );
         assert_eq!(action, ComboAction::ToggleMacroMode);
 
         // Held: doesn't retrigger
-        let (action, _) = cd.update(&buttons_with(&[Button::L3, Button::R3, Button::DpadDown]));
+        let (action, _) = cd.update(
+            &buttons_with(&[Button::L3, Button::R3, Button::DpadDown]),
+            &cfg,
+        );
         assert_eq!(action, ComboAction::None);
     }
 
@@ -575,19 +611,21 @@ mod tests {
     #[test]
     fn test_recording_not_triggered_with_combo_button() {
         let mut cd = ComboDetector::new();
+        let cfg = default_config();
         cd.macro_mode = true;
 
         // L3+R3+A: should NOT trigger recording (A takes priority)
-        let (action, _) = cd.update(&buttons_with(&[Button::L3, Button::R3, Button::A]));
+        let (action, _) = cd.update(&buttons_with(&[Button::L3, Button::R3, Button::A]), &cfg);
         assert_eq!(action, ComboAction::PlayMacro);
     }
 
     #[test]
     fn test_instant_combo_toggle_loop() {
         let mut cd = ComboDetector::new();
-        cd.update(&buttons_with(&[Button::L3, Button::R3]));
+        let cfg = default_config();
+        cd.update(&buttons_with(&[Button::L3, Button::R3]), &cfg);
 
-        let (action, sup) = cd.update(&buttons_with(&[Button::L3, Button::R3, Button::Y]));
+        let (action, sup) = cd.update(&buttons_with(&[Button::L3, Button::R3, Button::Y]), &cfg);
         assert_eq!(action, ComboAction::ToggleLoop);
         assert!(sup.buttons[..sup.count]
             .iter()
@@ -597,9 +635,13 @@ mod tests {
     #[test]
     fn test_instant_combo_cycle_speed() {
         let mut cd = ComboDetector::new();
-        cd.update(&buttons_with(&[Button::L3, Button::R3]));
+        let cfg = default_config();
+        cd.update(&buttons_with(&[Button::L3, Button::R3]), &cfg);
 
-        let (action, sup) = cd.update(&buttons_with(&[Button::L3, Button::R3, Button::DpadUp]));
+        let (action, sup) = cd.update(
+            &buttons_with(&[Button::L3, Button::R3, Button::DpadUp]),
+            &cfg,
+        );
         assert_eq!(action, ComboAction::CycleSpeed);
         assert!(sup.buttons[..sup.count]
             .iter()

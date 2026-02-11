@@ -6,6 +6,7 @@
 mod bt;
 mod calibration;
 mod combo;
+mod config;
 mod input;
 mod led;
 mod macro_engine;
@@ -127,7 +128,7 @@ async fn main() -> anyhow::Result<()> {
                 break; // sender dropped
             }
             let snapshot = state_rx.borrow_and_update().clone();
-            let interval_ms = snapshot.ui_update_interval_ms;
+            let interval_ms = snapshot.config.ui_update_interval_ms;
             let msg = serde_json::json!({
                 "type": "state_update",
                 "state": snapshot,
@@ -333,7 +334,7 @@ fn usb_processing_loop(
 ) -> mpsc::Receiver<MacroCommand> {
     let mut combo = ComboDetector::new();
     let mut ctrl = MacroController::new(macros_dir);
-    ctrl.calibration_samples = calibration_samples.load(Ordering::Relaxed);
+    ctrl.config.calibration_samples = calibration_samples.load(Ordering::Relaxed);
     let mut usb_check_counter: u32 = 0;
 
     let broadcast_macros = |broadcast: &broadcast::Sender<String>, dir: &std::path::Path| {
@@ -363,25 +364,13 @@ fn usb_processing_loop(
         // --- Drain web command queue ---
         while let Ok(web_cmd) = cmd_rx.try_recv() {
             let effect = ctrl.execute(web_cmd);
-            // Keep combo detector in sync with controller state
+            // Keep combo detector in sync with controller's macro mode
             combo.macro_mode = ctrl.macro_mode;
-            combo.hold_duration = ctrl.combo_hold_time;
-            combo.play_macro_button = ctrl.play_macro_button;
-            combo.stop_playback_button = ctrl.stop_playback_button;
-            combo.toggle_macro_mode_button = ctrl.toggle_macro_mode_button;
-            combo.toggle_loop_button = ctrl.toggle_loop_button;
-            combo.cycle_speed_button = ctrl.cycle_speed_button;
-            combo.prev_slot_button = ctrl.prev_slot_button;
-            combo.next_slot_button = ctrl.next_slot_button;
-            combo.toggle_recording_button = ctrl.toggle_recording_button;
-            combo.base_combo_button_1 = ctrl.base_combo_button_1;
-            combo.base_combo_button_2 = ctrl.base_combo_button_2;
-            combo.toggle_macro_mode_trigger = ctrl.toggle_macro_mode_trigger;
             // Sync stick deadzone to calibrators
-            main_cal.deadzone = ctrl.stick_deadzone;
-            c_cal.deadzone = ctrl.stick_deadzone;
+            main_cal.deadzone = ctrl.config.stick_deadzone;
+            c_cal.deadzone = ctrl.config.stick_deadzone;
             // Sync calibration samples for next USB reconnect
-            calibration_samples.store(ctrl.calibration_samples, Ordering::Relaxed);
+            calibration_samples.store(ctrl.config.calibration_samples, Ordering::Relaxed);
             apply_effect(
                 effect,
                 &state_broadcast,
@@ -421,7 +410,7 @@ fn usb_processing_loop(
 
                 // Check for abort combo on live input
                 let live_parsed = parse_hid_report(&raw_report);
-                let (action, _) = combo.update(&live_parsed.buttons);
+                let (action, _) = combo.update(&live_parsed.buttons, &ctrl.config);
                 if action == ComboAction::StopPlayback {
                     let effect = ctrl.execute(MacroCommand::StopPlayback);
                     apply_effect(
@@ -459,7 +448,7 @@ fn usb_processing_loop(
         let mut parsed = parse_hid_report(&raw_report);
 
         // --- Combo detection ---
-        let (action, suppressed) = combo.update(&parsed.buttons);
+        let (action, suppressed) = combo.update(&parsed.buttons, &ctrl.config);
 
         // --- Handle combo actions ---
         if let Some(cmd) = Option::from(action) {
@@ -537,26 +526,6 @@ fn update_state(
         playback_frame_count: ctrl.player.frame_count(),
         playback_input: playback_input.map(PlaybackInput::from_input_state),
         live_input: live_input.map(PlaybackInput::from_input_state),
-        stick_deadzone: ctrl.stick_deadzone,
-        combo_hold_time: ctrl.combo_hold_time,
-        auto_loop_default: ctrl.auto_loop_default,
-        playback_speed_default: ctrl.playback_speed_default,
-        playback_start_delay: ctrl.playback_start_delay,
-        loop_restart_delay: ctrl.loop_restart_delay,
-        recording_trim_end: ctrl.recording_trim_end,
-        recording_start_delay: ctrl.recording_start_delay,
-        ui_update_interval_ms: ctrl.ui_update_interval_ms,
-        calibration_samples: ctrl.calibration_samples,
-        play_macro_button: ctrl.play_macro_button.display_name().to_string(),
-        stop_playback_button: ctrl.stop_playback_button.display_name().to_string(),
-        toggle_macro_mode_button: ctrl.toggle_macro_mode_button.display_name().to_string(),
-        toggle_loop_button: ctrl.toggle_loop_button.display_name().to_string(),
-        cycle_speed_button: ctrl.cycle_speed_button.display_name().to_string(),
-        prev_slot_button: ctrl.prev_slot_button.display_name().to_string(),
-        next_slot_button: ctrl.next_slot_button.display_name().to_string(),
-        toggle_recording_button: ctrl.toggle_recording_button.display_name().to_string(),
-        base_combo_button_1: ctrl.base_combo_button_1.display_name().to_string(),
-        base_combo_button_2: ctrl.base_combo_button_2.display_name().to_string(),
-        toggle_macro_mode_trigger: ctrl.toggle_macro_mode_trigger.as_str().to_string(),
+        config: ctrl.config.clone(),
     });
 }

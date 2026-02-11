@@ -3,6 +3,7 @@
 use serde::Serialize;
 use tokio::sync::watch;
 
+use crate::config::Config;
 use crate::input::{Button, InputState};
 
 const ALL_BUTTONS: [(Button, &str); 18] = [
@@ -76,27 +77,9 @@ pub struct StateSnapshot {
     pub playback_frame_count: usize,
     pub playback_input: Option<PlaybackInput>,
     pub live_input: Option<PlaybackInput>,
-    pub stick_deadzone: f64,
-    pub combo_hold_time: f64,
-    pub auto_loop_default: bool,
-    pub playback_speed_default: f64,
-    pub playback_start_delay: f64,
-    pub loop_restart_delay: f64,
-    pub recording_trim_end: f64,
-    pub recording_start_delay: f64,
-    pub ui_update_interval_ms: u64,
-    pub calibration_samples: u32,
-    pub play_macro_button: String,
-    pub stop_playback_button: String,
-    pub toggle_macro_mode_button: String,
-    pub toggle_loop_button: String,
-    pub cycle_speed_button: String,
-    pub prev_slot_button: String,
-    pub next_slot_button: String,
-    pub toggle_recording_button: String,
-    pub base_combo_button_1: String,
-    pub base_combo_button_2: String,
-    pub toggle_macro_mode_trigger: String,
+    // Config is flattened into the JSON so the web UI sees the same field names
+    #[serde(flatten)]
+    pub config: Config,
 }
 
 impl Default for StateSnapshot {
@@ -117,49 +100,7 @@ impl Default for StateSnapshot {
             playback_frame_count: 0,
             playback_input: None,
             live_input: None,
-            stick_deadzone: crate::calibration::DEFAULT_DEADZONE,
-            combo_hold_time: crate::combo::DEFAULT_HOLD_DURATION,
-            auto_loop_default: false,
-            playback_speed_default: 1.0,
-            playback_start_delay: 0.0,
-            loop_restart_delay: 0.0,
-            recording_trim_end: 0.0,
-            recording_start_delay: 0.0,
-            ui_update_interval_ms: 200,
-            calibration_samples: 20,
-            play_macro_button: crate::combo::DEFAULT_PLAY_MACRO_BUTTON
-                .display_name()
-                .to_string(),
-            stop_playback_button: crate::combo::DEFAULT_STOP_PLAYBACK_BUTTON
-                .display_name()
-                .to_string(),
-            toggle_macro_mode_button: crate::combo::DEFAULT_TOGGLE_MACRO_MODE_BUTTON
-                .display_name()
-                .to_string(),
-            toggle_loop_button: crate::combo::DEFAULT_TOGGLE_LOOP_BUTTON
-                .display_name()
-                .to_string(),
-            cycle_speed_button: crate::combo::DEFAULT_CYCLE_SPEED_BUTTON
-                .display_name()
-                .to_string(),
-            prev_slot_button: crate::combo::DEFAULT_PREV_SLOT_BUTTON
-                .display_name()
-                .to_string(),
-            next_slot_button: crate::combo::DEFAULT_NEXT_SLOT_BUTTON
-                .display_name()
-                .to_string(),
-            toggle_recording_button: crate::combo::DEFAULT_TOGGLE_RECORDING_BUTTON
-                .display_name()
-                .to_string(),
-            base_combo_button_1: crate::combo::DEFAULT_BASE_COMBO_BUTTON_1
-                .display_name()
-                .to_string(),
-            base_combo_button_2: crate::combo::DEFAULT_BASE_COMBO_BUTTON_2
-                .display_name()
-                .to_string(),
-            toggle_macro_mode_trigger: crate::combo::DEFAULT_TOGGLE_MACRO_MODE_TRIGGER
-                .as_str()
-                .to_string(),
+            config: Config::default(),
         }
     }
 }
