@@ -10,294 +10,305 @@
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
   :root {
-    --bg: #2d2d2d; --surface: #3a3a3a; --card: #444;
+    --bg: #1a1a1a; --surface: #252525; --card: #2e2e2e; --card-hover: #353535;
     --accent: #e60012; --accent-hover: #c7000f;
-    --text: #f0f0f0; --muted: #999;
+    --text: #f0f0f0; --muted: #888; --muted-light: #aaa;
     --green: #49b84f; --red: #e60012; --yellow: #f5c518; --blue: #4a9bd9;
     --joycon-blue: #00c3e3; --joycon-red: #ff3c28;
-    --rail-width: 4px;
-    --radius: 16px; --radius-sm: 12px;
+    --rail-width: 3px;
+    --radius: 14px; --radius-sm: 10px;
+    --transport-height: 140px;
+    --header-height: 48px;
+    --safe-bottom: env(safe-area-inset-bottom, 0px);
   }
   html { font-size: 16px; }
   body {
     font-family: 'Nunito', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     background: var(--bg); color: var(--text);
-    min-height: 100vh;
-    padding: 0 var(--rail-width) 2rem;
-    padding: 0 var(--rail-width) calc(2rem + env(safe-area-inset-bottom, 0px));
+    min-height: 100vh; min-height: 100dvh;
     -webkit-tap-highlight-color: transparent;
+    overflow: hidden;
   }
-  .content-wrap {
-    max-width: 900px; margin: 0 auto;
-  }
-  /* Subtle diamond crosshatch pattern nod to SNES controller grip */
-  body::before {
-    content: ''; position: fixed; inset: 0; z-index: -1; opacity: 0.025;
-    background-image:
-      linear-gradient(45deg, #fff 25%, transparent 25%, transparent 75%, #fff 75%),
-      linear-gradient(45deg, #fff 25%, transparent 25%, transparent 75%, #fff 75%);
-    background-size: 20px 20px;
-    background-position: 0 0, 10px 10px;
-  }
-  /* Joy-Con rail accents — neon blue left, neon red right */
+  /* Joy-Con rail accents */
   body::after {
-    content: ''; position: fixed; inset: 0; z-index: 50; pointer-events: none;
+    content: ''; position: fixed; inset: 0; z-index: 200; pointer-events: none;
     border-left: var(--rail-width) solid var(--joycon-blue);
     border-right: var(--rail-width) solid var(--joycon-red);
   }
-  .status-bar {
-    position: sticky; top: 0; z-index: 100;
+
+  /* === HEADER BAR === */
+  .header {
+    position: fixed; top: 0; left: var(--rail-width); right: var(--rail-width);
+    z-index: 100; height: var(--header-height);
     display: flex; align-items: center; justify-content: space-between;
-    padding: 0.7rem 1rem; background: linear-gradient(180deg, #282828 0%, #1e1e1e 100%);
-    border-bottom: 3px solid transparent;
+    padding: 0 0.8rem;
+    background: linear-gradient(180deg, #222 0%, #1a1a1a 100%);
+    border-bottom: 2px solid transparent;
     border-image: linear-gradient(to right, var(--joycon-blue), var(--accent) 50%, var(--joycon-red)) 1;
-    box-shadow: 0 2px 12px rgba(0,0,0,0.4);
+    box-shadow: 0 2px 12px rgba(0,0,0,0.5);
   }
-  .status-bar h1 {
-    font-size: 1.05rem; font-weight: 800; letter-spacing: 0.03em;
-    color: var(--text);
+  .header h1 {
+    font-size: 0.95rem; font-weight: 800; letter-spacing: 0.03em;
+    white-space: nowrap;
   }
-  .status-pills { display: flex; gap: 0.4rem; flex-wrap: wrap; justify-content: flex-end; }
-  .status-pill {
-    display: flex; align-items: center; gap: 0.3rem;
-    font-size: 0.7rem; font-weight: 700; color: var(--muted); padding: 0.2rem 0.55rem;
-    background: rgba(255,255,255,0.07); border-radius: 20px;
-  }
-  .status-dot {
-    width: 8px; height: 8px; border-radius: 50%;
-    display: inline-block; transition: background 0.3s, box-shadow 0.3s;
-  }
-  .status-dot.green { background: var(--green); box-shadow: 0 0 8px rgba(73,184,79,0.6); }
-  .status-dot.red { background: var(--red); }
-  .status-dot.yellow { background: var(--yellow); box-shadow: 0 0 8px rgba(245,197,24,0.5); }
-  .section {
-    margin: 0.6rem 0.75rem; padding: 1rem;
-    background: var(--surface); border-radius: var(--radius);
-    border: 1px solid rgba(255,255,255,0.06);
-    border-left: 2px solid rgba(0,195,227,0.2);
-    border-right: 2px solid rgba(255,60,40,0.2);
-    box-shadow: 0 2px 8px rgba(0,0,0,0.15);
-  }
-  .section-title {
-    font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.12em;
-    color: var(--muted); margin-bottom: 0.7rem; font-weight: 800;
-    display: flex; align-items: center; gap: 0.4rem;
-  }
-  .section-title::before {
-    content: ''; display: inline-block; width: 3px; height: 0.9em;
-    background: var(--accent); border-radius: 2px;
-  }
-  .btn {
-    display: inline-flex; align-items: center; justify-content: center;
-    border: none; border-radius: var(--radius-sm); cursor: pointer;
-    font-family: 'Nunito', sans-serif;
-    font-size: 0.9rem; font-weight: 700; color: #fff;
-    padding: 0.7rem 1.2rem; min-height: 46px;
-    transition: opacity 0.15s, transform 0.1s, box-shadow 0.15s;
-    -webkit-user-select: none; user-select: none;
-    box-shadow: 0 3px 0 rgba(0,0,0,0.25);
-    position: relative;
-  }
-  .btn:active { transform: translateY(3px); box-shadow: 0 0 0 rgba(0,0,0,0.25); }
-  .btn:disabled { opacity: 0.35; pointer-events: none; }
-  .btn-accent { background: var(--accent); }
-  .btn-green { background: var(--green); }
-  .btn-blue { background: var(--blue); }
-  .btn-yellow { background: var(--yellow); color: #222; }
-  .btn-dark { background: rgba(255,255,255,0.1); box-shadow: 0 3px 0 rgba(0,0,0,0.15); }
-  .btn-red { background: var(--red); }
-  .toggle-status {
-    font-size: 0.8rem; padding: 0.3rem 0.9rem; border-radius: 20px; font-weight: 800;
-    letter-spacing: 0.03em;
-  }
-  .toggle-status.on { background: var(--green); color: #fff; }
-  .toggle-status.off { background: rgba(255,255,255,0.1); color: var(--muted); }
-  /* Home-button style toggle */
-  .btn-home {
-    width: 52px; height: 52px; border-radius: 50%; padding: 0;
-    display: inline-flex; align-items: center; justify-content: center;
-    background: #333; border: 2px solid rgba(255,255,255,0.1);
-    box-shadow: 0 3px 0 rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.06);
-    min-height: unset;
-  }
-  .btn-home:active { transform: translateY(3px); box-shadow: 0 0 0 rgba(0,0,0,0.3); }
-  /* D-pad style nav buttons */
-  .dpad-btn {
-    width: 50px; height: 50px; border-radius: 4px; font-size: 1.1rem;
-    background: #333; border: 2px solid rgba(255,255,255,0.08);
-    box-shadow: 0 3px 0 rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.06);
-    position: relative;
-  }
-  .dpad-btn::after {
-    content: ''; position: absolute; inset: 6px; border-radius: 2px;
-    border: 1px solid rgba(255,255,255,0.04);
-  }
-  .dpad-btn:active { transform: translateY(3px); box-shadow: 0 0 0 rgba(0,0,0,0.35); }
-  .slot-num { font-size: 1.6rem; font-weight: 900; letter-spacing: -0.02em; }
-  .slot-name {
-    font-size: 0.85rem; color: var(--muted); font-weight: 600;
-    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-  }
-  /* Power LED indicator */
   .power-led {
     width: 6px; height: 6px; border-radius: 50%; display: inline-block;
     background: var(--green); box-shadow: 0 0 6px rgba(73,184,79,0.7);
-    margin-right: 0.5rem; vertical-align: middle;
+    margin-right: 0.4rem; vertical-align: middle;
     animation: led-breathe 3s ease-in-out infinite;
   }
   @keyframes led-breathe {
     0%, 100% { opacity: 0.7; box-shadow: 0 0 4px rgba(73,184,79,0.5); }
     50% { opacity: 1; box-shadow: 0 0 10px rgba(73,184,79,0.9); }
   }
-  .speed-row { display: flex; gap: 0.4rem; }
-  .speed-row .btn {
-    flex: 1; padding: 0.5rem 0.3rem; font-size: 0.78rem; min-height: 38px;
-    border-radius: 20px; font-weight: 800;
+  .status-pills { display: flex; gap: 0.3rem; }
+  .status-pill {
+    display: flex; align-items: center; gap: 0.25rem;
+    font-size: 0.65rem; font-weight: 700; color: var(--muted); padding: 0.15rem 0.45rem;
+    background: rgba(255,255,255,0.06); border-radius: 20px;
   }
-  .speed-row .btn.active { background: var(--blue); box-shadow: 0 3px 0 rgba(0,0,0,0.25); }
-  /* Face-button style circular action buttons */
+  .status-dot {
+    width: 7px; height: 7px; border-radius: 50%;
+    display: inline-block; transition: background 0.3s, box-shadow 0.3s;
+  }
+  .status-dot.green { background: var(--green); box-shadow: 0 0 6px rgba(73,184,79,0.6); }
+  .status-dot.red { background: var(--red); }
+  .status-dot.yellow { background: var(--yellow); box-shadow: 0 0 6px rgba(245,197,24,0.5); }
+
+  /* === MAIN SCROLLABLE AREA === */
+  .main-scroll {
+    position: fixed;
+    top: var(--header-height);
+    left: var(--rail-width); right: var(--rail-width);
+    bottom: calc(var(--transport-height) + var(--safe-bottom));
+    overflow-y: auto; overflow-x: hidden;
+    -webkit-overflow-scrolling: touch;
+    scroll-behavior: smooth;
+  }
+  .main-content {
+    padding: 0.5rem 0.6rem 1rem;
+    max-width: 1400px; margin: 0 auto;
+  }
+
+  /* === TAB BAR (below header on mobile) === */
+  .tab-bar {
+    display: flex; gap: 0; padding: 0;
+    background: var(--surface); border-radius: var(--radius-sm);
+    margin-bottom: 0.6rem; overflow: hidden;
+    border: 1px solid rgba(255,255,255,0.06);
+  }
+  .tab-btn {
+    flex: 1; padding: 0.55rem 0.4rem; border: none; cursor: pointer;
+    font-family: 'Nunito', sans-serif; font-size: 0.72rem; font-weight: 700;
+    color: var(--muted); background: transparent;
+    transition: color 0.15s, background 0.15s;
+    text-transform: uppercase; letter-spacing: 0.06em;
+    position: relative;
+  }
+  .tab-btn.active {
+    color: var(--text); background: rgba(255,255,255,0.08);
+  }
+  .tab-btn.active::after {
+    content: ''; position: absolute; bottom: 0; left: 20%; right: 20%;
+    height: 2px; background: var(--accent); border-radius: 2px 2px 0 0;
+  }
+
+  /* === TAB PANELS === */
+  .tab-panel { display: none; }
+  .tab-panel.active { display: block; }
+
+  /* === PLAYLIST / MACRO LIST === */
+  .playlist { display: flex; flex-direction: column; gap: 2px; }
+  .playlist-empty {
+    text-align: center; padding: 3rem 1rem; color: var(--muted);
+  }
+  .playlist-empty-icon { font-size: 2.5rem; opacity: 0.3; display: block; margin-bottom: 0.5rem; }
+  .playlist-empty-text { font-size: 0.9rem; font-weight: 600; }
+  .playlist-empty-hint { font-size: 0.75rem; color: rgba(255,255,255,0.2); margin-top: 0.3rem; }
+
+  .playlist-item {
+    display: flex; align-items: center; gap: 0.6rem;
+    padding: 0.65rem 0.7rem;
+    background: var(--card); border-radius: var(--radius-sm);
+    cursor: pointer; transition: background 0.15s;
+    border: 2px solid transparent;
+    position: relative;
+    -webkit-user-select: none; user-select: none;
+    min-height: 60px;
+  }
+  .playlist-item:active { background: var(--card-hover); }
+  .playlist-item.selected {
+    border-color: rgba(74,155,217,0.4);
+    background: rgba(74,155,217,0.08);
+  }
+  .playlist-item.playing {
+    border-color: rgba(73,184,79,0.4);
+    background: rgba(73,184,79,0.08);
+  }
+  .playlist-item.playing .playlist-item-num {
+    color: var(--green);
+  }
+
+  .playlist-item-num {
+    font-size: 0.8rem; font-weight: 800; color: var(--muted);
+    min-width: 1.8rem; text-align: center; flex-shrink: 0;
+  }
+  .playlist-item-color {
+    width: 3px; height: 32px; border-radius: 2px; flex-shrink: 0;
+  }
+  .playlist-item-color.c0 { background: var(--green); }
+  .playlist-item-color.c1 { background: var(--red); }
+  .playlist-item-color.c2 { background: var(--blue); }
+  .playlist-item-color.c3 { background: var(--yellow); }
+
+  .playlist-item-info { flex: 1; min-width: 0; }
+  .playlist-item-name {
+    font-size: 0.88rem; font-weight: 700; line-height: 1.2;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .playlist-item-meta {
+    font-size: 0.68rem; color: var(--muted); font-weight: 600;
+    display: flex; gap: 0.5rem; margin-top: 0.15rem;
+  }
+
+  .playlist-item-playing-badge {
+    display: inline-flex; align-items: center; gap: 0.25rem;
+    font-size: 0.6rem; font-weight: 800; color: var(--green);
+    letter-spacing: 0.06em; text-transform: uppercase;
+  }
+  .playlist-item-playing-badge::before {
+    content: ''; display: inline-block; width: 5px; height: 5px;
+    border-radius: 50%; background: var(--green); animation: pulse 1s infinite;
+  }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
+
+  /* Equalizer bars animation for playing item */
+  .eq-bars { display: flex; gap: 2px; align-items: flex-end; height: 16px; flex-shrink: 0; }
+  .eq-bars .bar {
+    width: 3px; border-radius: 1px; background: var(--green);
+    animation: eq-bounce 0.8s ease-in-out infinite;
+  }
+  .eq-bars .bar:nth-child(1) { height: 40%; animation-delay: 0s; }
+  .eq-bars .bar:nth-child(2) { height: 70%; animation-delay: 0.15s; }
+  .eq-bars .bar:nth-child(3) { height: 50%; animation-delay: 0.3s; }
+  .eq-bars .bar:nth-child(4) { height: 90%; animation-delay: 0.1s; }
+  @keyframes eq-bounce {
+    0%, 100% { transform: scaleY(0.3); } 50% { transform: scaleY(1); }
+  }
+
+  .playlist-item-actions {
+    display: flex; gap: 0.2rem; flex-shrink: 0;
+  }
+  .playlist-action-btn {
+    width: 36px; height: 36px; border: none; border-radius: 50%; cursor: pointer;
+    background: rgba(255,255,255,0.06); color: var(--muted);
+    font-size: 0.8rem; display: flex; align-items: center; justify-content: center;
+    transition: background 0.15s, color 0.15s;
+    font-family: 'Nunito', sans-serif; font-weight: 700;
+  }
+  .playlist-action-btn:active { background: rgba(255,255,255,0.12); }
+  .playlist-action-btn.del { color: var(--red); }
+  .playlist-action-btn.del:active { background: rgba(230,0,18,0.15); }
+
+  /* === CONTROLS PANEL (mode, recording, controller) === */
+  .controls-panel { padding: 0.3rem 0; }
+  .control-card {
+    background: var(--card); border-radius: var(--radius-sm);
+    padding: 0.8rem; margin-bottom: 0.5rem;
+    border: 1px solid rgba(255,255,255,0.05);
+  }
+  .control-card-title {
+    font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.1em;
+    color: var(--muted); font-weight: 800; margin-bottom: 0.5rem;
+    display: flex; align-items: center; gap: 0.3rem;
+  }
+  .control-card-title::before {
+    content: ''; display: inline-block; width: 3px; height: 0.8em;
+    background: var(--accent); border-radius: 2px;
+  }
+
+  .mode-rec-row {
+    display: flex; align-items: center; gap: 0.8rem; flex-wrap: wrap;
+  }
+  .control-group {
+    display: flex; align-items: center; gap: 0.5rem;
+  }
+  .control-label {
+    font-size: 0.85rem; font-weight: 700;
+  }
+  .control-inline {
+    display: flex; align-items: center; gap: 0.5rem;
+  }
+  .controls-divider {
+    width: 1px; height: 32px; background: rgba(255,255,255,0.08); flex-shrink: 0;
+  }
+
+  /* Switch-style slide toggle */
+  .switch-toggle {
+    width: 52px; height: 28px; border-radius: 14px; padding: 2px;
+    background: rgba(255,255,255,0.1); border: none; cursor: pointer;
+    position: relative; transition: background 0.25s ease;
+    box-shadow: inset 0 1px 3px rgba(0,0,0,0.3);
+    -webkit-tap-highlight-color: transparent;
+  }
+  .switch-toggle.on { background: var(--green); }
+  .switch-toggle .knob {
+    width: 24px; height: 24px; border-radius: 50%;
+    background: #fff; display: block;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.3);
+    transition: transform 0.25s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  .switch-toggle.on .knob { transform: translateX(24px); }
+
+  .toggle-status {
+    font-size: 0.72rem; padding: 0.2rem 0.7rem; border-radius: 20px; font-weight: 800;
+    letter-spacing: 0.03em;
+  }
+  .toggle-status.on { background: var(--green); color: #fff; }
+  .toggle-status.off { background: rgba(255,255,255,0.08); color: var(--muted); }
+
   .btn-face {
-    width: 62px; height: 62px; border-radius: 50%; padding: 0;
-    font-size: 0.85rem; font-weight: 900; letter-spacing: 0.04em;
-    border: 2.5px solid rgba(255,255,255,0.12);
-    box-shadow: 0 4px 0 rgba(0,0,0,0.3), 0 0 0 3px rgba(0,0,0,0.15), inset 0 1px 1px rgba(255,255,255,0.15);
+    display: inline-flex; align-items: center; justify-content: center;
+    border: none; border-radius: 50%; cursor: pointer;
+    font-family: 'Nunito', sans-serif; font-weight: 900; color: #fff;
+    border: 2px solid rgba(255,255,255,0.1);
+    box-shadow: 0 3px 0 rgba(0,0,0,0.3), inset 0 1px 1px rgba(255,255,255,0.1);
     text-shadow: 0 1px 2px rgba(0,0,0,0.3);
-    min-height: unset;
+    transition: transform 0.1s, box-shadow 0.1s, background 0.2s;
+    -webkit-user-select: none; user-select: none;
   }
   .btn-face:active {
-    transform: translateY(4px);
-    box-shadow: 0 0 0 rgba(0,0,0,0.3), 0 0 0 3px rgba(0,0,0,0.15), inset 0 2px 3px rgba(0,0,0,0.3);
+    transform: translateY(3px);
+    box-shadow: 0 0 0 rgba(0,0,0,0.3), inset 0 2px 3px rgba(0,0,0,0.3);
   }
-  /* Plus/Minus shaped speed buttons */
-  .speed-row .btn.pm-btn {
-    position: relative; min-width: 42px;
+  .btn-face:disabled { opacity: 0.35; pointer-events: none; }
+  .rec-btn {
+    width: 46px; height: 46px; font-size: 0.65rem;
+    background: var(--accent); letter-spacing: 0.04em;
   }
+  .rec-btn.recording {
+    background: var(--yellow); color: #222;
+    animation: rec-ring 1.2s ease-in-out infinite;
+  }
+  @keyframes rec-ring {
+    0%, 100% { box-shadow: 0 3px 0 rgba(0,0,0,0.3), inset 0 1px 1px rgba(255,255,255,0.1), 0 0 0 0 rgba(230,0,18,0); }
+    50% { box-shadow: 0 3px 0 rgba(0,0,0,0.3), inset 0 1px 1px rgba(255,255,255,0.1), 0 0 0 8px rgba(230,0,18,0.2); }
+  }
+
   .rec-status {
-    display: inline-block; padding: 0.25rem 0.6rem; border-radius: 20px;
-    font-size: 0.75rem; font-weight: 800; margin-left: 0.5rem;
-    letter-spacing: 0.08em;
+    display: inline-block; padding: 0.2rem 0.5rem; border-radius: 20px;
+    font-size: 0.68rem; font-weight: 800; letter-spacing: 0.08em;
   }
   .rec-status.active { background: var(--red); animation: pulse 1s infinite; }
   .rec-status.countdown { background: var(--yellow); color: #000; animation: pulse 0.5s infinite; }
-  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.5; } }
-  .progress-bar-outer {
-    width: 100%; height: 6px; background: rgba(255,255,255,0.08);
-    border-radius: 3px; overflow: hidden; margin-bottom: 0.3rem;
+  .controls-section.recording-active .control-card:first-child {
+    border-color: rgba(230,0,18,0.25);
   }
-  .progress-bar-inner {
-    height: 100%; border-radius: 3px;
-    background: linear-gradient(to right, var(--joycon-blue), var(--accent), var(--joycon-red));
-    transition: width 0.15s linear; width: 0%;
-  }
-  .progress-label { font-size: 0.7rem; color: var(--muted); font-weight: 700; text-align: center; }
-  /* Switch Home Screen macro tiles */
-  .macro-list-grid {
-    display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
-    gap: 0.6rem; padding: 0.2rem 0;
-  }
-  .macro-tile {
-    position: relative; border-radius: var(--radius-sm);
-    background: var(--card); overflow: hidden; cursor: pointer;
-    transition: transform 0.18s cubic-bezier(0.22, 1, 0.36, 1),
-                box-shadow 0.18s ease, border-color 0.18s ease;
-    border: 2px solid rgba(255,255,255,0.06);
-    box-shadow: 0 2px 6px rgba(0,0,0,0.2);
-    -webkit-user-select: none; user-select: none;
-  }
-  .macro-tile:active { transform: scale(0.96); }
-  .macro-tile.selected {
-    border-color: var(--joycon-blue);
-    box-shadow: 0 0 0 2px rgba(0,195,227,0.35), 0 4px 16px rgba(0,195,227,0.15);
-  }
-  /* Color accent strip at top of each tile — cycles through face button colors */
-  .macro-tile-accent {
-    height: 4px; width: 100%;
-  }
-  .macro-tile-accent.color-0 { background: var(--green); }
-  .macro-tile-accent.color-1 { background: var(--red); }
-  .macro-tile-accent.color-2 { background: var(--blue); }
-  .macro-tile-accent.color-3 { background: var(--yellow); }
-  .macro-tile-body {
-    padding: 0.65rem 0.6rem 0.5rem;
-  }
-  .macro-tile-slot {
-    font-size: 0.6rem; font-weight: 800; text-transform: uppercase;
-    letter-spacing: 0.1em; color: var(--muted); margin-bottom: 0.2rem;
-  }
-  .macro-tile-name {
-    font-size: 0.85rem; font-weight: 700; line-height: 1.2;
-    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-    margin-bottom: 0.35rem;
-  }
-  .macro-tile-meta {
-    font-size: 0.68rem; color: var(--muted); font-weight: 600;
-    display: flex; gap: 0.4rem; align-items: center;
-  }
-  .macro-tile-meta span { white-space: nowrap; }
-  .macro-tile-actions {
-    display: flex; border-top: 1px solid rgba(255,255,255,0.06);
-  }
-  .macro-tile-actions .tile-btn {
-    flex: 1; padding: 0.55rem 0; border: none; cursor: pointer;
-    font-family: 'Nunito', sans-serif; font-size: 0.75rem; font-weight: 700;
-    background: transparent; color: var(--muted);
-    transition: background 0.15s, color 0.15s;
-    -webkit-tap-highlight-color: transparent;
-    min-height: 44px;
-  }
-  .macro-tile-actions .tile-btn + .tile-btn {
-    border-left: 1px solid rgba(255,255,255,0.06);
-  }
-  .macro-tile-actions .tile-btn:active { background: rgba(255,255,255,0.08); }
-  .macro-tile-actions .tile-btn.tile-btn-del { color: var(--red); }
-  .macro-tile-actions .tile-btn.tile-btn-del:active { background: rgba(230,0,18,0.12); }
-  .empty-msg {
-    color: var(--muted); font-size: 0.9rem; font-weight: 600;
-    text-align: center; padding: 2rem 1rem;
-  }
-  .empty-icon {
-    display: block; font-size: 2.2rem; margin-bottom: 0.5rem;
-    opacity: 0.35; filter: grayscale(0.5);
-  }
-  .empty-hint {
-    font-size: 0.75rem; margin-top: 0.3rem; color: rgba(255,255,255,0.25);
-  }
-  .modal-overlay {
-    display: none; position: fixed; inset: 0; z-index: 200;
-    background: rgba(0,0,0,0.7); align-items: center; justify-content: center;
-  }
-  .modal-overlay.show { display: flex; }
-  .modal {
-    background: var(--surface); border-radius: var(--radius);
-    padding: 1.5rem; width: 90%; max-width: 340px;
-    border: 1px solid rgba(255,255,255,0.08);
-    box-shadow: 0 8px 32px rgba(0,0,0,0.5);
-  }
-  .modal h3 { margin-bottom: 1rem; font-size: 1.1rem; font-weight: 800; }
-  .modal input {
-    width: 100%; padding: 0.7rem; border-radius: var(--radius-sm);
-    border: 1px solid rgba(255,255,255,0.15); background: var(--bg);
-    color: var(--text); font-size: 1rem; font-family: 'Nunito', sans-serif;
-    font-weight: 600; margin-bottom: 1rem;
-  }
-  .modal input:focus { outline: none; border-color: var(--accent); }
-  .modal-btns { display: flex; gap: 0.5rem; }
-  .modal-btns .btn { flex: 1; }
 
-  /* === Controller visualization === */
-  .controller-section {
-    margin: 0.6rem 0.75rem; padding: 0.8rem 0.5rem 0.6rem;
-    background: var(--surface); border-radius: var(--radius);
-    border: 1px solid rgba(255,255,255,0.06);
-    border-left: 2px solid rgba(0,195,227,0.2);
-    border-right: 2px solid rgba(255,60,40,0.2);
-    box-shadow: 0 2px 8px rgba(0,0,0,0.15);
-    text-align: center;
-    animation: section-in 0.35s cubic-bezier(0.22, 1, 0.36, 1) both;
-    display: flex; flex-direction: column; align-items: center; justify-content: center;
-  }
+  /* === Controller Visualization === */
+  .controller-card { text-align: center; }
   .controller-svg-wrap {
-    display: inline-block; max-width: 320px; width: 100%;
+    display: inline-block; max-width: 280px; width: 100%;
     filter: drop-shadow(0 4px 12px rgba(0,0,0,0.4));
     transition: filter 0.3s ease;
   }
@@ -307,7 +318,6 @@
     0%, 100% { filter: drop-shadow(0 4px 12px rgba(0,0,0,0.4)); }
     50% { filter: drop-shadow(0 4px 12px rgba(0,0,0,0.4)) drop-shadow(0 0 16px rgba(230,0,18,0.5)); }
   }
-  /* Controller SVG element styles */
   .ctrl-body { fill: #333; stroke: #555; stroke-width: 1.5; }
   .ctrl-grip-l { fill: #0ab9d6; }
   .ctrl-grip-r { fill: #ff4554; }
@@ -337,143 +347,26 @@
   .ctrl-home { fill: #333; stroke: rgba(255,255,255,0.15); stroke-width: 0.8; }
   .ctrl-capture { fill: #333; stroke: rgba(255,255,255,0.15); stroke-width: 0.8; }
   .ctrl-status-text {
-    font-size: 0.7rem; color: var(--muted); font-weight: 700; margin-top: 0.4rem;
+    font-size: 0.65rem; color: var(--muted); font-weight: 700; margin-top: 0.3rem;
     letter-spacing: 0.05em;
   }
   .ctrl-status-text.recording { color: var(--red); }
   .ctrl-status-text.playing { color: var(--green); }
-  .ctrl-playback-progress {
-    max-height: 0; overflow: hidden; opacity: 0;
-    transition: max-height 0.4s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.3s ease, margin 0.3s ease;
-    margin-top: 0;
-  }
-  .ctrl-playback-progress.show {
-    max-height: 60px; opacity: 1; margin-top: 0.5rem;
-  }
 
-  /* === Controls-card playback progress (visible near transport) === */
-  .controls-playback-progress {
-    max-height: 0; overflow: hidden; opacity: 0;
-    transition: max-height 0.4s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.3s ease, margin 0.3s ease;
-    margin: 0;
-  }
-  .controls-playback-progress.show {
-    max-height: 50px; opacity: 1; margin: 0.5rem 0 0.2rem;
-  }
-
-  /* === Unified Controls Section === */
-  .controls-section.recording-active {
-    border-color: rgba(230,0,18,0.3);
-    box-shadow: 0 2px 8px rgba(0,0,0,0.15), inset 0 0 0 1px rgba(230,0,18,0.1);
-  }
-  .mode-rec-bar {
-    display: flex; align-items: center; gap: 0.8rem;
-  }
-  .control-group {
-    display: flex; align-items: center; gap: 0.5rem;
-  }
-  .control-label {
-    font-size: 0.9rem; font-weight: 700;
-  }
-  .control-inline {
-    display: flex; align-items: center; gap: 0.5rem;
-  }
-  .controls-divider {
-    width: 1px; height: 36px; background: rgba(255,255,255,0.1); flex-shrink: 0;
-  }
-  .controls-separator {
-    height: 1px; background: rgba(255,255,255,0.08); margin: 0.7rem 0;
-  }
-  .rec-btn-compact {
-    width: 52px; height: 52px; font-size: 0.7rem;
-  }
-  /* === Transport: slot nav row + playback row === */
-  .transport-area {
-    display: flex; flex-direction: column; gap: 0.5rem;
-    margin-bottom: 0.6rem;
-  }
-  .slot-nav-row {
-    display: flex; align-items: center; gap: 0.5rem;
-  }
-  .slot-info-compact {
-    flex: 1; text-align: center; min-width: 0;
-  }
-  .slot-info-compact .slot-num { font-size: 1.2rem; font-weight: 900; letter-spacing: -0.02em; line-height: 1.1; }
-  .slot-info-compact .slot-name {
-    font-size: 0.75rem; color: var(--muted); font-weight: 600;
-    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-  }
-  .playback-row {
-    display: flex; align-items: center; justify-content: center; gap: 0.6rem;
-  }
-  .dpad-sm { width: 40px; height: 40px; font-size: 1rem; }
-  .btn-face-sm {
-    width: 48px; height: 48px; font-size: 0.72rem;
-  }
-  /* Play button on macro tiles */
-  .macro-tile-actions .tile-btn-play { color: var(--green); }
-  .macro-tile-actions .tile-btn-play:active { background: rgba(73,184,79,0.12); }
-
-  /* Now-playing indicator on macro tiles */
-  .macro-tile.playing {
-    border-color: var(--green);
-    box-shadow: 0 0 0 2px rgba(73,184,79,0.35), 0 4px 16px rgba(73,184,79,0.15);
-  }
-  .macro-tile.playing .macro-tile-accent { animation: playing-accent 1.5s ease-in-out infinite; }
-  @keyframes playing-accent {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.4; }
-  }
-  .macro-tile-playing-badge {
-    display: inline-flex; align-items: center; gap: 0.25rem;
-    font-size: 0.6rem; font-weight: 800; color: var(--green);
-    letter-spacing: 0.08em; text-transform: uppercase;
-  }
-  .macro-tile-playing-badge::before {
-    content: ''; display: inline-block; width: 6px; height: 6px;
-    border-radius: 50%; background: var(--green);
-    animation: pulse 1s infinite;
-  }
-
-  /* Collapsible speed controls */
-  .speed-toggle {
-    display: flex; align-items: center; justify-content: space-between;
-    cursor: pointer; padding: 0.3rem 0; margin-top: 0.1rem;
-    -webkit-tap-highlight-color: transparent;
-    -webkit-user-select: none; user-select: none;
-  }
-  .speed-toggle-label {
-    font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.1em;
-    color: var(--muted); font-weight: 800;
-  }
-  .speed-toggle-value {
-    font-size: 0.75rem; font-weight: 800; color: var(--blue);
-  }
-  .speed-toggle-arrow {
-    font-size: 0.6rem; color: var(--muted); transition: transform 0.2s ease;
-    margin-left: 0.3rem;
-  }
-  .speed-toggle-arrow.open { transform: rotate(180deg); }
-  .speed-collapse {
-    max-height: 0; overflow: hidden; opacity: 0;
-    transition: max-height 0.25s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.2s ease;
-  }
-  .speed-collapse.open {
-    max-height: 60px; opacity: 1;
-  }
-
-  /* === Settings === */
-  .settings-group { margin-bottom: 0.3rem; }
+  /* === SETTINGS PANEL === */
+  .settings-panel { padding: 0.3rem 0; }
+  .settings-group { margin-bottom: 0.2rem; }
   .settings-group-header {
     display: flex; align-items: center; justify-content: space-between;
-    cursor: pointer; padding: 0.6rem 0;
+    cursor: pointer; padding: 0.6rem 0.7rem;
+    background: var(--card); border-radius: var(--radius-sm);
     -webkit-tap-highlight-color: transparent;
     -webkit-user-select: none; user-select: none;
-    border-bottom: 1px solid rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.04);
   }
   .settings-group-header:active { opacity: 0.7; }
   .settings-group-title {
-    font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.1em;
+    font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.08em;
     color: var(--muted); font-weight: 800;
     display: flex; align-items: center; gap: 0.4rem;
   }
@@ -498,16 +391,16 @@
     max-height: 2000px; opacity: 1;
   }
   .settings-group-body-inner {
-    padding: 0.5rem 0 0.3rem;
+    padding: 0.5rem 0.7rem 0.3rem;
   }
   .setting-row { margin-bottom: 0.3rem; }
   .setting-label {
     display: flex; align-items: center; justify-content: space-between;
     margin-bottom: 0.4rem;
   }
-  .setting-name { font-size: 0.9rem; font-weight: 700; }
+  .setting-name { font-size: 0.85rem; font-weight: 700; }
   .setting-value {
-    font-size: 0.85rem; font-weight: 800; color: var(--blue);
+    font-size: 0.8rem; font-weight: 800; color: var(--blue);
     min-width: 2.5em; text-align: right;
   }
   .setting-slider {
@@ -528,12 +421,12 @@
   }
   .setting-range-labels {
     display: flex; justify-content: space-between;
-    font-size: 0.65rem; color: var(--muted); font-weight: 600; margin-top: 0.3rem;
+    font-size: 0.62rem; color: var(--muted); font-weight: 600; margin-top: 0.3rem;
   }
   .setting-select {
     width: 100%; padding: 0.5rem 0.7rem; border-radius: 8px;
-    background: rgba(255,255,255,0.08); color: #fff; font-size: 0.85rem;
-    font-weight: 700; border: 1px solid rgba(255,255,255,0.1);
+    background: rgba(255,255,255,0.06); color: #fff; font-size: 0.85rem;
+    font-weight: 700; border: 1px solid rgba(255,255,255,0.08);
     outline: none; cursor: pointer; -webkit-appearance: none; appearance: none;
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23888' stroke-width='2' fill='none'/%3E%3C/svg%3E");
     background-repeat: no-repeat; background-position: right 0.7rem center;
@@ -541,654 +434,561 @@
   .setting-select:focus { border-color: var(--blue); }
   .setting-select option { background: #1a1a2e; color: #fff; }
 
-  /* === Switch-style entrance animations === */
-  @keyframes section-in {
-    from { opacity: 0; transform: translateY(18px); }
-    to { opacity: 1; transform: translateY(0); }
+  /* === BOTTOM TRANSPORT BAR === */
+  .transport {
+    position: fixed;
+    bottom: 0; left: var(--rail-width); right: var(--rail-width);
+    z-index: 100;
+    background: linear-gradient(180deg, #2a2a2a 0%, #1e1e1e 100%);
+    border-top: 1px solid rgba(255,255,255,0.08);
+    box-shadow: 0 -4px 20px rgba(0,0,0,0.5);
+    padding-bottom: var(--safe-bottom);
   }
-  .section, .status-bar, .controller-section {
-    animation: section-in 0.35s cubic-bezier(0.22, 1, 0.36, 1) both;
+
+  /* Progress bar sits on top edge of transport */
+  .transport-progress {
+    height: 3px; background: rgba(255,255,255,0.06); position: relative;
+    cursor: pointer;
   }
-  .status-bar { animation-delay: 0s; }
-  .controls-section { animation-delay: 0.04s; }
-  .library-section { animation-delay: 0.08s; }
-  .controller-section { animation-delay: 0.12s; }
-  #settingsSection { animation-delay: 0.16s; }
-
-
-  /* === Slot number pop on change === */
-  @keyframes slot-pop {
-    0% { transform: scale(1); }
-    40% { transform: scale(1.15); }
-    100% { transform: scale(1); }
+  .transport-progress-fill {
+    height: 100%;
+    background: linear-gradient(to right, var(--joycon-blue), var(--accent), var(--joycon-red));
+    transition: width 0.15s linear; width: 0%;
   }
-  .slot-num.pop { animation: slot-pop 0.25s cubic-bezier(0.22, 1, 0.36, 1); }
 
-  /* === Switch-style slide toggle for macro mode === */
-  .switch-toggle {
-    width: 58px; height: 30px; border-radius: 15px; padding: 2px;
-    background: rgba(255,255,255,0.12); border: none; cursor: pointer;
-    position: relative; transition: background 0.25s ease;
-    box-shadow: inset 0 1px 3px rgba(0,0,0,0.3);
+  .transport-inner {
+    padding: 0.5rem 0.7rem 0.4rem;
+  }
+
+  /* Now-playing info row */
+  .transport-now {
+    display: flex; align-items: center; gap: 0.6rem; margin-bottom: 0.4rem;
+    min-height: 28px;
+  }
+  .transport-slot {
+    font-size: 0.65rem; font-weight: 800; color: var(--muted);
+    background: rgba(255,255,255,0.06); padding: 0.15rem 0.45rem;
+    border-radius: 4px; white-space: nowrap;
+  }
+  .transport-name {
+    font-size: 0.88rem; font-weight: 700; flex: 1; min-width: 0;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    transition: opacity 0.2s ease;
+  }
+  .transport-name.fading { opacity: 0; }
+  .transport-time {
+    font-size: 0.65rem; font-weight: 700; color: var(--muted);
+    font-variant-numeric: tabular-nums; white-space: nowrap;
+  }
+
+  /* Transport controls row */
+  .transport-controls {
+    display: flex; align-items: center; justify-content: center; gap: 0.3rem;
+  }
+  .transport-btn {
+    display: flex; align-items: center; justify-content: center;
+    border: none; border-radius: 50%; cursor: pointer;
+    font-family: 'Nunito', sans-serif; font-weight: 800; color: #fff;
+    transition: transform 0.1s, background 0.15s, opacity 0.15s;
+    -webkit-user-select: none; user-select: none;
     -webkit-tap-highlight-color: transparent;
   }
-  .switch-toggle.on { background: var(--green); }
-  .switch-toggle .knob {
-    width: 26px; height: 26px; border-radius: 50%;
-    background: #fff; display: block;
-    box-shadow: 0 1px 4px rgba(0,0,0,0.3);
-    transition: transform 0.25s cubic-bezier(0.22, 1, 0.36, 1);
+  .transport-btn:active { transform: scale(0.9); }
+  .transport-btn:disabled { opacity: 0.3; pointer-events: none; }
+
+  .transport-btn-sm {
+    width: 38px; height: 38px; font-size: 0.7rem;
+    background: rgba(255,255,255,0.08);
   }
-  .switch-toggle.on .knob { transform: translateX(28px); }
+  .transport-btn-sm:active { background: rgba(255,255,255,0.15); }
 
-  /* === Recording glow ring === */
-  @keyframes rec-ring {
-    0%, 100% { box-shadow: 0 4px 0 rgba(0,0,0,0.3), 0 0 0 3px rgba(0,0,0,0.15), inset 0 1px 1px rgba(255,255,255,0.15), 0 0 0 0 rgba(230,0,18,0); }
-    50% { box-shadow: 0 4px 0 rgba(0,0,0,0.3), 0 0 0 3px rgba(0,0,0,0.15), inset 0 1px 1px rgba(255,255,255,0.15), 0 0 0 10px rgba(230,0,18,0.25); }
+  .transport-btn-play {
+    width: 52px; height: 52px; font-size: 0.85rem;
+    background: var(--green);
+    box-shadow: 0 3px 0 rgba(0,0,0,0.3);
+    margin: 0 0.3rem;
   }
-  .btn-face.recording {
-    animation: rec-ring 1.2s ease-in-out infinite;
+  .transport-btn-play:active { transform: scale(0.9) translateY(2px); box-shadow: 0 0 0 rgba(0,0,0,0.3); }
+  .transport-btn-play.stopping { background: var(--red); }
+
+  .transport-btn-loop {
+    font-size: 0.55rem; letter-spacing: 0.03em;
   }
-
-  /* === Button press feedback === */
-  .btn-face { transition: transform 0.12s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.12s ease, background 0.2s ease, opacity 0.2s ease; }
-  .dpad-btn { transition: transform 0.12s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.12s ease; }
-
-  /* === Slot name fade === */
-  .slot-name { transition: opacity 0.2s ease; }
-  .slot-name.fading { opacity: 0; }
-
-  /* === Responsive grid layout === */
-  .grid-area {
-    display: grid;
-    grid-template-columns: 1fr;
-    gap: 0;
+  .transport-btn-loop.active {
+    background: rgba(74,155,217,0.25); color: var(--blue);
+  }
+  .transport-btn-speed {
+    font-size: 0.65rem; min-width: 38px;
+    font-variant-numeric: tabular-nums;
   }
 
-  /* Mobile: controls → library → controller viz → settings
-     (primary actions and content together, reference/config below) */
-  .controls-section { order: 1; }
-  .library-section { order: 2; }
-  .controller-section { order: 3; }
-  #settingsSection { order: 4; }
+  /* Speed pill popup */
+  .speed-popup {
+    position: absolute; bottom: 100%; left: 50%; transform: translateX(-50%);
+    background: var(--surface); border: 1px solid rgba(255,255,255,0.1);
+    border-radius: var(--radius-sm); padding: 0.4rem;
+    display: none; gap: 0.25rem; margin-bottom: 0.5rem;
+    box-shadow: 0 -4px 20px rgba(0,0,0,0.4);
+    white-space: nowrap;
+  }
+  .speed-popup.show { display: flex; }
+  .speed-popup-btn {
+    padding: 0.4rem 0.65rem; border: none; border-radius: 8px; cursor: pointer;
+    font-family: 'Nunito', sans-serif; font-size: 0.72rem; font-weight: 800;
+    color: var(--muted); background: transparent;
+    transition: background 0.15s, color 0.15s;
+  }
+  .speed-popup-btn.active { color: var(--text); background: rgba(74,155,217,0.2); }
+  .speed-popup-btn:active { background: rgba(255,255,255,0.1); }
 
-  /* Tablet: 2-column — controls+library left, controller+settings right */
+  /* === MODALS === */
+  .modal-overlay {
+    display: none; position: fixed; inset: 0; z-index: 300;
+    background: rgba(0,0,0,0.7); align-items: center; justify-content: center;
+  }
+  .modal-overlay.show { display: flex; }
+  .modal {
+    background: var(--surface); border-radius: var(--radius);
+    padding: 1.5rem; width: 90%; max-width: 340px;
+    border: 1px solid rgba(255,255,255,0.08);
+    box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+  }
+  .modal h3 { margin-bottom: 1rem; font-size: 1.1rem; font-weight: 800; }
+  .modal input {
+    width: 100%; padding: 0.7rem; border-radius: var(--radius-sm);
+    border: 1px solid rgba(255,255,255,0.15); background: var(--bg);
+    color: var(--text); font-size: 1rem; font-family: 'Nunito', sans-serif;
+    font-weight: 600; margin-bottom: 1rem;
+  }
+  .modal input:focus { outline: none; border-color: var(--accent); }
+  .modal-btns { display: flex; gap: 0.5rem; }
+  .modal-btns .btn { flex: 1; }
+  .btn {
+    display: inline-flex; align-items: center; justify-content: center;
+    border: none; border-radius: var(--radius-sm); cursor: pointer;
+    font-family: 'Nunito', sans-serif;
+    font-size: 0.88rem; font-weight: 700; color: #fff;
+    padding: 0.65rem 1.1rem; min-height: 44px;
+    transition: opacity 0.15s, transform 0.1s;
+    -webkit-user-select: none; user-select: none;
+  }
+  .btn:active { transform: translateY(2px); }
+  .btn:disabled { opacity: 0.35; pointer-events: none; }
+  .btn-dark { background: rgba(255,255,255,0.08); }
+  .btn-blue { background: var(--blue); }
+  .btn-red { background: var(--red); }
+  .btn-green { background: var(--green); }
+
+  /* === Entrance animations === */
+  @keyframes fade-in {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .main-content { animation: fade-in 0.3s ease both; }
+  .transport { animation: fade-in 0.3s ease 0.1s both; }
+
+  /* === RESPONSIVE: TABLET (600px+) === */
   @media (min-width: 600px) {
-    .content-wrap { padding: 0 0.5rem; }
-    .grid-area {
-      grid-template-columns: 1fr 1fr;
-      gap: 0 0.25rem;
+    :root { --transport-height: 120px; }
+    .main-content { padding: 0.6rem 1rem 1rem; }
+
+    .playlist-item:hover {
+      background: var(--card-hover);
+      border-color: rgba(255,255,255,0.08);
     }
-    .controls-section { order: 1; grid-column: 1; }
-    .library-section { order: 3; grid-column: 1; }
-    .controller-section { order: 2; grid-column: 2; margin: 0.6rem 0.5rem; }
-    #settingsSection { order: 4; grid-column: 2; }
-    .grid-area .section { margin: 0.6rem 0.5rem; }
-    .status-bar { border-radius: 0 0 var(--radius) var(--radius); }
-    .section { transition: box-shadow 0.2s ease, border-color 0.2s ease; }
-    .section:hover {
-      box-shadow: 0 4px 16px rgba(0,0,0,0.25);
-      border-color: rgba(255,255,255,0.1);
-    }
-    .controller-section:hover { box-shadow: 0 4px 16px rgba(0,0,0,0.25); }
-    .macro-tile:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 6px 20px rgba(0,0,0,0.3);
-      border-color: rgba(255,255,255,0.15);
-    }
-    .macro-tile.selected:hover {
-      border-color: var(--joycon-blue);
-      box-shadow: 0 0 0 2px rgba(0,195,227,0.45), 0 6px 20px rgba(0,195,227,0.2);
-    }
-    .macro-tile.playing:hover {
-      border-color: var(--green);
-      box-shadow: 0 0 0 2px rgba(73,184,79,0.45), 0 6px 20px rgba(73,184,79,0.2);
-    }
-    .macro-tile-actions .tile-btn:hover { background: rgba(255,255,255,0.06); color: var(--text); }
-    .macro-tile-actions .tile-btn.tile-btn-play:hover { color: #5cd465; background: rgba(73,184,79,0.1); }
-    .macro-tile-actions .tile-btn.tile-btn-del:hover { color: #ff4444; background: rgba(230,0,18,0.08); }
-    /* On tablet+, show speed row expanded by default */
-    .speed-collapse { max-height: 60px; opacity: 1; }
-    .speed-toggle-arrow { display: none; }
+    .playlist-item.selected:hover { border-color: rgba(74,155,217,0.5); }
+    .playlist-item.playing:hover { border-color: rgba(73,184,79,0.5); }
+    .playlist-action-btn:hover { background: rgba(255,255,255,0.1); color: var(--text); }
+    .playlist-action-btn.del:hover { background: rgba(230,0,18,0.12); color: #ff4444; }
+    .settings-group-header:hover { background: var(--card-hover); }
+    .transport-btn-sm:hover { background: rgba(255,255,255,0.14); }
+    .speed-popup-btn:hover { background: rgba(255,255,255,0.08); }
+    .tab-btn:hover { color: var(--muted-light); }
   }
 
-  /* Desktop: wider layout */
+  /* === RESPONSIVE: DESKTOP (900px+) === */
   @media (min-width: 900px) {
-    .content-wrap { padding: 0 1rem; }
-    .grid-area .section { margin: 0.75rem 0.5rem; padding: 1.25rem; }
-    .status-bar { margin: 0 0.5rem; }
-    .macro-list-grid { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 0.75rem; }
-    .controller-svg-wrap { max-width: 380px; }
-    .controller-section { padding: 1rem 0.5rem 0.8rem; margin: 0.75rem 0.5rem; }
-    /* On desktop, put slot nav and playback on single row */
-    .transport-area { flex-direction: row; align-items: center; }
-    .slot-nav-row { flex: 1; }
-    .playback-row { flex: 0 0 auto; }
+    :root { --transport-height: 100px; }
+    .main-content { padding: 0.8rem 1.5rem 1rem; }
+
+    /* Side-by-side layout: playlist left, controls/settings right */
+    .tab-bar { display: none; }
+    .tab-panel { display: block !important; }
+    .main-content {
+      display: grid;
+      grid-template-columns: 1fr minmax(320px, 400px);
+      gap: 0 1.2rem;
+      align-items: start;
+    }
+    .tab-panel-playlist { grid-column: 1; grid-row: 1; }
+    .tab-panel-controls { grid-column: 2; grid-row: 1; }
+    .tab-panel-settings { grid-column: 2; grid-row: 2; }
+
+    .controller-svg-wrap { max-width: 260px; }
+
+    /* Horizontal transport layout */
+    .transport-inner {
+      display: flex; align-items: center; gap: 1rem;
+      padding: 0.5rem 1.5rem 0.4rem;
+      max-width: 1400px; margin: 0 auto;
+    }
+    .transport-now {
+      flex: 1; min-width: 0; margin-bottom: 0;
+    }
+    .transport-controls { flex: 0 0 auto; }
   }
 
-  /* Wide desktop: 3-column — controls | library | controller+settings */
-  @media (min-width: 1100px) {
-    .content-wrap { max-width: 1200px; }
-    .grid-area {
-      grid-template-columns: minmax(260px, 1fr) minmax(300px, 1.3fr) minmax(260px, 1fr);
-      gap: 0 0.25rem;
+  /* === RESPONSIVE: WIDE DESKTOP (1200px+) === */
+  @media (min-width: 1200px) {
+    .main-content {
+      grid-template-columns: 1fr 360px 320px;
     }
-    .controls-section { order: 1; grid-column: 1; grid-row: 1 / 3; }
-    .library-section { order: 2; grid-column: 2; grid-row: 1 / 3; }
-    .controller-section { order: 3; grid-column: 3; grid-row: 1; }
-    #settingsSection { order: 4; grid-column: 3; grid-row: 2; }
+    .tab-panel-playlist { grid-column: 1; grid-row: 1; }
+    .tab-panel-controls { grid-column: 2; grid-row: 1; }
+    .tab-panel-settings { grid-column: 3; grid-row: 1; }
   }
 </style>
 </head>
 <body>
 
-<div class="content-wrap">
-
-<div class="status-bar">
+<!-- HEADER -->
+<div class="header">
   <h1><span class="power-led"></span>Nintendo Pi</h1>
   <div class="status-pills">
-    <div class="status-pill"><span class="status-dot red" id="piDot"></span><span id="piLabel">Pi</span></div>
-    <div class="status-pill"><span class="status-dot red" id="ctrlDot"></span><span id="ctrlLabel">Controller</span></div>
-    <div class="status-pill"><span class="status-dot red" id="switchDot"></span><span id="switchLabel">Switch</span></div>
+    <div class="status-pill"><span class="status-dot red" id="piDot"></span><span>Pi</span></div>
+    <div class="status-pill"><span class="status-dot red" id="ctrlDot"></span><span>Controller</span></div>
+    <div class="status-pill"><span class="status-dot red" id="switchDot"></span><span>Switch</span></div>
   </div>
 </div>
 
-<div class="grid-area">
+<!-- MAIN SCROLLABLE AREA -->
+<div class="main-scroll">
+<div class="main-content">
 
-<div class="section controls-section" id="controlsSection">
-  <!-- Transport: slot nav + playback (primary actions, top of card) -->
-  <div class="transport-area">
-    <div class="slot-nav-row">
-      <button class="btn dpad-btn dpad-sm" onclick="sendCmd('PREV_SLOT')">&larr;</button>
-      <div class="slot-info-compact">
-        <div class="slot-num" id="slotNum">0</div>
-        <div class="slot-name" id="slotName">--</div>
-      </div>
-      <button class="btn dpad-btn dpad-sm" onclick="sendCmd('NEXT_SLOT')">&rarr;</button>
-    </div>
-    <div class="playback-row">
-      <button class="btn btn-green btn-face btn-face-sm" id="btnPlay" onclick="sendCmd('PLAY_MACRO')">PLAY</button>
-      <button class="btn btn-red btn-face btn-face-sm" id="btnStop" onclick="sendCmd('STOP_PLAYBACK')">STOP</button>
-      <button class="btn btn-dark btn-face btn-face-sm" id="btnLoop" onclick="sendCmd('TOGGLE_LOOP')" style="font-size:0.6rem">LOOP<br>OFF</button>
-    </div>
+  <!-- Tab bar (mobile/tablet only, hidden on desktop) -->
+  <div class="tab-bar" id="tabBar" style="grid-column: 1 / -1;">
+    <button class="tab-btn active" data-tab="playlist" onclick="switchTab('playlist')">Macros</button>
+    <button class="tab-btn" data-tab="controls" onclick="switchTab('controls')">Controls</button>
+    <button class="tab-btn" data-tab="settings" onclick="switchTab('settings')">Settings</button>
   </div>
 
-  <!-- Playback progress (visible during playback, right near the transport) -->
-  <div class="controls-playback-progress" id="controlsPlaybackProgress">
-    <div class="progress-bar-outer"><div class="progress-bar-inner" id="controlsProgress"></div></div>
-    <div class="progress-label" id="controlsProgressLabel">0 / 0</div>
-  </div>
-
-  <!-- Speed controls (collapsible on mobile) -->
-  <div class="speed-toggle" id="speedToggle" onclick="toggleSpeed()">
-    <span class="speed-toggle-label">Speed</span>
-    <span><span class="speed-toggle-value" id="speedValue">1x</span><span class="speed-toggle-arrow" id="speedArrow">&#9660;</span></span>
-  </div>
-  <div class="speed-collapse" id="speedCollapse">
-    <div class="speed-row" id="speedRow">
-      <button class="btn btn-dark" onclick="setSpeed(0.25)">0.25x</button>
-      <button class="btn btn-dark" onclick="setSpeed(0.5)">0.5x</button>
-      <button class="btn btn-dark active" onclick="setSpeed(1)">1x</button>
-      <button class="btn btn-dark" onclick="setSpeed(2)">2x</button>
-      <button class="btn btn-dark" onclick="setSpeed(4)">4x</button>
-    </div>
-  </div>
-
-  <div class="controls-separator"></div>
-
-  <!-- Mode & Recording (secondary actions, bottom of card) -->
-  <div class="mode-rec-bar">
-    <div class="control-group">
-      <span class="control-label">Macro Mode</span>
-      <div class="control-inline">
-        <span class="toggle-status off" id="macroModeStatus">OFF</span>
-        <button class="switch-toggle" id="btnMacroMode" onclick="sendCmd('TOGGLE_MACRO_MODE')">
-          <span class="knob"></span>
-        </button>
+  <!-- PLAYLIST TAB -->
+  <div class="tab-panel tab-panel-playlist active" id="panelPlaylist">
+    <div id="macroList">
+      <div class="playlist-empty">
+        <span class="playlist-empty-icon">&#127918;</span>
+        <div class="playlist-empty-text">No macros yet</div>
+        <div class="playlist-empty-hint">Record your first macro to see it here</div>
       </div>
     </div>
-    <div class="controls-divider"></div>
-    <div class="control-group">
-      <button class="btn btn-accent btn-face rec-btn-compact" id="btnRecord" onclick="sendCmd('TOGGLE_RECORDING')">
-        REC
-      </button>
-      <span class="rec-status" id="recStatus" style="display:none">REC</span>
+  </div>
+
+  <!-- CONTROLS TAB -->
+  <div class="tab-panel tab-panel-controls" id="panelControls">
+    <div class="controls-panel controls-section" id="controlsSection">
+      <!-- Mode & Recording -->
+      <div class="control-card">
+        <div class="control-card-title">Mode &amp; Recording</div>
+        <div class="mode-rec-row">
+          <div class="control-group">
+            <span class="control-label">Macro Mode</span>
+            <div class="control-inline">
+              <span class="toggle-status off" id="macroModeStatus">OFF</span>
+              <button class="switch-toggle" id="btnMacroMode" onclick="sendCmd('TOGGLE_MACRO_MODE')">
+                <span class="knob"></span>
+              </button>
+            </div>
+          </div>
+          <div class="controls-divider"></div>
+          <div class="control-group">
+            <button class="btn-face rec-btn" id="btnRecord" onclick="sendCmd('TOGGLE_RECORDING')">REC</button>
+            <span class="rec-status" id="recStatus" style="display:none">REC</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Controller Visualization -->
+      <div class="control-card controller-card">
+        <div class="control-card-title">Controller Input</div>
+        <div class="controller-svg-wrap disconnected" id="controllerWrap">
+          <svg viewBox="0 0 200 100" xmlns="http://www.w3.org/2000/svg">
+            <path class="ctrl-body" d="M40,18 Q40,8 50,8 L150,8 Q160,8 160,18 L160,55 Q160,70 150,78 L140,85 Q132,92 120,92 L112,92 Q105,92 100,85 Q95,92 88,92 L80,92 Q68,92 60,85 L50,78 Q40,70 40,55 Z"/>
+            <path class="ctrl-grip-l" d="M40,18 Q40,8 50,8 L68,8 L68,55 Q68,70 60,78 L50,78 Q40,70 40,55 Z" rx="4"/>
+            <path class="ctrl-grip-r" d="M132,8 L150,8 Q160,8 160,18 L160,55 Q160,70 150,78 L140,78 Q132,70 132,55 Z" rx="4"/>
+            <circle class="ctrl-stick-base" cx="62" cy="38" r="12"/>
+            <circle class="ctrl-stick-cap" id="ctrlLStick" cx="62" cy="38" r="8"/>
+            <g id="ctrlDpad">
+              <rect class="ctrl-dpad" x="72" y="50" width="16" height="5" rx="1"/>
+              <rect class="ctrl-dpad" x="77.5" y="44.5" width="5" height="16" rx="1"/>
+              <rect class="ctrl-dpad-btn" id="ctrlDLeft" x="72" y="50" width="5.5" height="5" rx="1"/>
+              <rect class="ctrl-dpad-btn" id="ctrlDRight" x="82.5" y="50" width="5.5" height="5" rx="1"/>
+              <rect class="ctrl-dpad-btn" id="ctrlDUp" x="77.5" y="44.5" width="5" height="5.5" rx="1"/>
+              <rect class="ctrl-dpad-btn" id="ctrlDDown" x="77.5" y="55" width="5" height="5.5" rx="1"/>
+            </g>
+            <g id="ctrlBtnA" class="ctrl-btn">
+              <circle cx="138" cy="38" r="5.5"/>
+              <text class="ctrl-btn-label" x="138" y="38">A</text>
+            </g>
+            <g id="ctrlBtnB" class="ctrl-btn">
+              <circle cx="128" cy="45" r="5.5"/>
+              <text class="ctrl-btn-label" x="128" y="45">B</text>
+            </g>
+            <g id="ctrlBtnX" class="ctrl-btn">
+              <circle cx="128" cy="31" r="5.5"/>
+              <text class="ctrl-btn-label" x="128" y="31">X</text>
+            </g>
+            <g id="ctrlBtnY" class="ctrl-btn">
+              <circle cx="118" cy="38" r="5.5"/>
+              <text class="ctrl-btn-label" x="118" y="38">Y</text>
+            </g>
+            <circle class="ctrl-stick-base" cx="118" cy="58" r="12"/>
+            <circle class="ctrl-stick-cap" id="ctrlRStick" cx="118" cy="58" r="8"/>
+            <rect class="ctrl-bumper" id="ctrlL" x="44" y="5" width="24" height="6" rx="3"/>
+            <rect class="ctrl-bumper" id="ctrlR" x="132" y="5" width="24" height="6" rx="3"/>
+            <rect class="ctrl-trigger" id="ctrlZL" x="46" y="0" width="20" height="5" rx="2"/>
+            <rect class="ctrl-trigger" id="ctrlZR" x="134" y="0" width="20" height="5" rx="2"/>
+            <circle class="ctrl-special" id="ctrlMinus" cx="84" cy="24" r="3.5"/>
+            <circle class="ctrl-special" id="ctrlPlus" cx="116" cy="24" r="3.5"/>
+            <line x1="82" y1="24" x2="86" y2="24" stroke="rgba(255,255,255,0.35)" stroke-width="0.8"/>
+            <line x1="114" y1="24" x2="118" y2="24" stroke="rgba(255,255,255,0.35)" stroke-width="0.8"/>
+            <line x1="116" y1="22" x2="116" y2="26" stroke="rgba(255,255,255,0.35)" stroke-width="0.8"/>
+            <circle class="ctrl-home" id="ctrlHome" cx="108" cy="24" r="4"/>
+            <circle cx="108" cy="24" r="2" fill="none" stroke="rgba(255,255,255,0.2)" stroke-width="0.5"/>
+            <rect class="ctrl-capture" id="ctrlCapture" x="90" y="21" width="6" height="6" rx="1"/>
+            <rect x="91.5" y="22.5" width="3" height="3" rx="0.5" fill="none" stroke="rgba(255,255,255,0.2)" stroke-width="0.4"/>
+            <circle id="ctrlL3" cx="62" cy="38" r="2" fill="transparent" stroke="none"/>
+            <circle id="ctrlR3" cx="118" cy="58" r="2" fill="transparent" stroke="none"/>
+          </svg>
+        </div>
+        <div class="ctrl-status-text" id="ctrlStatusText">Waiting for controller...</div>
+      </div>
     </div>
   </div>
+
+  <!-- SETTINGS TAB -->
+  <div class="tab-panel tab-panel-settings" id="panelSettings">
+    <div class="settings-panel" id="settingsSection">
+
+      <!-- Button Mappings -->
+      <div class="settings-group group-buttons">
+        <div class="settings-group-header" onclick="toggleSettingsGroup(this)">
+          <span class="settings-group-title">Button Mappings</span>
+          <span class="settings-group-arrow">&#9660;</span>
+        </div>
+        <div class="settings-group-body">
+          <div class="settings-group-body-inner">
+            <div class="setting-row">
+              <div class="setting-label"><span class="setting-name">Play Macro Button</span><span class="setting-value" id="playBtnValue">A</span></div>
+              <select class="setting-select" id="playBtnSelect">
+                <option value="A">A</option><option value="X">X</option><option value="L">L</option><option value="R">R</option><option value="ZL">ZL</option><option value="ZR">ZR</option>
+              </select>
+            </div>
+            <div class="setting-row">
+              <div class="setting-label"><span class="setting-name">Stop Playback Button</span><span class="setting-value" id="stopBtnValue">B</span></div>
+              <select class="setting-select" id="stopBtnSelect">
+                <option value="B">B</option><option value="A">A</option><option value="X">X</option><option value="L">L</option><option value="R">R</option><option value="ZL">ZL</option><option value="ZR">ZR</option>
+              </select>
+            </div>
+            <div class="setting-row">
+              <div class="setting-label"><span class="setting-name">Toggle Macro Mode</span><span class="setting-value" id="toggleModeBtnValue">D-pad Down</span></div>
+              <select class="setting-select" id="toggleModeBtnSelect">
+                <option value="DpadDown">D-pad Down</option><option value="A">A</option><option value="B">B</option><option value="X">X</option><option value="L">L</option><option value="R">R</option><option value="ZL">ZL</option><option value="ZR">ZR</option>
+              </select>
+            </div>
+            <div class="setting-row">
+              <div class="setting-label"><span class="setting-name">Toggle Recording</span><span class="setting-value" id="toggleRecBtnValue">-</span></div>
+              <select class="setting-select" id="toggleRecBtnSelect">
+                <option value="Minus">-</option><option value="Plus">+</option><option value="A">A</option><option value="B">B</option><option value="X">X</option><option value="Y">Y</option><option value="L">L</option><option value="R">R</option><option value="ZL">ZL</option><option value="ZR">ZR</option>
+              </select>
+            </div>
+            <div class="setting-row">
+              <div class="setting-label"><span class="setting-name">Toggle Loop</span><span class="setting-value" id="toggleLoopBtnValue">Y</span></div>
+              <select class="setting-select" id="toggleLoopBtnSelect">
+                <option value="Y">Y</option><option value="A">A</option><option value="B">B</option><option value="X">X</option><option value="L">L</option><option value="R">R</option><option value="ZL">ZL</option><option value="ZR">ZR</option>
+              </select>
+            </div>
+            <div class="setting-row">
+              <div class="setting-label"><span class="setting-name">Cycle Speed</span><span class="setting-value" id="cycleSpeedBtnValue">DpadUp</span></div>
+              <select class="setting-select" id="cycleSpeedBtnSelect">
+                <option value="DpadUp">DpadUp</option><option value="A">A</option><option value="B">B</option><option value="X">X</option><option value="Y">Y</option><option value="L">L</option><option value="R">R</option><option value="ZL">ZL</option><option value="ZR">ZR</option>
+              </select>
+            </div>
+            <div class="setting-row">
+              <div class="setting-label"><span class="setting-name">Prev Slot</span><span class="setting-value" id="prevSlotBtnValue">D-pad Left</span></div>
+              <select class="setting-select" id="prevSlotBtnSelect">
+                <option value="DpadLeft">D-pad Left</option><option value="A">A</option><option value="B">B</option><option value="X">X</option><option value="Y">Y</option><option value="L">L</option><option value="R">R</option><option value="ZL">ZL</option><option value="ZR">ZR</option>
+              </select>
+            </div>
+            <div class="setting-row">
+              <div class="setting-label"><span class="setting-name">Next Slot</span><span class="setting-value" id="nextSlotBtnValue">D-pad Right</span></div>
+              <select class="setting-select" id="nextSlotBtnSelect">
+                <option value="DpadRight">D-pad Right</option><option value="A">A</option><option value="B">B</option><option value="X">X</option><option value="Y">Y</option><option value="L">L</option><option value="R">R</option><option value="ZL">ZL</option><option value="ZR">ZR</option>
+              </select>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Playback -->
+      <div class="settings-group group-playback">
+        <div class="settings-group-header" onclick="toggleSettingsGroup(this)">
+          <span class="settings-group-title">Playback</span>
+          <span class="settings-group-arrow">&#9660;</span>
+        </div>
+        <div class="settings-group-body">
+          <div class="settings-group-body-inner">
+            <div class="setting-row">
+              <div class="setting-label"><span class="setting-name">Default Speed</span><span class="setting-value" id="speedDefaultValue">1.0x</span></div>
+              <input type="range" class="setting-slider" id="speedDefaultSlider" min="0" max="4" step="1" value="2">
+              <div class="setting-range-labels"><span>0.25x</span><span>4.0x</span></div>
+            </div>
+            <div class="setting-row">
+              <div class="setting-label">
+                <span class="setting-name">Auto-Loop</span>
+                <button class="switch-toggle" id="autoLoopToggle" onclick="toggleAutoLoop()"><span class="knob"></span></button>
+              </div>
+              <div class="setting-range-labels"><span>Loop macros by default when playing</span></div>
+            </div>
+            <div class="setting-row">
+              <div class="setting-label"><span class="setting-name">Start Delay</span><span class="setting-value" id="startDelayValue">0.0s</span></div>
+              <input type="range" class="setting-slider" id="startDelaySlider" min="0" max="5" step="0.5" value="0">
+              <div class="setting-range-labels"><span>0s (instant)</span><span>5s (max)</span></div>
+            </div>
+            <div class="setting-row">
+              <div class="setting-label"><span class="setting-name">Loop Restart Delay</span><span class="setting-value" id="loopDelayValue">0.0s</span></div>
+              <input type="range" class="setting-slider" id="loopDelaySlider" min="0" max="5" step="0.5" value="0">
+              <div class="setting-range-labels"><span>0s (instant)</span><span>5s (max)</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Recording -->
+      <div class="settings-group group-recording">
+        <div class="settings-group-header" onclick="toggleSettingsGroup(this)">
+          <span class="settings-group-title">Recording</span>
+          <span class="settings-group-arrow">&#9660;</span>
+        </div>
+        <div class="settings-group-body">
+          <div class="settings-group-body-inner">
+            <div class="setting-row">
+              <div class="setting-label"><span class="setting-name">Start Delay</span><span class="setting-value" id="recDelayValue">0.0s</span></div>
+              <input type="range" class="setting-slider" id="recDelaySlider" min="0" max="5" step="0.5" value="0">
+              <div class="setting-range-labels"><span>0s (instant)</span><span>5s (max)</span></div>
+            </div>
+            <div class="setting-row">
+              <div class="setting-label"><span class="setting-name">Trim End</span><span class="setting-value" id="trimEndValue">0.0s</span></div>
+              <input type="range" class="setting-slider" id="trimEndSlider" min="0" max="2" step="0.1" value="0">
+              <div class="setting-range-labels"><span>0s (none)</span><span>2s (max)</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Combo Settings -->
+      <div class="settings-group group-combo">
+        <div class="settings-group-header" onclick="toggleSettingsGroup(this)">
+          <span class="settings-group-title">Combo Activation</span>
+          <span class="settings-group-arrow">&#9660;</span>
+        </div>
+        <div class="settings-group-body">
+          <div class="settings-group-body-inner">
+            <div class="setting-row">
+              <div class="setting-label"><span class="setting-name">Base Button 1</span><span class="setting-value" id="baseCombo1Value">L3</span></div>
+              <select class="setting-select" id="baseCombo1Select">
+                <option value="L3">L3</option><option value="R3">R3</option><option value="L">L</option><option value="R">R</option><option value="ZL">ZL</option><option value="ZR">ZR</option>
+              </select>
+            </div>
+            <div class="setting-row">
+              <div class="setting-label"><span class="setting-name">Base Button 2</span><span class="setting-value" id="baseCombo2Value">R3</span></div>
+              <select class="setting-select" id="baseCombo2Select">
+                <option value="R3">R3</option><option value="L3">L3</option><option value="L">L</option><option value="R">R</option><option value="ZL">ZL</option><option value="ZR">ZR</option>
+              </select>
+            </div>
+            <div class="setting-row">
+              <div class="setting-label"><span class="setting-name">Hold Time</span><span class="setting-value" id="holdTimeValue">0.5s</span></div>
+              <input type="range" class="setting-slider" id="holdTimeSlider" min="0.1" max="2.0" step="0.1" value="0.5">
+              <div class="setting-range-labels"><span>0.1s (fast)</span><span>2.0s (slow)</span></div>
+            </div>
+            <div class="setting-row">
+              <div class="setting-label"><span class="setting-name">Mode Trigger</span><span class="setting-value" id="triggerModeValue">Hold</span></div>
+              <select class="setting-select" id="triggerModeSelect">
+                <option value="hold">Hold (default)</option><option value="edge">Instant Press</option>
+              </select>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Advanced -->
+      <div class="settings-group group-advanced">
+        <div class="settings-group-header" onclick="toggleSettingsGroup(this)">
+          <span class="settings-group-title">Advanced</span>
+          <span class="settings-group-arrow">&#9660;</span>
+        </div>
+        <div class="settings-group-body">
+          <div class="settings-group-body-inner">
+            <div class="setting-row">
+              <div class="setting-label"><span class="setting-name">Stick Deadzone</span><span class="setting-value" id="deadzoneValue">10.0</span></div>
+              <input type="range" class="setting-slider" id="deadzoneSlider" min="0" max="50" step="0.5" value="10">
+              <div class="setting-range-labels"><span>0 (none)</span><span>50 (max)</span></div>
+            </div>
+            <div class="setting-row">
+              <div class="setting-label"><span class="setting-name">UI Update Rate</span><span class="setting-value" id="uiIntervalValue">200ms</span></div>
+              <input type="range" class="setting-slider" id="uiIntervalSlider" min="50" max="500" step="50" value="200">
+              <div class="setting-range-labels"><span>50ms (fast)</span><span>500ms (slow)</span></div>
+            </div>
+            <div class="setting-row">
+              <div class="setting-label"><span class="setting-name">Calibration Samples</span><span class="setting-value" id="calSamplesValue">20</span></div>
+              <input type="range" class="setting-slider" id="calSamplesSlider" min="5" max="100" step="5" value="20">
+              <div class="setting-range-labels"><span>5 (fast)</span><span>100 (precise)</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+</div>
 </div>
 
-<div class="controller-section">
-  <div class="controller-svg-wrap disconnected" id="controllerWrap">
-    <svg viewBox="0 0 200 100" xmlns="http://www.w3.org/2000/svg">
-      <!-- Controller body -->
-      <path class="ctrl-body" d="M40,18 Q40,8 50,8 L150,8 Q160,8 160,18 L160,55 Q160,70 150,78 L140,85 Q132,92 120,92 L112,92 Q105,92 100,85 Q95,92 88,92 L80,92 Q68,92 60,85 L50,78 Q40,70 40,55 Z"/>
-      <!-- Left grip -->
-      <path class="ctrl-grip-l" d="M40,18 Q40,8 50,8 L68,8 L68,55 Q68,70 60,78 L50,78 Q40,70 40,55 Z" rx="4"/>
-      <!-- Right grip -->
-      <path class="ctrl-grip-r" d="M132,8 L150,8 Q160,8 160,18 L160,55 Q160,70 150,78 L140,78 Q132,70 132,55 Z" rx="4"/>
-
-      <!-- Left stick -->
-      <circle class="ctrl-stick-base" cx="62" cy="38" r="12"/>
-      <circle class="ctrl-stick-cap" id="ctrlLStick" cx="62" cy="38" r="8"/>
-
-      <!-- D-pad -->
-      <g id="ctrlDpad">
-        <rect class="ctrl-dpad" x="72" y="50" width="16" height="5" rx="1"/>
-        <rect class="ctrl-dpad" x="77.5" y="44.5" width="5" height="16" rx="1"/>
-        <rect class="ctrl-dpad-btn" id="ctrlDLeft" x="72" y="50" width="5.5" height="5" rx="1"/>
-        <rect class="ctrl-dpad-btn" id="ctrlDRight" x="82.5" y="50" width="5.5" height="5" rx="1"/>
-        <rect class="ctrl-dpad-btn" id="ctrlDUp" x="77.5" y="44.5" width="5" height="5.5" rx="1"/>
-        <rect class="ctrl-dpad-btn" id="ctrlDDown" x="77.5" y="55" width="5" height="5.5" rx="1"/>
-      </g>
-
-      <!-- Face buttons -->
-      <g id="ctrlBtnA" class="ctrl-btn">
-        <circle cx="138" cy="38" r="5.5"/>
-        <text class="ctrl-btn-label" x="138" y="38">A</text>
-      </g>
-      <g id="ctrlBtnB" class="ctrl-btn">
-        <circle cx="128" cy="45" r="5.5"/>
-        <text class="ctrl-btn-label" x="128" y="45">B</text>
-      </g>
-      <g id="ctrlBtnX" class="ctrl-btn">
-        <circle cx="128" cy="31" r="5.5"/>
-        <text class="ctrl-btn-label" x="128" y="31">X</text>
-      </g>
-      <g id="ctrlBtnY" class="ctrl-btn">
-        <circle cx="118" cy="38" r="5.5"/>
-        <text class="ctrl-btn-label" x="118" y="38">Y</text>
-      </g>
-
-      <!-- Right stick -->
-      <circle class="ctrl-stick-base" cx="118" cy="58" r="12"/>
-      <circle class="ctrl-stick-cap" id="ctrlRStick" cx="118" cy="58" r="8"/>
-
-      <!-- Bumpers (L/R) -->
-      <rect class="ctrl-bumper" id="ctrlL" x="44" y="5" width="24" height="6" rx="3"/>
-      <rect class="ctrl-bumper" id="ctrlR" x="132" y="5" width="24" height="6" rx="3"/>
-
-      <!-- Triggers (ZL/ZR) -->
-      <rect class="ctrl-trigger" id="ctrlZL" x="46" y="0" width="20" height="5" rx="2"/>
-      <rect class="ctrl-trigger" id="ctrlZR" x="134" y="0" width="20" height="5" rx="2"/>
-
-      <!-- Minus / Plus -->
-      <circle class="ctrl-special" id="ctrlMinus" cx="84" cy="24" r="3.5"/>
-      <circle class="ctrl-special" id="ctrlPlus" cx="116" cy="24" r="3.5"/>
-      <!-- Minus/Plus symbols -->
-      <line x1="82" y1="24" x2="86" y2="24" stroke="rgba(255,255,255,0.35)" stroke-width="0.8"/>
-      <line x1="114" y1="24" x2="118" y2="24" stroke="rgba(255,255,255,0.35)" stroke-width="0.8"/>
-      <line x1="116" y1="22" x2="116" y2="26" stroke="rgba(255,255,255,0.35)" stroke-width="0.8"/>
-
-      <!-- Home button -->
-      <circle class="ctrl-home" id="ctrlHome" cx="108" cy="24" r="4"/>
-      <circle cx="108" cy="24" r="2" fill="none" stroke="rgba(255,255,255,0.2)" stroke-width="0.5"/>
-
-      <!-- Capture button -->
-      <rect class="ctrl-capture" id="ctrlCapture" x="90" y="21" width="6" height="6" rx="1"/>
-      <rect x="91.5" y="22.5" width="3" height="3" rx="0.5" fill="none" stroke="rgba(255,255,255,0.2)" stroke-width="0.4"/>
-
-      <!-- Stick click indicators (L3/R3) — tiny dots -->
-      <circle id="ctrlL3" cx="62" cy="38" r="2" fill="transparent" stroke="none"/>
-      <circle id="ctrlR3" cx="118" cy="58" r="2" fill="transparent" stroke="none"/>
-    </svg>
-  </div>
-  <div class="ctrl-status-text" id="ctrlStatusText">Waiting for controller...</div>
-  <div class="ctrl-playback-progress" id="ctrlPlaybackProgress">
-    <div class="progress-bar-outer"><div class="progress-bar-inner" id="vizProgress"></div></div>
-    <div class="progress-label" id="vizProgressLabel">0 / 0</div>
-  </div>
-</div>
-
-<div class="section controls-section" id="settingsSection">
-  <div class="section-title">Settings</div>
-
-  <!-- Button Mappings -->
-  <div class="settings-group group-buttons">
-    <div class="settings-group-header" onclick="toggleSettingsGroup(this)">
-      <span class="settings-group-title">Button Mappings</span>
-      <span class="settings-group-arrow">&#9660;</span>
-    </div>
-    <div class="settings-group-body">
-      <div class="settings-group-body-inner">
-        <div class="setting-row">
-          <div class="setting-label">
-            <span class="setting-name">Play Macro Button</span>
-            <span class="setting-value" id="playBtnValue">A</span>
-          </div>
-          <select class="setting-select" id="playBtnSelect">
-            <option value="A">A</option>
-            <option value="X">X</option>
-            <option value="L">L</option>
-            <option value="R">R</option>
-            <option value="ZL">ZL</option>
-            <option value="ZR">ZR</option>
-          </select>
-        </div>
-        <div class="setting-row">
-          <div class="setting-label">
-            <span class="setting-name">Stop Playback Button</span>
-            <span class="setting-value" id="stopBtnValue">B</span>
-          </div>
-          <select class="setting-select" id="stopBtnSelect">
-            <option value="B">B</option>
-            <option value="A">A</option>
-            <option value="X">X</option>
-            <option value="L">L</option>
-            <option value="R">R</option>
-            <option value="ZL">ZL</option>
-            <option value="ZR">ZR</option>
-          </select>
-        </div>
-        <div class="setting-row">
-          <div class="setting-label">
-            <span class="setting-name">Toggle Macro Mode</span>
-            <span class="setting-value" id="toggleModeBtnValue">D-pad Down</span>
-          </div>
-          <select class="setting-select" id="toggleModeBtnSelect">
-            <option value="DpadDown">D-pad Down</option>
-            <option value="A">A</option>
-            <option value="B">B</option>
-            <option value="X">X</option>
-            <option value="L">L</option>
-            <option value="R">R</option>
-            <option value="ZL">ZL</option>
-            <option value="ZR">ZR</option>
-          </select>
-        </div>
-        <div class="setting-row">
-          <div class="setting-label">
-            <span class="setting-name">Toggle Recording</span>
-            <span class="setting-value" id="toggleRecBtnValue">-</span>
-          </div>
-          <select class="setting-select" id="toggleRecBtnSelect">
-            <option value="Minus">-</option>
-            <option value="Plus">+</option>
-            <option value="A">A</option>
-            <option value="B">B</option>
-            <option value="X">X</option>
-            <option value="Y">Y</option>
-            <option value="L">L</option>
-            <option value="R">R</option>
-            <option value="ZL">ZL</option>
-            <option value="ZR">ZR</option>
-          </select>
-        </div>
-        <div class="setting-row">
-          <div class="setting-label">
-            <span class="setting-name">Toggle Loop</span>
-            <span class="setting-value" id="toggleLoopBtnValue">Y</span>
-          </div>
-          <select class="setting-select" id="toggleLoopBtnSelect">
-            <option value="Y">Y</option>
-            <option value="A">A</option>
-            <option value="B">B</option>
-            <option value="X">X</option>
-            <option value="L">L</option>
-            <option value="R">R</option>
-            <option value="ZL">ZL</option>
-            <option value="ZR">ZR</option>
-          </select>
-        </div>
-        <div class="setting-row">
-          <div class="setting-label">
-            <span class="setting-name">Cycle Speed</span>
-            <span class="setting-value" id="cycleSpeedBtnValue">DpadUp</span>
-          </div>
-          <select class="setting-select" id="cycleSpeedBtnSelect">
-            <option value="DpadUp">DpadUp</option>
-            <option value="A">A</option>
-            <option value="B">B</option>
-            <option value="X">X</option>
-            <option value="Y">Y</option>
-            <option value="L">L</option>
-            <option value="R">R</option>
-            <option value="ZL">ZL</option>
-            <option value="ZR">ZR</option>
-          </select>
-        </div>
-        <div class="setting-row">
-          <div class="setting-label">
-            <span class="setting-name">Prev Slot</span>
-            <span class="setting-value" id="prevSlotBtnValue">D-pad Left</span>
-          </div>
-          <select class="setting-select" id="prevSlotBtnSelect">
-            <option value="DpadLeft">D-pad Left</option>
-            <option value="A">A</option>
-            <option value="B">B</option>
-            <option value="X">X</option>
-            <option value="Y">Y</option>
-            <option value="L">L</option>
-            <option value="R">R</option>
-            <option value="ZL">ZL</option>
-            <option value="ZR">ZR</option>
-          </select>
-        </div>
-        <div class="setting-row">
-          <div class="setting-label">
-            <span class="setting-name">Next Slot</span>
-            <span class="setting-value" id="nextSlotBtnValue">D-pad Right</span>
-          </div>
-          <select class="setting-select" id="nextSlotBtnSelect">
-            <option value="DpadRight">D-pad Right</option>
-            <option value="A">A</option>
-            <option value="B">B</option>
-            <option value="X">X</option>
-            <option value="Y">Y</option>
-            <option value="L">L</option>
-            <option value="R">R</option>
-            <option value="ZL">ZL</option>
-            <option value="ZR">ZR</option>
-          </select>
-        </div>
-      </div>
-    </div>
+<!-- BOTTOM TRANSPORT BAR -->
+<div class="transport" id="transport">
+  <!-- Thin progress bar along top edge -->
+  <div class="transport-progress">
+    <div class="transport-progress-fill" id="transportProgress"></div>
   </div>
 
-  <!-- Playback -->
-  <div class="settings-group group-playback">
-    <div class="settings-group-header" onclick="toggleSettingsGroup(this)">
-      <span class="settings-group-title">Playback</span>
-      <span class="settings-group-arrow">&#9660;</span>
+  <div class="transport-inner">
+    <!-- Now-playing info -->
+    <div class="transport-now">
+      <span class="transport-slot" id="transportSlot">0 / 0</span>
+      <span class="transport-name" id="transportName">--</span>
+      <span class="transport-time" id="transportTime"></span>
     </div>
-    <div class="settings-group-body">
-      <div class="settings-group-body-inner">
-        <div class="setting-row">
-          <div class="setting-label">
-            <span class="setting-name">Default Speed</span>
-            <span class="setting-value" id="speedDefaultValue">1.0x</span>
-          </div>
-          <input type="range" class="setting-slider" id="speedDefaultSlider" min="0" max="4" step="1" value="2">
-          <div class="setting-range-labels">
-            <span>0.25x</span>
-            <span>4.0x</span>
-          </div>
-        </div>
-        <div class="setting-row">
-          <div class="setting-label">
-            <span class="setting-name">Auto-Loop</span>
-            <button class="switch-toggle" id="autoLoopToggle" onclick="toggleAutoLoop()">
-              <span class="knob"></span>
-            </button>
-          </div>
-          <div class="setting-range-labels">
-            <span>Loop macros by default when playing</span>
-          </div>
-        </div>
-        <div class="setting-row">
-          <div class="setting-label">
-            <span class="setting-name">Start Delay</span>
-            <span class="setting-value" id="startDelayValue">0.0s</span>
-          </div>
-          <input type="range" class="setting-slider" id="startDelaySlider" min="0" max="5" step="0.5" value="0">
-          <div class="setting-range-labels">
-            <span>0s (instant)</span>
-            <span>5s (max)</span>
-          </div>
-        </div>
-        <div class="setting-row">
-          <div class="setting-label">
-            <span class="setting-name">Loop Restart Delay</span>
-            <span class="setting-value" id="loopDelayValue">0.0s</span>
-          </div>
-          <input type="range" class="setting-slider" id="loopDelaySlider" min="0" max="5" step="0.5" value="0">
-          <div class="setting-range-labels">
-            <span>0s (instant)</span>
-            <span>5s (max)</span>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
 
-  <!-- Recording -->
-  <div class="settings-group group-recording">
-    <div class="settings-group-header" onclick="toggleSettingsGroup(this)">
-      <span class="settings-group-title">Recording</span>
-      <span class="settings-group-arrow">&#9660;</span>
-    </div>
-    <div class="settings-group-body">
-      <div class="settings-group-body-inner">
-        <div class="setting-row">
-          <div class="setting-label">
-            <span class="setting-name">Start Delay</span>
-            <span class="setting-value" id="recDelayValue">0.0s</span>
-          </div>
-          <input type="range" class="setting-slider" id="recDelaySlider" min="0" max="5" step="0.5" value="0">
-          <div class="setting-range-labels">
-            <span>0s (instant)</span>
-            <span>5s (max)</span>
-          </div>
-        </div>
-        <div class="setting-row">
-          <div class="setting-label">
-            <span class="setting-name">Trim End</span>
-            <span class="setting-value" id="trimEndValue">0.0s</span>
-          </div>
-          <input type="range" class="setting-slider" id="trimEndSlider" min="0" max="2" step="0.1" value="0">
-          <div class="setting-range-labels">
-            <span>0s (none)</span>
-            <span>2s (max)</span>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Combo Settings -->
-  <div class="settings-group group-combo">
-    <div class="settings-group-header" onclick="toggleSettingsGroup(this)">
-      <span class="settings-group-title">Combo Activation</span>
-      <span class="settings-group-arrow">&#9660;</span>
-    </div>
-    <div class="settings-group-body">
-      <div class="settings-group-body-inner">
-        <div class="setting-row">
-          <div class="setting-label">
-            <span class="setting-name">Base Button 1</span>
-            <span class="setting-value" id="baseCombo1Value">L3</span>
-          </div>
-          <select class="setting-select" id="baseCombo1Select">
-            <option value="L3">L3</option>
-            <option value="R3">R3</option>
-            <option value="L">L</option>
-            <option value="R">R</option>
-            <option value="ZL">ZL</option>
-            <option value="ZR">ZR</option>
-          </select>
-        </div>
-        <div class="setting-row">
-          <div class="setting-label">
-            <span class="setting-name">Base Button 2</span>
-            <span class="setting-value" id="baseCombo2Value">R3</span>
-          </div>
-          <select class="setting-select" id="baseCombo2Select">
-            <option value="R3">R3</option>
-            <option value="L3">L3</option>
-            <option value="L">L</option>
-            <option value="R">R</option>
-            <option value="ZL">ZL</option>
-            <option value="ZR">ZR</option>
-          </select>
-        </div>
-        <div class="setting-row">
-          <div class="setting-label">
-            <span class="setting-name">Hold Time</span>
-            <span class="setting-value" id="holdTimeValue">0.5s</span>
-          </div>
-          <input type="range" class="setting-slider" id="holdTimeSlider" min="0.1" max="2.0" step="0.1" value="0.5">
-          <div class="setting-range-labels">
-            <span>0.1s (fast)</span>
-            <span>2.0s (slow)</span>
-          </div>
-        </div>
-        <div class="setting-row">
-          <div class="setting-label">
-            <span class="setting-name">Mode Trigger</span>
-            <span class="setting-value" id="triggerModeValue">Hold</span>
-          </div>
-          <select class="setting-select" id="triggerModeSelect">
-            <option value="hold">Hold (default)</option>
-            <option value="edge">Instant Press</option>
-          </select>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Advanced -->
-  <div class="settings-group group-advanced">
-    <div class="settings-group-header" onclick="toggleSettingsGroup(this)">
-      <span class="settings-group-title">Advanced</span>
-      <span class="settings-group-arrow">&#9660;</span>
-    </div>
-    <div class="settings-group-body">
-      <div class="settings-group-body-inner">
-        <div class="setting-row">
-          <div class="setting-label">
-            <span class="setting-name">Stick Deadzone</span>
-            <span class="setting-value" id="deadzoneValue">10.0</span>
-          </div>
-          <input type="range" class="setting-slider" id="deadzoneSlider" min="0" max="50" step="0.5" value="10">
-          <div class="setting-range-labels">
-            <span>0 (none)</span>
-            <span>50 (max)</span>
-          </div>
-        </div>
-        <div class="setting-row">
-          <div class="setting-label">
-            <span class="setting-name">UI Update Rate</span>
-            <span class="setting-value" id="uiIntervalValue">200ms</span>
-          </div>
-          <input type="range" class="setting-slider" id="uiIntervalSlider" min="50" max="500" step="50" value="200">
-          <div class="setting-range-labels">
-            <span>50ms (fast)</span>
-            <span>500ms (slow)</span>
-          </div>
-        </div>
-        <div class="setting-row">
-          <div class="setting-label">
-            <span class="setting-name">Calibration Samples</span>
-            <span class="setting-value" id="calSamplesValue">20</span>
-          </div>
-          <input type="range" class="setting-slider" id="calSamplesSlider" min="5" max="100" step="5" value="20">
-          <div class="setting-range-labels">
-            <span>5 (fast)</span>
-            <span>100 (precise)</span>
-          </div>
+    <!-- Playback controls -->
+    <div class="transport-controls">
+      <button class="transport-btn transport-btn-sm" id="btnPrev" onclick="sendCmd('PREV_SLOT')" title="Previous">&#9664;&#9664;</button>
+      <button class="transport-btn transport-btn-play" id="btnPlay" onclick="handlePlayStop()" title="Play">&#9654;</button>
+      <button class="transport-btn transport-btn-sm" id="btnNext" onclick="sendCmd('NEXT_SLOT')" title="Next">&#9654;&#9654;</button>
+      <button class="transport-btn transport-btn-sm transport-btn-loop" id="btnLoop" onclick="sendCmd('TOGGLE_LOOP')" title="Loop">&#8635;</button>
+      <div style="position:relative">
+        <button class="transport-btn transport-btn-sm transport-btn-speed" id="btnSpeed" onclick="toggleSpeedPopup()" title="Speed">1x</button>
+        <div class="speed-popup" id="speedPopup">
+          <button class="speed-popup-btn" onclick="setSpeed(0.25)">.25x</button>
+          <button class="speed-popup-btn" onclick="setSpeed(0.5)">.5x</button>
+          <button class="speed-popup-btn active" onclick="setSpeed(1)">1x</button>
+          <button class="speed-popup-btn" onclick="setSpeed(2)">2x</button>
+          <button class="speed-popup-btn" onclick="setSpeed(4)">4x</button>
         </div>
       </div>
     </div>
   </div>
 </div>
 
-<div class="section library-section">
-  <div class="section-title">Macro Library</div>
-  <div id="macroList"><div class="empty-msg">No macros yet</div></div>
-</div>
-
-</div><!-- grid-area -->
-</div><!-- content-wrap -->
-
+<!-- MODALS -->
 <div class="modal-overlay" id="renameModal">
   <div class="modal">
     <h3>Rename Macro</h3>
@@ -1219,6 +1019,7 @@
   var es = null;
   var prevPlaying = false;
   var prevPlayingSlot = -1;
+
   // === Nintendo-style synthesized UI sound effects ===
   var audioCtx = null;
   var sfxEnabled = true;
@@ -1234,7 +1035,6 @@
     return audioCtx;
   }
 
-  // Unlock audio on first user interaction (required by mobile browsers)
   function unlockAudio() {
     if (sfxUnlocked) return;
     sfxUnlocked = true;
@@ -1248,7 +1048,6 @@
   document.addEventListener('touchstart', unlockAudio, { once: true });
   document.addEventListener('click', unlockAudio, { once: true });
 
-  // Play a tone: frequency (Hz), duration (s), volume (0-1), type, optional ramp
   function playTone(freq, dur, vol, type, rampTo) {
     if (!sfxEnabled) return;
     var ctx = getAudioCtx();
@@ -1267,7 +1066,6 @@
     osc.stop(ctx.currentTime + dur);
   }
 
-  // Play a quick noise click (like a soft mechanical tick)
   function playClick(vol) {
     if (!sfxEnabled) return;
     var ctx = getAudioCtx();
@@ -1275,7 +1073,6 @@
     var buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
     var data = buffer.getChannelData(0);
     for (var i = 0; i < bufferSize; i++) {
-      // Shaped noise burst — sharp attack, fast decay
       var env = Math.exp(-i / (bufferSize * 0.15));
       data[i] = (Math.random() * 2 - 1) * env;
     }
@@ -1288,75 +1085,42 @@
     src.start(ctx.currentTime);
   }
 
-  // Sound library — short, musical, Switch-OS-inspired
   var sfx = {
-    // Navigation tick — soft high pop
-    nav: function() {
-      playClick(0.12);
-      playTone(1800, 0.04, 0.08, 'sine');
-    },
-    // Confirmation — two-note rising chime
-    confirm: function() {
-      playTone(880, 0.08, 0.1, 'sine');
-      setTimeout(function() { playTone(1320, 0.1, 0.1, 'sine'); }, 60);
-    },
-    // Toggle ON — bright rising sweep
-    toggleOn: function() {
-      playTone(660, 0.12, 0.1, 'sine', 1200);
-    },
-    // Toggle OFF — descending soft tone
-    toggleOff: function() {
-      playTone(880, 0.12, 0.08, 'sine', 440);
-    },
-    // Record start — two quick ascending pips
-    recStart: function() {
-      playTone(740, 0.06, 0.1, 'square');
-      setTimeout(function() { playTone(988, 0.08, 0.1, 'square'); }, 70);
-    },
-    // Record stop — single descending tone
-    recStop: function() {
-      playTone(988, 0.1, 0.1, 'square', 520);
-    },
-    // Play macro — cheerful three-note ascending
-    play: function() {
-      playTone(660, 0.07, 0.09, 'sine');
-      setTimeout(function() { playTone(880, 0.07, 0.09, 'sine'); }, 60);
-      setTimeout(function() { playTone(1100, 0.1, 0.09, 'sine'); }, 120);
-    },
-    // Stop — soft thud
-    stop: function() {
-      playTone(220, 0.1, 0.12, 'sine', 110);
-      playClick(0.1);
-    },
-    // Slot change — crisp tick
-    slot: function() {
-      playClick(0.15);
-      playTone(1400, 0.035, 0.07, 'triangle');
-    },
-    // Delete — low warning
-    del: function() {
-      playTone(330, 0.08, 0.1, 'sawtooth', 220);
-      setTimeout(function() { playTone(220, 0.12, 0.08, 'sawtooth', 165); }, 80);
-    },
-    // Generic button press
-    press: function() {
-      playClick(0.1);
+    nav: function() { playClick(0.12); playTone(1800, 0.04, 0.08, 'sine'); },
+    confirm: function() { playTone(880, 0.08, 0.1, 'sine'); setTimeout(function() { playTone(1320, 0.1, 0.1, 'sine'); }, 60); },
+    toggleOn: function() { playTone(660, 0.12, 0.1, 'sine', 1200); },
+    toggleOff: function() { playTone(880, 0.12, 0.08, 'sine', 440); },
+    recStart: function() { playTone(740, 0.06, 0.1, 'square'); setTimeout(function() { playTone(988, 0.08, 0.1, 'square'); }, 70); },
+    recStop: function() { playTone(988, 0.1, 0.1, 'square', 520); },
+    play: function() { playTone(660, 0.07, 0.09, 'sine'); setTimeout(function() { playTone(880, 0.07, 0.09, 'sine'); }, 60); setTimeout(function() { playTone(1100, 0.1, 0.09, 'sine'); }, 120); },
+    stop: function() { playTone(220, 0.1, 0.12, 'sine', 110); playClick(0.1); },
+    slot: function() { playClick(0.15); playTone(1400, 0.035, 0.07, 'triangle'); },
+    del: function() { playTone(330, 0.08, 0.1, 'sawtooth', 220); setTimeout(function() { playTone(220, 0.12, 0.08, 'sawtooth', 165); }, 80); },
+    press: function() { playClick(0.1); }
+  };
+
+  // === Tab switching (mobile) ===
+  window.switchTab = function(tab) {
+    sfx.nav();
+    var tabs = document.querySelectorAll('.tab-btn');
+    var panels = document.querySelectorAll('.tab-panel');
+    for (var i = 0; i < tabs.length; i++) {
+      tabs[i].classList.toggle('active', tabs[i].getAttribute('data-tab') === tab);
+    }
+    for (var j = 0; j < panels.length; j++) {
+      panels[j].classList.toggle('active', panels[j].id === 'panel' + tab.charAt(0).toUpperCase() + tab.slice(1));
     }
   };
 
+  // === SSE Connection ===
   function connect() {
     es = new EventSource('/events');
-
-    es.onopen = function() {
-      setStatusDot('piDot', 'green');
-    };
-
+    es.onopen = function() { setStatusDot('piDot', 'green'); };
     es.onerror = function() {
       setStatusDot('piDot', 'red');
       setStatusDot('ctrlDot', 'red');
       setStatusDot('switchDot', 'red');
     };
-
     es.onmessage = function(e) {
       try {
         var msg = JSON.parse(e.data);
@@ -1368,7 +1132,6 @@
         } else if (msg.type === 'state_update') {
           state = msg.state;
           updateUI();
-          // Re-render macros when playing state or active slot changes
           if (state.playing !== prevPlaying || (state.playing && state.current_slot !== prevPlayingSlot)) {
             prevPlaying = state.playing;
             prevPlayingSlot = state.current_slot;
@@ -1377,12 +1140,11 @@
         } else if (msg.type === 'macro_list') {
           macros = msg.macros || [];
           renderMacros();
-          updateSlotName();
+          updateTransportInfo();
         }
       } catch(err) {}
     };
   }
-
   connect();
 
   function setStatusDot(id, color) {
@@ -1390,139 +1152,131 @@
     dot.className = 'status-dot ' + color;
   }
 
+  // === Main UI update ===
   function updateUI() {
-    // Update hardware status dots
     setStatusDot('ctrlDot', state.usb_connected ? 'green' : 'yellow');
     setStatusDot('switchDot', state.bt_connected ? 'green' : 'red');
+
+    // Macro mode toggle
     var modeEl = document.getElementById('macroModeStatus');
     var toggleBtn = document.getElementById('btnMacroMode');
     if (state.macro_mode) {
-      modeEl.textContent = 'ON';
-      modeEl.className = 'toggle-status on';
+      modeEl.textContent = 'ON'; modeEl.className = 'toggle-status on';
       toggleBtn.classList.add('on');
     } else {
-      modeEl.textContent = 'OFF';
-      modeEl.className = 'toggle-status off';
+      modeEl.textContent = 'OFF'; modeEl.className = 'toggle-status off';
       toggleBtn.classList.remove('on');
     }
 
-    var slotEl = document.getElementById('slotNum');
-    var newSlotText = state.slot_count > 0
-      ? (state.current_slot + 1) + ' / ' + state.slot_count
-      : '0 / 0';
-    if (slotEl.textContent !== newSlotText) {
-      slotEl.textContent = newSlotText;
-      slotEl.classList.remove('pop');
-      void slotEl.offsetWidth; // reflow to restart animation
-      slotEl.classList.add('pop');
-    }
-    updateSlotName();
-
+    // Recording
     var recBtn = document.getElementById('btnRecord');
     var recStatus = document.getElementById('recStatus');
-    var modeRecSection = document.getElementById('controlsSection');
+    var ctrlSection = document.getElementById('controlsSection');
     if (state.recording) {
       recBtn.textContent = 'STOP';
-      recBtn.className = 'btn btn-yellow btn-face rec-btn-compact recording';
+      recBtn.className = 'btn-face rec-btn recording';
       recStatus.style.display = '';
       if (state.recording_countdown) {
-        recStatus.textContent = 'WAIT';
-        recStatus.className = 'rec-status countdown';
+        recStatus.textContent = 'WAIT'; recStatus.className = 'rec-status countdown';
       } else {
-        recStatus.textContent = 'REC';
-        recStatus.className = 'rec-status active';
+        recStatus.textContent = 'REC'; recStatus.className = 'rec-status active';
       }
-      modeRecSection.classList.add('recording-active');
+      ctrlSection.classList.add('recording-active');
     } else {
       recBtn.textContent = 'REC';
-      recBtn.className = 'btn btn-accent btn-face rec-btn-compact';
+      recBtn.className = 'btn-face rec-btn';
       recStatus.style.display = 'none';
-      modeRecSection.classList.remove('recording-active');
+      ctrlSection.classList.remove('recording-active');
     }
 
+    // Transport: play/stop button
     var playBtn = document.getElementById('btnPlay');
     if (state.playing) {
-      playBtn.innerHTML = '&#9654;';
-      playBtn.disabled = true;
-      playBtn.style.opacity = '0.5';
+      playBtn.innerHTML = '&#9632;'; // stop square
+      playBtn.classList.add('stopping');
+      playBtn.title = 'Stop';
     } else {
-      playBtn.textContent = 'PLAY';
-      playBtn.disabled = false;
-      playBtn.style.opacity = '';
+      playBtn.innerHTML = '&#9654;'; // play triangle
+      playBtn.classList.remove('stopping');
+      playBtn.title = 'Play';
     }
 
+    // Transport: loop button
     var loopBtn = document.getElementById('btnLoop');
     if (state.looping) {
-      loopBtn.innerHTML = 'LOOP<br>ON';
-      loopBtn.className = 'btn btn-blue btn-face btn-face-sm';
-      loopBtn.style.fontSize = '0.6rem';
+      loopBtn.classList.add('active');
     } else {
-      loopBtn.innerHTML = 'LOOP<br>OFF';
-      loopBtn.className = 'btn btn-dark btn-face btn-face-sm';
-      loopBtn.style.fontSize = '0.6rem';
+      loopBtn.classList.remove('active');
     }
 
-    var speedBtns = document.getElementById('speedRow').children;
+    // Transport: speed button
+    var speedBtn = document.getElementById('btnSpeed');
+    speedBtn.textContent = state.playback_speed + 'x';
+
+    // Speed popup active state
+    var speedBtns = document.getElementById('speedPopup').children;
     var speeds = [0.25, 0.5, 1, 2, 4];
     for (var i = 0; i < speedBtns.length; i++) {
       speedBtns[i].className = state.playback_speed === speeds[i]
-        ? 'btn btn-dark active' : 'btn btn-dark';
+        ? 'speed-popup-btn active' : 'speed-popup-btn';
     }
-    // Update speed display in collapsed header
-    var speedVal = document.getElementById('speedValue');
-    if (speedVal) speedVal.textContent = state.playback_speed + 'x';
 
-    // Playback progress bars (both in controls card and controller section)
+    // Transport: progress bar
     var isPlaying = state.playing && state.playback_frame_count > 0;
-    var pct = isPlaying && state.playback_frame_count > 0
-      ? (state.playback_frame / state.playback_frame_count * 100) : 0;
-    var progressLabel = state.playback_frame + ' / ' + state.playback_frame_count;
+    var pct = isPlaying ? (state.playback_frame / state.playback_frame_count * 100) : 0;
+    document.getElementById('transportProgress').style.width = pct + '%';
 
-    // Controls card progress (primary — always visible without scrolling)
-    var ctrlsProgress = document.getElementById('controlsPlaybackProgress');
+    // Transport: time display
+    var timeEl = document.getElementById('transportTime');
     if (isPlaying) {
-      ctrlsProgress.classList.add('show');
-      document.getElementById('controlsProgress').style.width = pct + '%';
-      document.getElementById('controlsProgressLabel').textContent = progressLabel;
+      timeEl.textContent = state.playback_frame + ' / ' + state.playback_frame_count;
+    } else if (state.slot_count > 0 && macros.length > 0 && state.current_slot < macros.length) {
+      var m = macros[state.current_slot];
+      timeEl.textContent = m.frame_count + ' fr';
     } else {
-      ctrlsProgress.classList.remove('show');
+      timeEl.textContent = '';
     }
 
-    // Controller viz progress (secondary — in controller section)
-    var progressWrap = document.getElementById('ctrlPlaybackProgress');
-    if (state.playing && state.playback_input) {
-      progressWrap.classList.add('show');
-      document.getElementById('vizProgress').style.width = pct + '%';
-      document.getElementById('vizProgressLabel').textContent = progressLabel;
-    } else {
-      progressWrap.classList.remove('show');
-    }
+    // Transport: now-playing info
+    updateTransportInfo();
 
-    // Sync settings
-    syncDeadzone();
-    syncHoldTime();
-    syncBaseCombo1();
-    syncBaseCombo2();
-    syncPlayBtn();
-    syncStopBtn();
-    syncToggleModeBtn();
-    syncTriggerMode();
-    syncToggleLoopBtn();
-    syncCycleSpeedBtn();
-    syncPrevSlotBtn();
-    syncNextSlotBtn();
-    syncToggleRecBtn();
-    syncAutoLoop();
-    syncSpeedDefault();
-    syncStartDelay();
-    syncLoopDelay();
-    syncTrimEnd();
-    syncRecDelay();
-    syncUiInterval();
-    syncCalSamples();
+    // Sync all settings
+    syncDeadzone(); syncHoldTime();
+    syncBaseCombo1(); syncBaseCombo2();
+    syncPlayBtn(); syncStopBtn(); syncToggleModeBtn(); syncTriggerMode();
+    syncToggleLoopBtn(); syncCycleSpeedBtn(); syncPrevSlotBtn(); syncNextSlotBtn();
+    syncToggleRecBtn(); syncAutoLoop(); syncSpeedDefault();
+    syncStartDelay(); syncLoopDelay(); syncTrimEnd(); syncRecDelay();
+    syncUiInterval(); syncCalSamples();
 
-    // Update controller visualization
+    // Controller visualization
     updateController();
+  }
+
+  function updateTransportInfo() {
+    var slotEl = document.getElementById('transportSlot');
+    var nameEl = document.getElementById('transportName');
+
+    var newSlotText = state.slot_count > 0
+      ? (state.current_slot + 1) + ' / ' + state.slot_count
+      : '0 / 0';
+    slotEl.textContent = newSlotText;
+
+    var newName;
+    if (state.current_macro_name) {
+      newName = state.current_macro_name;
+    } else if (macros.length > 0 && state.current_slot < macros.length) {
+      newName = macros[state.current_slot].name;
+    } else {
+      newName = '--';
+    }
+    if (nameEl.textContent !== newName) {
+      nameEl.classList.add('fading');
+      setTimeout(function() {
+        nameEl.textContent = newName;
+        nameEl.classList.remove('fading');
+      }, 150);
+    }
   }
 
   // === Controller visualization ===
@@ -1537,8 +1291,6 @@
   var CTRL_BTN_ACTIVE_CLASS = {
     'A': 'active-a', 'B': 'active-b', 'X': 'active-x', 'Y': 'active-y'
   };
-
-  // Stick rest positions (cx, cy) in SVG coords
   var LSTICK_REST = [62, 38], RSTICK_REST = [118, 58], STICK_RANGE = 8;
 
   function updateController() {
@@ -1546,21 +1298,12 @@
     var statusText = document.getElementById('ctrlStatusText');
     var connected = state.usb_connected;
 
-    // Connection state
-    if (connected) {
-      wrap.classList.remove('disconnected');
-    } else {
-      wrap.classList.add('disconnected');
-    }
+    if (connected) { wrap.classList.remove('disconnected'); }
+    else { wrap.classList.add('disconnected'); }
 
-    // Recording pulse
-    if (state.recording) {
-      wrap.classList.add('recording');
-    } else {
-      wrap.classList.remove('recording');
-    }
+    if (state.recording) { wrap.classList.add('recording'); }
+    else { wrap.classList.remove('recording'); }
 
-    // Status text
     if (!connected) {
       statusText.textContent = 'Waiting for controller...';
       statusText.className = 'ctrl-status-text';
@@ -1581,16 +1324,12 @@
       statusText.className = 'ctrl-status-text';
     }
 
-    // Reset all buttons
     var allIds = Object.values(CTRL_BTN_MAP);
     for (var i = 0; i < allIds.length; i++) {
       var el = document.getElementById(allIds[i]);
-      if (el) {
-        el.classList.remove('active', 'active-a', 'active-b', 'active-x', 'active-y');
-      }
+      if (el) el.classList.remove('active', 'active-a', 'active-b', 'active-x', 'active-y');
     }
 
-    // Reset sticks to center
     var lStick = document.getElementById('ctrlLStick');
     var rStick = document.getElementById('ctrlRStick');
     lStick.setAttribute('cx', LSTICK_REST[0]);
@@ -1600,11 +1339,8 @@
     rStick.setAttribute('cy', RSTICK_REST[1]);
     rStick.classList.remove('active');
 
-    // Choose input source: playback input during macro playback, live input otherwise
     var pi = (state.playing && state.playback_input) ? state.playback_input : state.live_input;
-
     if (pi) {
-      // Light up active buttons
       for (var j = 0; j < pi.buttons.length; j++) {
         var btn = pi.buttons[j];
         var elId = CTRL_BTN_MAP[btn];
@@ -1616,8 +1352,6 @@
           }
         }
       }
-
-      // Move sticks
       var ls = pi.left_stick;
       var rs = pi.right_stick;
       lStick.setAttribute('cx', LSTICK_REST[0] + ls[0] * STICK_RANGE);
@@ -1629,18 +1363,37 @@
     }
   }
 
+  // === Transport actions ===
+  window.handlePlayStop = function() {
+    if (state.playing) {
+      sendCmd('STOP_PLAYBACK');
+    } else {
+      sendCmd('PLAY_MACRO');
+    }
+  };
+
   window.setSpeed = function(speed) {
     sfx.nav();
     sendCmd('SET_PLAYBACK_SPEED', speed);
+    closeSpeedPopup();
   };
 
-  window.toggleSpeed = function() {
+  window.toggleSpeedPopup = function() {
     sfx.press();
-    var collapse = document.getElementById('speedCollapse');
-    var arrow = document.getElementById('speedArrow');
-    collapse.classList.toggle('open');
-    arrow.classList.toggle('open');
+    var popup = document.getElementById('speedPopup');
+    popup.classList.toggle('show');
   };
+
+  function closeSpeedPopup() {
+    document.getElementById('speedPopup').classList.remove('show');
+  }
+
+  // Close speed popup when clicking outside
+  document.addEventListener('click', function(e) {
+    if (!e.target.closest('.transport-btn-speed') && !e.target.closest('.speed-popup')) {
+      closeSpeedPopup();
+    }
+  });
 
   window.toggleSettingsGroup = function(headerEl) {
     sfx.press();
@@ -1650,38 +1403,20 @@
     arrow.classList.toggle('open');
   };
 
-  function updateSlotName() {
-    var nameEl = document.getElementById('slotName');
-    var newName;
-    if (state.current_macro_name) {
-      newName = state.current_macro_name;
-    } else if (macros.length > 0 && state.current_slot < macros.length) {
-      newName = macros[state.current_slot].name;
-    } else {
-      newName = '--';
-    }
-    if (nameEl.textContent !== newName) {
-      nameEl.classList.add('fading');
-      setTimeout(function() {
-        nameEl.textContent = newName;
-        nameEl.classList.remove('fading');
-      }, 150);
-    }
-  }
-
-  var TILE_COLORS = ['color-0', 'color-1', 'color-2', 'color-3'];
+  // === Macro list rendering (playlist style) ===
+  var TILE_COLORS = ['c0', 'c1', 'c2', 'c3'];
 
   function renderMacros() {
     var container = document.getElementById('macroList');
     if (!macros || macros.length === 0) {
-      container.innerHTML = '<div class="empty-msg">'
-        + '<span class="empty-icon">&#127918;</span>'
-        + 'No macros yet'
-        + '<span class="empty-hint">Record your first macro to see it here</span>'
+      container.innerHTML = '<div class="playlist-empty">'
+        + '<span class="playlist-empty-icon">&#127918;</span>'
+        + '<div class="playlist-empty-text">No macros yet</div>'
+        + '<div class="playlist-empty-hint">Record your first macro to see it here</div>'
         + '</div>';
       return;
     }
-    var html = '<div class="macro-list-grid">';
+    var html = '<div class="playlist">';
     for (var i = 0; i < macros.length; i++) {
       var m = macros[i];
       var dur = m.duration_ms >= 1000
@@ -1691,19 +1426,26 @@
       var isPlaying = state.playing && state.current_slot === i;
       var playingClass = isPlaying ? ' playing' : '';
       var colorClass = TILE_COLORS[i % TILE_COLORS.length];
-      html += '<div class="macro-tile' + sel + playingClass + '" onclick="selectSlot(' + i + ')">'
-        + '<div class="macro-tile-accent ' + colorClass + '"></div>'
-        + '<div class="macro-tile-body">'
-        + '<div class="macro-tile-slot">Slot ' + (i + 1)
-        + (isPlaying ? ' <span class="macro-tile-playing-badge">Playing</span>' : '')
-        + '</div>'
-        + '<div class="macro-tile-name">' + escHtml(m.name) + '</div>'
-        + '<div class="macro-tile-meta"><span>' + m.frame_count + ' fr</span><span>' + dur + '</span></div>'
-        + '</div>'
-        + '<div class="macro-tile-actions">'
-        + '<button class="tile-btn tile-btn-play" onclick="event.stopPropagation();playSlot(' + i + ')">&#9654; Play</button>'
-        + '<button class="tile-btn" onclick="event.stopPropagation();openRename(' + m.id + ',\'' + escAttr(m.name) + '\')">Rename</button>'
-        + '<button class="tile-btn tile-btn-del" onclick="event.stopPropagation();deleteMacro(' + m.id + ',\'' + escAttr(m.name) + '\')">Delete</button>'
+
+      html += '<div class="playlist-item' + sel + playingClass + '" onclick="selectSlot(' + i + ')">'
+        + '<span class="playlist-item-num">' + (i + 1) + '</span>'
+        + '<div class="playlist-item-color ' + colorClass + '"></div>'
+        + '<div class="playlist-item-info">'
+        + '<div class="playlist-item-name">' + escHtml(m.name) + '</div>'
+        + '<div class="playlist-item-meta">'
+        + '<span>' + m.frame_count + ' frames</span>'
+        + '<span>' + dur + '</span>'
+        + (isPlaying ? '<span class="playlist-item-playing-badge">Playing</span>' : '')
+        + '</div></div>';
+
+      if (isPlaying) {
+        html += '<div class="eq-bars"><div class="bar"></div><div class="bar"></div><div class="bar"></div><div class="bar"></div></div>';
+      }
+
+      html += '<div class="playlist-item-actions">'
+        + '<button class="playlist-action-btn" onclick="event.stopPropagation();playSlot(' + i + ')" title="Play">&#9654;</button>'
+        + '<button class="playlist-action-btn" onclick="event.stopPropagation();openRename(' + m.id + ',\'' + escAttr(m.name) + '\')" title="Rename">&#9998;</button>'
+        + '<button class="playlist-action-btn del" onclick="event.stopPropagation();deleteMacro(' + m.id + ',\'' + escAttr(m.name) + '\')" title="Delete">&#10005;</button>'
         + '</div></div>';
     }
     html += '</div>';
@@ -1719,8 +1461,8 @@
     return s.replace(/'/g, "\\'").replace(/"/g, '&quot;');
   }
 
+  // === Commands ===
   window.sendCmd = function(cmd, data) {
-    // Play appropriate sound effect per command
     switch (cmd) {
       case 'TOGGLE_MACRO_MODE':
         (state.macro_mode ? sfx.toggleOff : sfx.toggleOn)(); break;
@@ -1821,329 +1563,156 @@
     if (e.key === 'Enter') window.submitRename();
     if (e.key === 'Escape') window.closeRename();
   });
-
   document.getElementById('renameModal').addEventListener('click', function(e) {
     if (e.target === this) window.closeRename();
   });
-
   document.getElementById('deleteModal').addEventListener('click', function(e) {
     if (e.target === this) window.closeDelete();
   });
 
-  // === Stick deadzone slider ===
+  // === Settings sync functions ===
   var deadzoneSlider = document.getElementById('deadzoneSlider');
   var deadzoneValue = document.getElementById('deadzoneValue');
-  var deadzoneTimeout = null;
-
-  deadzoneSlider.addEventListener('input', function() {
-    var val = parseFloat(deadzoneSlider.value);
-    deadzoneValue.textContent = val.toFixed(1);
-  });
-
-  deadzoneSlider.addEventListener('change', function() {
-    var val = parseFloat(deadzoneSlider.value);
-    sfx.nav();
-    sendCmd('SET_STICK_DEADZONE', val);
-  });
-
-  // Sync slider when state updates include deadzone
+  deadzoneSlider.addEventListener('input', function() { deadzoneValue.textContent = parseFloat(deadzoneSlider.value).toFixed(1); });
+  deadzoneSlider.addEventListener('change', function() { sfx.nav(); sendCmd('SET_STICK_DEADZONE', parseFloat(deadzoneSlider.value)); });
   function syncDeadzone() {
     if (state.stick_deadzone !== undefined) {
-      var val = state.stick_deadzone;
-      deadzoneValue.textContent = val.toFixed(1);
-      if (document.activeElement !== deadzoneSlider) {
-        deadzoneSlider.value = val;
-      }
+      deadzoneValue.textContent = state.stick_deadzone.toFixed(1);
+      if (document.activeElement !== deadzoneSlider) deadzoneSlider.value = state.stick_deadzone;
     }
   }
 
-  // === Combo hold time slider ===
   var holdTimeSlider = document.getElementById('holdTimeSlider');
   var holdTimeValue = document.getElementById('holdTimeValue');
-
-  holdTimeSlider.addEventListener('input', function() {
-    var val = parseFloat(holdTimeSlider.value);
-    holdTimeValue.textContent = val.toFixed(1) + 's';
-  });
-
-  holdTimeSlider.addEventListener('change', function() {
-    var val = parseFloat(holdTimeSlider.value);
-    sfx.nav();
-    sendCmd('SET_COMBO_HOLD_TIME', val);
-  });
-
+  holdTimeSlider.addEventListener('input', function() { holdTimeValue.textContent = parseFloat(holdTimeSlider.value).toFixed(1) + 's'; });
+  holdTimeSlider.addEventListener('change', function() { sfx.nav(); sendCmd('SET_COMBO_HOLD_TIME', parseFloat(holdTimeSlider.value)); });
   function syncHoldTime() {
     if (state.combo_hold_time !== undefined) {
-      var val = state.combo_hold_time;
-      holdTimeValue.textContent = val.toFixed(1) + 's';
-      if (document.activeElement !== holdTimeSlider) {
-        holdTimeSlider.value = val;
-      }
+      holdTimeValue.textContent = state.combo_hold_time.toFixed(1) + 's';
+      if (document.activeElement !== holdTimeSlider) holdTimeSlider.value = state.combo_hold_time;
     }
   }
 
-  // === Base combo button 1 select ===
   var baseCombo1Select = document.getElementById('baseCombo1Select');
   var baseCombo1Value = document.getElementById('baseCombo1Value');
-  var BASE_COMBO_BTN_LABELS = {
-    'L3': 'L3', 'R3': 'R3', 'L': 'L', 'R': 'R', 'ZL': 'ZL', 'ZR': 'ZR'
-  };
-
-  baseCombo1Select.addEventListener('change', function() {
-    var val = baseCombo1Select.value;
-    baseCombo1Value.textContent = BASE_COMBO_BTN_LABELS[val] || val;
-    sfx.nav();
-    sendCmd('SET_BASE_COMBO_BUTTON_1', val);
-  });
-
+  var BASE_COMBO_BTN_LABELS = { 'L3': 'L3', 'R3': 'R3', 'L': 'L', 'R': 'R', 'ZL': 'ZL', 'ZR': 'ZR' };
+  baseCombo1Select.addEventListener('change', function() { var v = baseCombo1Select.value; baseCombo1Value.textContent = BASE_COMBO_BTN_LABELS[v] || v; sfx.nav(); sendCmd('SET_BASE_COMBO_BUTTON_1', v); });
   function syncBaseCombo1() {
     if (state.base_combo_button_1 !== undefined) {
-      var val = state.base_combo_button_1;
-      baseCombo1Value.textContent = BASE_COMBO_BTN_LABELS[val] || val;
-      if (document.activeElement !== baseCombo1Select) {
-        baseCombo1Select.value = val;
-      }
+      baseCombo1Value.textContent = BASE_COMBO_BTN_LABELS[state.base_combo_button_1] || state.base_combo_button_1;
+      if (document.activeElement !== baseCombo1Select) baseCombo1Select.value = state.base_combo_button_1;
     }
   }
 
-  // === Base combo button 2 select ===
   var baseCombo2Select = document.getElementById('baseCombo2Select');
   var baseCombo2Value = document.getElementById('baseCombo2Value');
-
-  baseCombo2Select.addEventListener('change', function() {
-    var val = baseCombo2Select.value;
-    baseCombo2Value.textContent = BASE_COMBO_BTN_LABELS[val] || val;
-    sfx.nav();
-    sendCmd('SET_BASE_COMBO_BUTTON_2', val);
-  });
-
+  baseCombo2Select.addEventListener('change', function() { var v = baseCombo2Select.value; baseCombo2Value.textContent = BASE_COMBO_BTN_LABELS[v] || v; sfx.nav(); sendCmd('SET_BASE_COMBO_BUTTON_2', v); });
   function syncBaseCombo2() {
     if (state.base_combo_button_2 !== undefined) {
-      var val = state.base_combo_button_2;
-      baseCombo2Value.textContent = BASE_COMBO_BTN_LABELS[val] || val;
-      if (document.activeElement !== baseCombo2Select) {
-        baseCombo2Select.value = val;
-      }
+      baseCombo2Value.textContent = BASE_COMBO_BTN_LABELS[state.base_combo_button_2] || state.base_combo_button_2;
+      if (document.activeElement !== baseCombo2Select) baseCombo2Select.value = state.base_combo_button_2;
     }
   }
 
-  // === Play macro button select ===
   var playBtnSelect = document.getElementById('playBtnSelect');
   var playBtnValue = document.getElementById('playBtnValue');
-  var PLAY_BTN_LABELS = {
-    'A': 'A', 'X': 'X', 'L': 'L', 'R': 'R', 'ZL': 'ZL', 'ZR': 'ZR'
-  };
-
-  playBtnSelect.addEventListener('change', function() {
-    var val = playBtnSelect.value;
-    playBtnValue.textContent = PLAY_BTN_LABELS[val] || val;
-    sfx.nav();
-    sendCmd('SET_PLAY_MACRO_BUTTON', val);
-  });
-
+  var PLAY_BTN_LABELS = { 'A': 'A', 'X': 'X', 'L': 'L', 'R': 'R', 'ZL': 'ZL', 'ZR': 'ZR' };
+  playBtnSelect.addEventListener('change', function() { var v = playBtnSelect.value; playBtnValue.textContent = PLAY_BTN_LABELS[v] || v; sfx.nav(); sendCmd('SET_PLAY_MACRO_BUTTON', v); });
   function syncPlayBtn() {
     if (state.play_macro_button !== undefined) {
-      var val = state.play_macro_button;
-      playBtnValue.textContent = PLAY_BTN_LABELS[val] || val;
-      if (document.activeElement !== playBtnSelect) {
-        playBtnSelect.value = val;
-      }
+      playBtnValue.textContent = PLAY_BTN_LABELS[state.play_macro_button] || state.play_macro_button;
+      if (document.activeElement !== playBtnSelect) playBtnSelect.value = state.play_macro_button;
     }
   }
 
-  // === Stop playback button select ===
   var stopBtnSelect = document.getElementById('stopBtnSelect');
   var stopBtnValue = document.getElementById('stopBtnValue');
-  var STOP_BTN_LABELS = {
-    'B': 'B', 'A': 'A', 'X': 'X', 'L': 'L', 'R': 'R', 'ZL': 'ZL', 'ZR': 'ZR'
-  };
-
-  stopBtnSelect.addEventListener('change', function() {
-    var val = stopBtnSelect.value;
-    stopBtnValue.textContent = STOP_BTN_LABELS[val] || val;
-    sfx.nav();
-    sendCmd('SET_STOP_PLAYBACK_BUTTON', val);
-  });
-
+  var STOP_BTN_LABELS = { 'B': 'B', 'A': 'A', 'X': 'X', 'L': 'L', 'R': 'R', 'ZL': 'ZL', 'ZR': 'ZR' };
+  stopBtnSelect.addEventListener('change', function() { var v = stopBtnSelect.value; stopBtnValue.textContent = STOP_BTN_LABELS[v] || v; sfx.nav(); sendCmd('SET_STOP_PLAYBACK_BUTTON', v); });
   function syncStopBtn() {
     if (state.stop_playback_button !== undefined) {
-      var val = state.stop_playback_button;
-      stopBtnValue.textContent = STOP_BTN_LABELS[val] || val;
-      if (document.activeElement !== stopBtnSelect) {
-        stopBtnSelect.value = val;
-      }
+      stopBtnValue.textContent = STOP_BTN_LABELS[state.stop_playback_button] || state.stop_playback_button;
+      if (document.activeElement !== stopBtnSelect) stopBtnSelect.value = state.stop_playback_button;
     }
   }
 
-  // === Toggle macro mode button select ===
   var toggleModeBtnSelect = document.getElementById('toggleModeBtnSelect');
   var toggleModeBtnValue = document.getElementById('toggleModeBtnValue');
-  var TOGGLE_MODE_BTN_LABELS = {
-    'DpadDown': 'D-pad Down', 'A': 'A', 'B': 'B', 'X': 'X', 'L': 'L', 'R': 'R', 'ZL': 'ZL', 'ZR': 'ZR'
-  };
-
-  toggleModeBtnSelect.addEventListener('change', function() {
-    var val = toggleModeBtnSelect.value;
-    toggleModeBtnValue.textContent = TOGGLE_MODE_BTN_LABELS[val] || val;
-    sfx.nav();
-    sendCmd('SET_TOGGLE_MACRO_MODE_BUTTON', val);
-  });
-
+  var TOGGLE_MODE_BTN_LABELS = { 'DpadDown': 'D-pad Down', 'A': 'A', 'B': 'B', 'X': 'X', 'L': 'L', 'R': 'R', 'ZL': 'ZL', 'ZR': 'ZR' };
+  toggleModeBtnSelect.addEventListener('change', function() { var v = toggleModeBtnSelect.value; toggleModeBtnValue.textContent = TOGGLE_MODE_BTN_LABELS[v] || v; sfx.nav(); sendCmd('SET_TOGGLE_MACRO_MODE_BUTTON', v); });
   function syncToggleModeBtn() {
     if (state.toggle_macro_mode_button !== undefined) {
-      var val = state.toggle_macro_mode_button;
-      toggleModeBtnValue.textContent = TOGGLE_MODE_BTN_LABELS[val] || val;
-      if (document.activeElement !== toggleModeBtnSelect) {
-        toggleModeBtnSelect.value = val;
-      }
+      toggleModeBtnValue.textContent = TOGGLE_MODE_BTN_LABELS[state.toggle_macro_mode_button] || state.toggle_macro_mode_button;
+      if (document.activeElement !== toggleModeBtnSelect) toggleModeBtnSelect.value = state.toggle_macro_mode_button;
     }
   }
 
-  // === Macro mode trigger mode select ===
   var triggerModeSelect = document.getElementById('triggerModeSelect');
   var triggerModeValue = document.getElementById('triggerModeValue');
-  var TRIGGER_MODE_LABELS = {
-    'hold': 'Hold', 'edge': 'Instant Press'
-  };
-
-  triggerModeSelect.addEventListener('change', function() {
-    var val = triggerModeSelect.value;
-    triggerModeValue.textContent = TRIGGER_MODE_LABELS[val] || val;
-    sfx.nav();
-    sendCmd('SET_TOGGLE_MACRO_MODE_TRIGGER', val);
-  });
-
+  var TRIGGER_MODE_LABELS = { 'hold': 'Hold', 'edge': 'Instant Press' };
+  triggerModeSelect.addEventListener('change', function() { var v = triggerModeSelect.value; triggerModeValue.textContent = TRIGGER_MODE_LABELS[v] || v; sfx.nav(); sendCmd('SET_TOGGLE_MACRO_MODE_TRIGGER', v); });
   function syncTriggerMode() {
     if (state.toggle_macro_mode_trigger !== undefined) {
-      var val = state.toggle_macro_mode_trigger;
-      triggerModeValue.textContent = TRIGGER_MODE_LABELS[val] || val;
-      if (document.activeElement !== triggerModeSelect) {
-        triggerModeSelect.value = val;
-      }
+      triggerModeValue.textContent = TRIGGER_MODE_LABELS[state.toggle_macro_mode_trigger] || state.toggle_macro_mode_trigger;
+      if (document.activeElement !== triggerModeSelect) triggerModeSelect.value = state.toggle_macro_mode_trigger;
     }
   }
 
-  // === Toggle loop button select ===
   var toggleLoopBtnSelect = document.getElementById('toggleLoopBtnSelect');
   var toggleLoopBtnValue = document.getElementById('toggleLoopBtnValue');
-  var TOGGLE_LOOP_BTN_LABELS = {
-    'Y': 'Y', 'A': 'A', 'B': 'B', 'X': 'X', 'L': 'L', 'R': 'R', 'ZL': 'ZL', 'ZR': 'ZR'
-  };
-
-  toggleLoopBtnSelect.addEventListener('change', function() {
-    var val = toggleLoopBtnSelect.value;
-    toggleLoopBtnValue.textContent = TOGGLE_LOOP_BTN_LABELS[val] || val;
-    sfx.nav();
-    sendCmd('SET_TOGGLE_LOOP_BUTTON', val);
-  });
-
+  var TOGGLE_LOOP_BTN_LABELS = { 'Y': 'Y', 'A': 'A', 'B': 'B', 'X': 'X', 'L': 'L', 'R': 'R', 'ZL': 'ZL', 'ZR': 'ZR' };
+  toggleLoopBtnSelect.addEventListener('change', function() { var v = toggleLoopBtnSelect.value; toggleLoopBtnValue.textContent = TOGGLE_LOOP_BTN_LABELS[v] || v; sfx.nav(); sendCmd('SET_TOGGLE_LOOP_BUTTON', v); });
   function syncToggleLoopBtn() {
     if (state.toggle_loop_button !== undefined) {
-      var val = state.toggle_loop_button;
-      toggleLoopBtnValue.textContent = TOGGLE_LOOP_BTN_LABELS[val] || val;
-      if (document.activeElement !== toggleLoopBtnSelect) {
-        toggleLoopBtnSelect.value = val;
-      }
+      toggleLoopBtnValue.textContent = TOGGLE_LOOP_BTN_LABELS[state.toggle_loop_button] || state.toggle_loop_button;
+      if (document.activeElement !== toggleLoopBtnSelect) toggleLoopBtnSelect.value = state.toggle_loop_button;
     }
   }
 
-  // === Cycle speed button select ===
   var cycleSpeedBtnSelect = document.getElementById('cycleSpeedBtnSelect');
   var cycleSpeedBtnValue = document.getElementById('cycleSpeedBtnValue');
-  var CYCLE_SPEED_BTN_LABELS = {
-    'DpadUp': 'DpadUp', 'A': 'A', 'B': 'B', 'X': 'X', 'Y': 'Y', 'L': 'L', 'R': 'R', 'ZL': 'ZL', 'ZR': 'ZR'
-  };
-
-  cycleSpeedBtnSelect.addEventListener('change', function() {
-    var val = cycleSpeedBtnSelect.value;
-    cycleSpeedBtnValue.textContent = CYCLE_SPEED_BTN_LABELS[val] || val;
-    sfx.nav();
-    sendCmd('SET_CYCLE_SPEED_BUTTON', val);
-  });
-
+  var CYCLE_SPEED_BTN_LABELS = { 'DpadUp': 'DpadUp', 'A': 'A', 'B': 'B', 'X': 'X', 'Y': 'Y', 'L': 'L', 'R': 'R', 'ZL': 'ZL', 'ZR': 'ZR' };
+  cycleSpeedBtnSelect.addEventListener('change', function() { var v = cycleSpeedBtnSelect.value; cycleSpeedBtnValue.textContent = CYCLE_SPEED_BTN_LABELS[v] || v; sfx.nav(); sendCmd('SET_CYCLE_SPEED_BUTTON', v); });
   function syncCycleSpeedBtn() {
     if (state.cycle_speed_button !== undefined) {
-      var val = state.cycle_speed_button;
-      cycleSpeedBtnValue.textContent = CYCLE_SPEED_BTN_LABELS[val] || val;
-      if (document.activeElement !== cycleSpeedBtnSelect) {
-        cycleSpeedBtnSelect.value = val;
-      }
+      cycleSpeedBtnValue.textContent = CYCLE_SPEED_BTN_LABELS[state.cycle_speed_button] || state.cycle_speed_button;
+      if (document.activeElement !== cycleSpeedBtnSelect) cycleSpeedBtnSelect.value = state.cycle_speed_button;
     }
   }
 
-  // === Prev slot button select ===
   var prevSlotBtnSelect = document.getElementById('prevSlotBtnSelect');
   var prevSlotBtnValue = document.getElementById('prevSlotBtnValue');
-  var PREV_SLOT_BTN_LABELS = {
-    'DpadLeft': 'D-pad Left', 'A': 'A', 'B': 'B', 'X': 'X', 'Y': 'Y', 'L': 'L', 'R': 'R', 'ZL': 'ZL', 'ZR': 'ZR'
-  };
-
-  prevSlotBtnSelect.addEventListener('change', function() {
-    var val = prevSlotBtnSelect.value;
-    prevSlotBtnValue.textContent = PREV_SLOT_BTN_LABELS[val] || val;
-    sfx.nav();
-    sendCmd('SET_PREV_SLOT_BUTTON', val);
-  });
-
+  var PREV_SLOT_BTN_LABELS = { 'DpadLeft': 'D-pad Left', 'A': 'A', 'B': 'B', 'X': 'X', 'Y': 'Y', 'L': 'L', 'R': 'R', 'ZL': 'ZL', 'ZR': 'ZR' };
+  prevSlotBtnSelect.addEventListener('change', function() { var v = prevSlotBtnSelect.value; prevSlotBtnValue.textContent = PREV_SLOT_BTN_LABELS[v] || v; sfx.nav(); sendCmd('SET_PREV_SLOT_BUTTON', v); });
   function syncPrevSlotBtn() {
     if (state.prev_slot_button !== undefined) {
-      var val = state.prev_slot_button;
-      prevSlotBtnValue.textContent = PREV_SLOT_BTN_LABELS[val] || val;
-      if (document.activeElement !== prevSlotBtnSelect) {
-        prevSlotBtnSelect.value = val;
-      }
+      prevSlotBtnValue.textContent = PREV_SLOT_BTN_LABELS[state.prev_slot_button] || state.prev_slot_button;
+      if (document.activeElement !== prevSlotBtnSelect) prevSlotBtnSelect.value = state.prev_slot_button;
     }
   }
 
-  // === Next slot button select ===
   var nextSlotBtnSelect = document.getElementById('nextSlotBtnSelect');
   var nextSlotBtnValue = document.getElementById('nextSlotBtnValue');
-  var NEXT_SLOT_BTN_LABELS = {
-    'DpadRight': 'D-pad Right', 'A': 'A', 'B': 'B', 'X': 'X', 'Y': 'Y', 'L': 'L', 'R': 'R', 'ZL': 'ZL', 'ZR': 'ZR'
-  };
-
-  nextSlotBtnSelect.addEventListener('change', function() {
-    var val = nextSlotBtnSelect.value;
-    nextSlotBtnValue.textContent = NEXT_SLOT_BTN_LABELS[val] || val;
-    sfx.nav();
-    sendCmd('SET_NEXT_SLOT_BUTTON', val);
-  });
-
+  var NEXT_SLOT_BTN_LABELS = { 'DpadRight': 'D-pad Right', 'A': 'A', 'B': 'B', 'X': 'X', 'Y': 'Y', 'L': 'L', 'R': 'R', 'ZL': 'ZL', 'ZR': 'ZR' };
+  nextSlotBtnSelect.addEventListener('change', function() { var v = nextSlotBtnSelect.value; nextSlotBtnValue.textContent = NEXT_SLOT_BTN_LABELS[v] || v; sfx.nav(); sendCmd('SET_NEXT_SLOT_BUTTON', v); });
   function syncNextSlotBtn() {
     if (state.next_slot_button !== undefined) {
-      var val = state.next_slot_button;
-      nextSlotBtnValue.textContent = NEXT_SLOT_BTN_LABELS[val] || val;
-      if (document.activeElement !== nextSlotBtnSelect) {
-        nextSlotBtnSelect.value = val;
-      }
+      nextSlotBtnValue.textContent = NEXT_SLOT_BTN_LABELS[state.next_slot_button] || state.next_slot_button;
+      if (document.activeElement !== nextSlotBtnSelect) nextSlotBtnSelect.value = state.next_slot_button;
     }
   }
 
-  // === Toggle recording button select ===
   var toggleRecBtnSelect = document.getElementById('toggleRecBtnSelect');
   var toggleRecBtnValue = document.getElementById('toggleRecBtnValue');
-  var TOGGLE_REC_BTN_LABELS = {
-    'Minus': '-', 'Plus': '+', 'A': 'A', 'B': 'B', 'X': 'X', 'Y': 'Y', 'L': 'L', 'R': 'R', 'ZL': 'ZL', 'ZR': 'ZR'
-  };
-
-  toggleRecBtnSelect.addEventListener('change', function() {
-    var val = toggleRecBtnSelect.value;
-    toggleRecBtnValue.textContent = TOGGLE_REC_BTN_LABELS[val] || val;
-    sfx.nav();
-    sendCmd('SET_TOGGLE_RECORDING_BUTTON', val);
-  });
-
+  var TOGGLE_REC_BTN_LABELS = { 'Minus': '-', 'Plus': '+', 'A': 'A', 'B': 'B', 'X': 'X', 'Y': 'Y', 'L': 'L', 'R': 'R', 'ZL': 'ZL', 'ZR': 'ZR' };
+  toggleRecBtnSelect.addEventListener('change', function() { var v = toggleRecBtnSelect.value; toggleRecBtnValue.textContent = TOGGLE_REC_BTN_LABELS[v] || v; sfx.nav(); sendCmd('SET_TOGGLE_RECORDING_BUTTON', v); });
   function syncToggleRecBtn() {
     if (state.toggle_recording_button !== undefined) {
-      var val = state.toggle_recording_button;
-      toggleRecBtnValue.textContent = TOGGLE_REC_BTN_LABELS[val] || val;
-      if (document.activeElement !== toggleRecBtnSelect) {
-        toggleRecBtnSelect.value = val;
-      }
+      toggleRecBtnValue.textContent = TOGGLE_REC_BTN_LABELS[state.toggle_recording_button] || state.toggle_recording_button;
+      if (document.activeElement !== toggleRecBtnSelect) toggleRecBtnSelect.value = state.toggle_recording_button;
     }
   }
 
-  // === Auto-loop default toggle ===
   window.toggleAutoLoop = function() {
     var newVal = !state.auto_loop_default;
     (newVal ? sfx.toggleOn : sfx.toggleOff)();
@@ -2153,190 +1722,89 @@
       body: JSON.stringify({ cmd: 'SET_AUTO_LOOP_DEFAULT', data: newVal })
     });
   };
-
   function syncAutoLoop() {
     var toggle = document.getElementById('autoLoopToggle');
-    if (state.auto_loop_default) {
-      toggle.classList.add('on');
-    } else {
-      toggle.classList.remove('on');
-    }
+    if (state.auto_loop_default) { toggle.classList.add('on'); } else { toggle.classList.remove('on'); }
   }
 
-  // === Default playback speed slider ===
   var SPEED_PRESETS = [0.25, 0.5, 1.0, 2.0, 4.0];
   var speedDefaultSlider = document.getElementById('speedDefaultSlider');
   var speedDefaultValue = document.getElementById('speedDefaultValue');
-
-  speedDefaultSlider.addEventListener('input', function() {
-    var idx = parseInt(speedDefaultSlider.value);
-    speedDefaultValue.textContent = SPEED_PRESETS[idx] + 'x';
-  });
-
-  speedDefaultSlider.addEventListener('change', function() {
-    var idx = parseInt(speedDefaultSlider.value);
-    sfx.nav();
-    sendCmd('SET_PLAYBACK_SPEED_DEFAULT', SPEED_PRESETS[idx]);
-  });
-
+  speedDefaultSlider.addEventListener('input', function() { speedDefaultValue.textContent = SPEED_PRESETS[parseInt(speedDefaultSlider.value)] + 'x'; });
+  speedDefaultSlider.addEventListener('change', function() { sfx.nav(); sendCmd('SET_PLAYBACK_SPEED_DEFAULT', SPEED_PRESETS[parseInt(speedDefaultSlider.value)]); });
   function syncSpeedDefault() {
     if (state.playback_speed_default !== undefined) {
-      var val = state.playback_speed_default;
-      speedDefaultValue.textContent = val + 'x';
+      speedDefaultValue.textContent = state.playback_speed_default + 'x';
       if (document.activeElement !== speedDefaultSlider) {
-        var idx = SPEED_PRESETS.indexOf(val);
+        var idx = SPEED_PRESETS.indexOf(state.playback_speed_default);
         if (idx >= 0) speedDefaultSlider.value = idx;
       }
     }
   }
 
-  // === Playback start delay slider ===
   var startDelaySlider = document.getElementById('startDelaySlider');
   var startDelayValue = document.getElementById('startDelayValue');
-
-  startDelaySlider.addEventListener('input', function() {
-    var val = parseFloat(startDelaySlider.value);
-    startDelayValue.textContent = val.toFixed(1) + 's';
-  });
-
-  startDelaySlider.addEventListener('change', function() {
-    var val = parseFloat(startDelaySlider.value);
-    sfx.nav();
-    sendCmd('SET_PLAYBACK_START_DELAY', val);
-  });
-
+  startDelaySlider.addEventListener('input', function() { startDelayValue.textContent = parseFloat(startDelaySlider.value).toFixed(1) + 's'; });
+  startDelaySlider.addEventListener('change', function() { sfx.nav(); sendCmd('SET_PLAYBACK_START_DELAY', parseFloat(startDelaySlider.value)); });
   function syncStartDelay() {
     if (state.playback_start_delay !== undefined) {
-      var val = state.playback_start_delay;
-      startDelayValue.textContent = val.toFixed(1) + 's';
-      if (document.activeElement !== startDelaySlider) {
-        startDelaySlider.value = val;
-      }
+      startDelayValue.textContent = state.playback_start_delay.toFixed(1) + 's';
+      if (document.activeElement !== startDelaySlider) startDelaySlider.value = state.playback_start_delay;
     }
   }
 
-  // === Loop restart delay slider ===
   var loopDelaySlider = document.getElementById('loopDelaySlider');
   var loopDelayValue = document.getElementById('loopDelayValue');
-
-  loopDelaySlider.addEventListener('input', function() {
-    var val = parseFloat(loopDelaySlider.value);
-    loopDelayValue.textContent = val.toFixed(1) + 's';
-  });
-
-  loopDelaySlider.addEventListener('change', function() {
-    var val = parseFloat(loopDelaySlider.value);
-    sfx.nav();
-    sendCmd('SET_LOOP_RESTART_DELAY', val);
-  });
-
+  loopDelaySlider.addEventListener('input', function() { loopDelayValue.textContent = parseFloat(loopDelaySlider.value).toFixed(1) + 's'; });
+  loopDelaySlider.addEventListener('change', function() { sfx.nav(); sendCmd('SET_LOOP_RESTART_DELAY', parseFloat(loopDelaySlider.value)); });
   function syncLoopDelay() {
     if (state.loop_restart_delay !== undefined) {
-      var val = state.loop_restart_delay;
-      loopDelayValue.textContent = val.toFixed(1) + 's';
-      if (document.activeElement !== loopDelaySlider) {
-        loopDelaySlider.value = val;
-      }
+      loopDelayValue.textContent = state.loop_restart_delay.toFixed(1) + 's';
+      if (document.activeElement !== loopDelaySlider) loopDelaySlider.value = state.loop_restart_delay;
     }
   }
 
-  // === Recording trim end slider ===
   var trimEndSlider = document.getElementById('trimEndSlider');
   var trimEndValue = document.getElementById('trimEndValue');
-
-  trimEndSlider.addEventListener('input', function() {
-    var val = parseFloat(trimEndSlider.value);
-    trimEndValue.textContent = val.toFixed(1) + 's';
-  });
-
-  trimEndSlider.addEventListener('change', function() {
-    var val = parseFloat(trimEndSlider.value);
-    sfx.nav();
-    sendCmd('SET_RECORDING_TRIM_END', val);
-  });
-
+  trimEndSlider.addEventListener('input', function() { trimEndValue.textContent = parseFloat(trimEndSlider.value).toFixed(1) + 's'; });
+  trimEndSlider.addEventListener('change', function() { sfx.nav(); sendCmd('SET_RECORDING_TRIM_END', parseFloat(trimEndSlider.value)); });
   function syncTrimEnd() {
     if (state.recording_trim_end !== undefined) {
-      var val = state.recording_trim_end;
-      trimEndValue.textContent = val.toFixed(1) + 's';
-      if (document.activeElement !== trimEndSlider) {
-        trimEndSlider.value = val;
-      }
+      trimEndValue.textContent = state.recording_trim_end.toFixed(1) + 's';
+      if (document.activeElement !== trimEndSlider) trimEndSlider.value = state.recording_trim_end;
     }
   }
 
-  // === Recording start delay slider ===
   var recDelaySlider = document.getElementById('recDelaySlider');
   var recDelayValue = document.getElementById('recDelayValue');
-
-  recDelaySlider.addEventListener('input', function() {
-    var val = parseFloat(recDelaySlider.value);
-    recDelayValue.textContent = val.toFixed(1) + 's';
-  });
-
-  recDelaySlider.addEventListener('change', function() {
-    var val = parseFloat(recDelaySlider.value);
-    sfx.nav();
-    sendCmd('SET_RECORDING_START_DELAY', val);
-  });
-
+  recDelaySlider.addEventListener('input', function() { recDelayValue.textContent = parseFloat(recDelaySlider.value).toFixed(1) + 's'; });
+  recDelaySlider.addEventListener('change', function() { sfx.nav(); sendCmd('SET_RECORDING_START_DELAY', parseFloat(recDelaySlider.value)); });
   function syncRecDelay() {
     if (state.recording_start_delay !== undefined) {
-      var val = state.recording_start_delay;
-      recDelayValue.textContent = val.toFixed(1) + 's';
-      if (document.activeElement !== recDelaySlider) {
-        recDelaySlider.value = val;
-      }
+      recDelayValue.textContent = state.recording_start_delay.toFixed(1) + 's';
+      if (document.activeElement !== recDelaySlider) recDelaySlider.value = state.recording_start_delay;
     }
   }
 
-  // === UI update interval slider ===
   var uiIntervalSlider = document.getElementById('uiIntervalSlider');
   var uiIntervalValue = document.getElementById('uiIntervalValue');
-
-  uiIntervalSlider.addEventListener('input', function() {
-    var val = parseInt(uiIntervalSlider.value);
-    uiIntervalValue.textContent = val + 'ms';
-  });
-
-  uiIntervalSlider.addEventListener('change', function() {
-    var val = parseInt(uiIntervalSlider.value);
-    sfx.nav();
-    sendCmd('SET_UI_UPDATE_INTERVAL', val);
-  });
-
+  uiIntervalSlider.addEventListener('input', function() { uiIntervalValue.textContent = parseInt(uiIntervalSlider.value) + 'ms'; });
+  uiIntervalSlider.addEventListener('change', function() { sfx.nav(); sendCmd('SET_UI_UPDATE_INTERVAL', parseInt(uiIntervalSlider.value)); });
   function syncUiInterval() {
     if (state.ui_update_interval_ms !== undefined) {
-      var val = state.ui_update_interval_ms;
-      uiIntervalValue.textContent = val + 'ms';
-      if (document.activeElement !== uiIntervalSlider) {
-        uiIntervalSlider.value = val;
-      }
+      uiIntervalValue.textContent = state.ui_update_interval_ms + 'ms';
+      if (document.activeElement !== uiIntervalSlider) uiIntervalSlider.value = state.ui_update_interval_ms;
     }
   }
 
-  // === Calibration samples slider ===
   var calSamplesSlider = document.getElementById('calSamplesSlider');
   var calSamplesValue = document.getElementById('calSamplesValue');
-
-  calSamplesSlider.addEventListener('input', function() {
-    var val = parseInt(calSamplesSlider.value);
-    calSamplesValue.textContent = val;
-  });
-
-  calSamplesSlider.addEventListener('change', function() {
-    var val = parseInt(calSamplesSlider.value);
-    sfx.nav();
-    sendCmd('SET_CALIBRATION_SAMPLES', val);
-  });
-
+  calSamplesSlider.addEventListener('input', function() { calSamplesValue.textContent = parseInt(calSamplesSlider.value); });
+  calSamplesSlider.addEventListener('change', function() { sfx.nav(); sendCmd('SET_CALIBRATION_SAMPLES', parseInt(calSamplesSlider.value)); });
   function syncCalSamples() {
     if (state.calibration_samples !== undefined) {
-      var val = state.calibration_samples;
-      calSamplesValue.textContent = val;
-      if (document.activeElement !== calSamplesSlider) {
-        calSamplesSlider.value = val;
-      }
+      calSamplesValue.textContent = state.calibration_samples;
+      if (document.activeElement !== calSamplesSlider) calSamplesSlider.value = state.calibration_samples;
     }
   }
 })();
