@@ -11,7 +11,7 @@ pub struct MacroRecorder {
     pub recording: bool,
     frames: Vec<(u64, [u8; 64])>,
     start: Option<Instant>,
-    delay_until: Option<Instant>,
+    countdown_deadline: Option<Instant>,
 }
 
 impl MacroRecorder {
@@ -20,7 +20,7 @@ impl MacroRecorder {
             recording: false,
             frames: Vec::new(),
             start: None,
-            delay_until: None,
+            countdown_deadline: None,
         }
     }
 
@@ -29,11 +29,12 @@ impl MacroRecorder {
         self.recording = true;
         let delay_us = (delay_secs.max(0.0) * 1_000_000.0) as u64;
         if delay_us > 0 {
-            self.delay_until = Some(Instant::now() + std::time::Duration::from_micros(delay_us));
+            self.countdown_deadline =
+                Some(Instant::now() + std::time::Duration::from_micros(delay_us));
             self.start = None;
             info!("[MACRO] Recording starting in {delay_secs:.1}s");
         } else {
-            self.delay_until = None;
+            self.countdown_deadline = None;
             self.start = Some(Instant::now());
             info!("[MACRO] Recording started");
         }
@@ -41,7 +42,7 @@ impl MacroRecorder {
 
     /// Whether the recorder is in countdown (delay not yet elapsed).
     pub fn in_countdown(&self) -> bool {
-        self.delay_until
+        self.countdown_deadline
             .map(|t| Instant::now() < t)
             .unwrap_or(false)
     }
@@ -52,12 +53,12 @@ impl MacroRecorder {
             return;
         }
         // Check if still in countdown
-        if let Some(deadline) = self.delay_until {
+        if let Some(deadline) = self.countdown_deadline {
             if Instant::now() < deadline {
                 return; // Still waiting
             }
             // Countdown finished — begin actual recording
-            self.delay_until = None;
+            self.countdown_deadline = None;
             self.start = Some(Instant::now());
             info!("[MACRO] Recording started (after delay)");
         }
@@ -84,9 +85,9 @@ impl MacroRecorder {
         if trim_us > 0 {
             if let Some(&(last_ts, _)) = self.frames.last() {
                 let cutoff = last_ts.saturating_sub(trim_us);
-                let orig = self.frames.len();
+                let count_before_trim = self.frames.len();
                 self.frames.retain(|&(ts, _)| ts <= cutoff);
-                let trimmed = orig - self.frames.len();
+                let trimmed = count_before_trim - self.frames.len();
                 if trimmed > 0 {
                     info!(
                         "[MACRO] Trimmed {trimmed} frames ({:.1}s) from end",

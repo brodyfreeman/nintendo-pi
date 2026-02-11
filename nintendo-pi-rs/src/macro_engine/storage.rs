@@ -122,7 +122,7 @@ pub fn save_macro(
         filename,
         frame_count,
         duration_ms: duration_us / 1000,
-        created: chrono_now(),
+        created: unix_timestamp_secs(),
     };
     index.push(entry);
     save_index(macros_dir, &index);
@@ -169,7 +169,7 @@ pub fn rename_macro(macros_dir: &Path, macro_id: u32, new_name: &str) -> bool {
 
 pub fn delete_macro(macros_dir: &Path, macro_id: u32) -> bool {
     let mut index = load_index(macros_dir);
-    let orig_len = index.len();
+    let count_before_delete = index.len();
 
     index.retain(|entry| {
         if entry.id == macro_id {
@@ -187,7 +187,7 @@ pub fn delete_macro(macros_dir: &Path, macro_id: u32) -> bool {
         }
     });
 
-    let deleted = index.len() < orig_len;
+    let deleted = index.len() < count_before_delete;
     if deleted {
         save_index(macros_dir, &index);
         debug!("[MACRO] Index updated: {} macro(s) remaining", index.len());
@@ -207,7 +207,7 @@ pub fn get_macro_id_by_slot(macros_dir: &Path, slot: usize) -> Option<u32> {
 }
 
 /// Simple timestamp without pulling in chrono.
-fn chrono_now() -> String {
+fn unix_timestamp_secs() -> String {
     use std::time::SystemTime;
     let dur = SystemTime::now()
         .duration_since(SystemTime::UNIX_EPOCH)

@@ -95,7 +95,7 @@ impl Processor {
     fn drain_web_commands(&mut self) {
         while let Ok(web_cmd) = self.io.cmd_rx.try_recv() {
             let effect = self.ctrl.execute(web_cmd);
-            self.sync_after_command();
+            self.sync_config_to_hardware();
             self.apply_effect(effect);
         }
     }
@@ -175,9 +175,8 @@ impl Processor {
         build_bt_report(parsed, left, right, 0)
     }
 
-    /// Sync combo detector and calibrator state after a command that may have
-    /// changed config.
-    fn sync_after_command(&mut self) {
+    /// Push config changes to hardware-facing state (stick deadzone, calibration).
+    fn sync_config_to_hardware(&mut self) {
         self.sticks.set_deadzone(self.ctrl.config.stick_deadzone);
         self.io
             .calibration_samples

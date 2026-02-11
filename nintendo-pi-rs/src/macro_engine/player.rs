@@ -149,11 +149,11 @@ impl MacroPlayer {
             return None;
         }
         let mmap = self.mmap.as_ref()?;
-        let raw_elapsed_us = self.start.as_ref()?.elapsed().as_micros() as u64;
-        if raw_elapsed_us < self.delay_us {
+        let total_elapsed_us = self.start.as_ref()?.elapsed().as_micros() as u64;
+        if total_elapsed_us < self.delay_us {
             return None; // Still in countdown — pass through live input
         }
-        let elapsed_us = ((raw_elapsed_us - self.delay_us) as f64 * self.speed) as u64;
+        let elapsed_us = ((total_elapsed_us - self.delay_us) as f64 * self.speed) as u64;
 
         // Advance through frames whose timestamps have passed
         while self.frame_index < self.frame_count {

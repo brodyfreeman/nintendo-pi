@@ -132,10 +132,10 @@ impl StickPair {
 }
 
 /// Center, calibrate, and normalize a single stick.
-fn calibrate_one(cal: &StickCalibrator, raw: (u16, u16), center: (u16, u16)) -> (f64, f64) {
+fn calibrate_one(calibrator: &StickCalibrator, raw: (u16, u16), center: (u16, u16)) -> (f64, f64) {
     let x_c = raw.0 as f64 - center.0 as f64;
     let y_c = raw.1 as f64 - center.1 as f64;
-    let (x_cal, y_cal) = cal.calibrate(x_c, y_c);
+    let (x_cal, y_cal) = calibrator.calibrate(x_c, y_c);
     (
         (x_cal * 100.0 / 2048.0).clamp(-100.0, 100.0),
         (y_cal * 100.0 / 2048.0).clamp(-100.0, 100.0),
