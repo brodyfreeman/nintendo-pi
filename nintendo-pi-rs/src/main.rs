@@ -102,10 +102,10 @@ async fn main() -> anyhow::Result<()> {
     let _dbus_conn = loop {
         match async {
             let conn = zbus::Connection::system().await?;
-            bt::sdp::register_agent(&conn).await?;
-            bt::sdp::configure_adapter(&conn).await?;
+            bt::agent::register_agent(&conn).await?;
+            bt::adapter::configure_adapter(&conn).await?;
             bt::sdp::register_sdp_profile(&conn).await?;
-            bt::sdp::set_device_class().await?;
+            bt::adapter::set_device_class().await?;
             anyhow::Ok(conn)
         }
         .await
