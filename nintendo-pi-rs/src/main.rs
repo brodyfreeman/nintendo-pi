@@ -224,10 +224,10 @@ async fn main() -> anyhow::Result<()> {
             });
 
             // Wait for BT connection, but also check if USB has disconnected.
-            // Important: accept_connection() must NOT be cancelled by a timer,
-            // because dropping the future tears down the L2CAP listeners and
-            // prevents the Switch from completing its connection.
-            let accept_fut = bt::emulator::accept_connection();
+            // Important: accept() must NOT be cancelled by a timer, because
+            // dropping the future tears down the L2CAP listeners and prevents
+            // the Switch from completing its connection.
+            let accept_fut = bt::emulator::BtSession::accept();
             tokio::pin!(accept_fut);
 
             let mut bt_session = loop {
@@ -238,8 +238,7 @@ async fn main() -> anyhow::Result<()> {
                             Err(e) => {
                                 error!("[BT] Connection error: {e}");
                                 tokio::time::sleep(Duration::from_secs(2)).await;
-                                // Recreate accept future after an error
-                                accept_fut.set(bt::emulator::accept_connection());
+                                accept_fut.set(bt::emulator::BtSession::accept());
                             }
                         }
                     }
@@ -249,13 +248,11 @@ async fn main() -> anyhow::Result<()> {
                             mitm_state.update(StateSnapshot::default());
                             break 'bt_loop;
                         }
-                        // Don't recreate accept_fut — keep the listeners alive
                     }
                 }
             };
 
-            // Run pairing
-            if let Err(e) = bt::emulator::run_pairing(&mut bt_session).await {
+            if let Err(e) = bt_session.run_pairing().await {
                 error!("[BT] Pairing error: {e}");
                 continue;
             }
@@ -264,37 +261,10 @@ async fn main() -> anyhow::Result<()> {
             bt_connected.store(true, Ordering::Relaxed);
             led::set_led(&led::LED_NORMAL);
 
-            // --- BT forwarding loop ---
-            let mut bt_timer: u8 = 0;
-            loop {
-                match report_rx.recv().await {
-                    Some(mut report) => {
-                        // Overwrite timer byte with the real BT timer
-                        // Timer is at byte [2] (after 0xA1 header and report ID)
-                        report[2] = bt_timer;
-                        bt_timer = bt_timer.wrapping_add(1);
-
-                        if let Err(e) =
-                            bt::emulator::send_input_report(&mut bt_session, &report).await
-                        {
-                            warn!("[BT] Send error: {e}");
-                            break; // BT disconnected
-                        }
-
-                        // Poll BT control channel for subcommands
-                        match bt::emulator::poll_control(&mut bt_session, &mut bt_timer).await {
-                            Ok(true) | Err(_) => break, // BT disconnected
-                            _ => {}
-                        }
-                    }
-                    None => {
-                        // USB processing ended (sender dropped)
-                        break 'bt_loop;
-                    }
-                }
+            let usb_alive = bt_session.forward_reports(&mut report_rx).await;
+            if !usb_alive {
+                break 'bt_loop;
             }
-
-            // BT disconnected — continue bt_loop to wait for reconnection
             warn!("[BT] Switch disconnected. Waiting for reconnection...");
             bt_connected.store(false, Ordering::Relaxed);
             led::set_led(&led::LED_NORMAL);
