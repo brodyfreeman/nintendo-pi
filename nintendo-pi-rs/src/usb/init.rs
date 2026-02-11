@@ -89,7 +89,6 @@ pub fn is_device_present() -> bool {
         .any(|d| d.vendor_id() == VENDOR_ID && d.product_id() == PRODUCT_ID)
 }
 
-/// Find and open the Switch 2 Pro Controller USB device.
 fn find_device() -> Option<nusb::Device> {
     for dev_info in nusb::list_devices().ok()? {
         if dev_info.vendor_id() == VENDOR_ID && dev_info.product_id() == PRODUCT_ID {
@@ -173,47 +172,4 @@ pub async fn initialize_controller() -> anyhow::Result<()> {
 
     info!("[USB] Initialization sequence complete!");
     Ok(())
-}
-
-/// Send an LED command to the physical controller.
-/// Opens a fresh USB connection, sends the command, and closes.
-/// Best-effort: errors are logged but not propagated.
-pub fn send_led_command(pattern: &[u8]) {
-    let Some(device) = find_device() else {
-        debug!("[LED] Device not found for LED write");
-        return;
-    };
-
-    let _ = device.detach_kernel_driver(USB_INTERFACE);
-
-    let Ok(interface) = device.claim_interface(USB_INTERFACE) else {
-        debug!("[LED] Could not claim interface for LED write");
-        return;
-    };
-
-    // Find OUT endpoint
-    let Ok(config) = device.active_configuration() else {
-        return;
-    };
-    let Some(iface_desc) = config
-        .interface_alt_settings()
-        .find(|i| i.interface_number() == USB_INTERFACE)
-    else {
-        return;
-    };
-
-    let Some(ep_out) = iface_desc
-        .endpoints()
-        .find(|ep| ep.direction() == nusb::transfer::Direction::Out)
-        .map(|ep| ep.address())
-    else {
-        return;
-    };
-
-    // Fire and forget -- queue the transfer but don't await
-    drop(interface.bulk_out(ep_out, pattern.to_vec()));
-
-    // Reattach kernel driver
-    drop(interface);
-    let _ = device.attach_kernel_driver(USB_INTERFACE);
 }

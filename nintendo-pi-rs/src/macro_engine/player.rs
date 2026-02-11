@@ -8,9 +8,7 @@ use memmap2::Mmap;
 use tracing::{debug, error, info, warn};
 
 use super::storage::{self, FRAME_SIZE, HEADER_SIZE, MAGIC, MAGIC_V1};
-
-/// Available playback speed presets.
-pub const SPEED_PRESETS: &[f64] = &[0.25, 0.5, 1.0, 2.0, 4.0];
+use crate::config::SPEED_PRESETS;
 
 pub struct MacroPlayer {
     pub playing: bool,

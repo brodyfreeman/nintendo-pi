@@ -9,6 +9,9 @@ use tracing::{info, warn};
 use crate::combo::{self, TriggerMode};
 use crate::input::Button;
 
+/// Available playback speed presets.
+pub const SPEED_PRESETS: &[f64] = &[0.25, 0.5, 1.0, 2.0, 4.0];
+
 /// All user-configurable settings in one place.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct Config {
@@ -99,8 +102,6 @@ impl Config {
     /// Apply a config update by field name, clamping values and validating names.
     /// Returns false if the field name is unknown or the value is invalid.
     pub fn apply(&mut self, update: &ConfigUpdate) -> bool {
-        use crate::macro_engine::player::SPEED_PRESETS;
-
         let field = update.field.as_str();
         let val = &update.value;
 
