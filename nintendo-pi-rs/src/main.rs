@@ -10,6 +10,7 @@ mod config;
 mod input;
 mod led;
 mod macro_engine;
+mod processing;
 mod usb;
 mod web;
 
@@ -23,11 +24,9 @@ use tokio::sync::{broadcast, mpsc};
 use tracing::{error, info, warn};
 
 use calibration::{auto_calibrate_centers, StickCalibrator, C_STICK_CAL, MAIN_STICK_CAL};
-use combo::{ComboAction, ComboDetector};
-use input::{build_bt_report, parse_hid_report};
-use macro_engine::controller::{MacroCommand, MacroController};
-use macro_engine::storage;
-use web::state::{MitmState, PlaybackInput, StateSnapshot};
+use macro_engine::controller::MacroCommand;
+use processing::{Processor, ProcessorIO, StickCalibration};
+use web::state::{MitmState, StateSnapshot};
 
 #[derive(Parser)]
 #[command(
@@ -196,28 +195,24 @@ async fn main() -> anyhow::Result<()> {
         // --- Spawn USB processing on a blocking thread ---
         let (report_tx, mut report_rx) = mpsc::channel::<[u8; 50]>(4);
 
-        let usb_mitm_state = mitm_state.clone();
-        let usb_state_broadcast = state_broadcast.clone();
-        let usb_bt_connected = bt_connected.clone();
-        let usb_macros_dir = args.macros_dir.clone();
-        let usb_cal_samples = calibration_samples.clone();
+        let io = ProcessorIO {
+            hid_rx,
+            cmd_rx,
+            report_tx,
+            mitm_state: mitm_state.clone(),
+            state_broadcast: state_broadcast.clone(),
+            bt_connected: bt_connected.clone(),
+            calibration_samples: calibration_samples.clone(),
+        };
+        let sticks = StickCalibration {
+            main_cal,
+            c_cal,
+            left_center,
+            right_center,
+        };
+        let processor = Processor::new(io, sticks, args.macros_dir.clone());
 
-        let usb_handle = tokio::task::spawn_blocking(move || {
-            usb_processing_loop(
-                hid_rx,
-                cmd_rx,
-                report_tx,
-                usb_mitm_state,
-                usb_state_broadcast,
-                usb_bt_connected,
-                usb_macros_dir,
-                main_cal,
-                c_cal,
-                left_center,
-                right_center,
-                usb_cal_samples,
-            )
-        });
+        let usb_handle = tokio::task::spawn_blocking(move || processor.run());
 
         // --- BT connection loop (async, on main task) ---
         'bt_loop: loop {
@@ -310,222 +305,4 @@ async fn main() -> anyhow::Result<()> {
         mitm_state.update(StateSnapshot::default());
         cmd_rx = usb_handle.await?;
     }
-}
-
-/// USB processing loop — runs on a blocking thread via `spawn_blocking`.
-///
-/// Reads HID reports, runs combo detection, macro recording/playback, and web
-/// commands. Sends built BT reports over `report_tx`. Returns `cmd_rx` so it
-/// can be reused across USB reconnection cycles.
-#[allow(clippy::too_many_arguments)]
-fn usb_processing_loop(
-    hid_rx: std::sync::mpsc::Receiver<usb::hid::HidReport>,
-    mut cmd_rx: mpsc::Receiver<MacroCommand>,
-    report_tx: mpsc::Sender<[u8; 50]>,
-    mitm_state: Arc<MitmState>,
-    state_broadcast: broadcast::Sender<String>,
-    bt_connected: Arc<AtomicBool>,
-    macros_dir: PathBuf,
-    mut main_cal: StickCalibrator,
-    mut c_cal: StickCalibrator,
-    left_center: (u16, u16),
-    right_center: (u16, u16),
-    calibration_samples: Arc<AtomicU32>,
-) -> mpsc::Receiver<MacroCommand> {
-    let mut combo = ComboDetector::new();
-    let mut ctrl = MacroController::new(macros_dir);
-    ctrl.config.calibration_samples = calibration_samples.load(Ordering::Relaxed);
-    let mut usb_check_counter: u32 = 0;
-
-    let broadcast_macros = |broadcast: &broadcast::Sender<String>, dir: &std::path::Path| {
-        let macros = storage::list_macros(dir);
-        let msg = serde_json::json!({ "type": "macro_list", "macros": macros });
-        let _ = broadcast.send(msg.to_string());
-    };
-
-    /// Apply side effects from a macro command.
-    fn apply_effect(
-        effect: macro_engine::controller::MacroEffect,
-        state_broadcast: &broadcast::Sender<String>,
-        macros_dir: &std::path::Path,
-        broadcast_macros: &dyn Fn(&broadcast::Sender<String>, &std::path::Path),
-    ) {
-        if let Some(pattern) = effect.led {
-            led::set_led(pattern);
-        }
-        if effect.broadcast_macros {
-            broadcast_macros(state_broadcast, macros_dir);
-        }
-    }
-
-    info!("[MITM] USB processing active.");
-
-    loop {
-        // --- Drain web command queue ---
-        while let Ok(web_cmd) = cmd_rx.try_recv() {
-            let effect = ctrl.execute(web_cmd);
-            // Keep combo detector in sync with controller's macro mode
-            combo.macro_mode = ctrl.macro_mode;
-            // Sync stick deadzone to calibrators
-            main_cal.deadzone = ctrl.config.stick_deadzone;
-            c_cal.deadzone = ctrl.config.stick_deadzone;
-            // Sync calibration samples for next USB reconnect
-            calibration_samples.store(ctrl.config.calibration_samples, Ordering::Relaxed);
-            apply_effect(
-                effect,
-                &state_broadcast,
-                ctrl.macros_dir(),
-                &broadcast_macros,
-            );
-        }
-
-        // --- Read HID report (non-blocking from channel) ---
-        let raw_report = match hid_rx.recv_timeout(Duration::from_millis(8)) {
-            Ok(report) => report,
-            Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
-                // Periodically check if USB device is still present (~every 2s)
-                usb_check_counter += 1;
-                if usb_check_counter >= 250 {
-                    usb_check_counter = 0;
-                    if !usb::init::is_device_present() {
-                        return cmd_rx; // USB disconnected
-                    }
-                }
-                continue;
-            }
-            Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
-                return cmd_rx; // USB disconnected
-            }
-        };
-
-        // --- Macro playback override ---
-        if ctrl.player.playing {
-            if let Some(macro_frame) = ctrl.player.get_frame() {
-                // Use macro frame for BT output
-                let parsed = parse_hid_report(&macro_frame);
-                let left_cal = calibrate_stick(&main_cal, parsed.left_stick_raw, left_center);
-                let right_cal = calibrate_stick(&c_cal, parsed.right_stick_raw, right_center);
-                let bt_report = build_bt_report(&parsed, left_cal, right_cal, 0);
-                let _ = report_tx.try_send(bt_report);
-
-                // Check for abort combo on live input
-                let live_parsed = parse_hid_report(&raw_report);
-                let (action, _) = combo.update(&live_parsed.buttons, &ctrl.config);
-                if action == ComboAction::StopPlayback {
-                    let effect = ctrl.execute(MacroCommand::StopPlayback);
-                    apply_effect(
-                        effect,
-                        &state_broadcast,
-                        ctrl.macros_dir(),
-                        &broadcast_macros,
-                    );
-                }
-
-                update_state(
-                    &mitm_state,
-                    &ctrl,
-                    bt_connected.load(Ordering::Relaxed),
-                    Some(&parsed),
-                    Some(&live_parsed),
-                );
-                continue;
-            } else if !ctrl.player.playing {
-                // Playback finished (player set playing=false internally)
-                let effect = ctrl.execute(MacroCommand::StopPlayback);
-                apply_effect(
-                    effect,
-                    &state_broadcast,
-                    ctrl.macros_dir(),
-                    &broadcast_macros,
-                );
-                info!("[MACRO] Playback finished.");
-            }
-            // else: still playing but no frame ready yet (before first timestamp),
-            // fall through to normal input processing
-        }
-
-        // --- Parse live input ---
-        let mut parsed = parse_hid_report(&raw_report);
-
-        // --- Combo detection ---
-        let (action, suppressed) = combo.update(&parsed.buttons, &ctrl.config);
-
-        // --- Handle combo actions ---
-        if let Some(cmd) = Option::from(action) {
-            let effect = ctrl.execute(cmd);
-            combo.macro_mode = ctrl.macro_mode;
-            apply_effect(
-                effect,
-                &state_broadcast,
-                ctrl.macros_dir(),
-                &broadcast_macros,
-            );
-        }
-
-        // --- Filter suppressed buttons ---
-        let mut filtered_report = raw_report;
-        if !suppressed.is_empty() {
-            suppressed.filter_buttons(&mut parsed.buttons);
-            suppressed.filter_raw_report(&mut filtered_report);
-        }
-
-        // --- Record if active ---
-        if ctrl.recorder.recording {
-            ctrl.recorder.add_frame(&filtered_report);
-        }
-
-        // --- Build BT report and send to forwarding channel ---
-        let left_cal = calibrate_stick(&main_cal, parsed.left_stick_raw, left_center);
-        let right_cal = calibrate_stick(&c_cal, parsed.right_stick_raw, right_center);
-        let bt_report = build_bt_report(&parsed, left_cal, right_cal, 0);
-        let _ = report_tx.try_send(bt_report);
-
-        // --- Update web UI state ---
-        update_state(
-            &mitm_state,
-            &ctrl,
-            bt_connected.load(Ordering::Relaxed),
-            None,
-            Some(&parsed),
-        );
-    }
-}
-
-fn calibrate_stick(cal: &StickCalibrator, raw: (u16, u16), center: (u16, u16)) -> (f64, f64) {
-    let x_c = raw.0 as f64 - center.0 as f64;
-    let y_c = raw.1 as f64 - center.1 as f64;
-    let (x_cal, y_cal) = cal.calibrate(x_c, y_c);
-    // Calibrator outputs ~[-2600, 2600] at full tilt — scale to [-100, 100]
-    // matching Python: max(-100, min(100, int(cal * 100 / 2048)))
-    (
-        (x_cal * 100.0 / 2048.0).clamp(-100.0, 100.0),
-        (y_cal * 100.0 / 2048.0).clamp(-100.0, 100.0),
-    )
-}
-
-fn update_state(
-    mitm_state: &MitmState,
-    ctrl: &MacroController,
-    bt_connected: bool,
-    playback_input: Option<&input::InputState>,
-    live_input: Option<&input::InputState>,
-) {
-    mitm_state.update(StateSnapshot {
-        macro_mode: ctrl.macro_mode,
-        recording: ctrl.recorder.recording,
-        recording_countdown: ctrl.recorder.in_countdown(),
-        playing: ctrl.player.playing,
-        current_slot: ctrl.current_slot,
-        slot_count: ctrl.cached_slot_count,
-        current_macro_name: ctrl.cached_macro_name.clone(),
-        usb_connected: true,
-        bt_connected,
-        playback_speed: ctrl.player.speed,
-        looping: ctrl.player.looping,
-        playback_frame: ctrl.player.frame_index(),
-        playback_frame_count: ctrl.player.frame_count(),
-        playback_input: playback_input.map(PlaybackInput::from_input_state),
-        live_input: live_input.map(PlaybackInput::from_input_state),
-        config: ctrl.config.clone(),
-    });
 }
