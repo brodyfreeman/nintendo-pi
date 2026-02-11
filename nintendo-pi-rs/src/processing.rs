@@ -113,7 +113,11 @@ impl Processor {
 
             // Check for abort combo on live input
             let live_parsed = parse_hid_report(raw_report);
-            let (command, _) = self.combo.update(&live_parsed.buttons, &self.ctrl.config);
+            let (command, _) = self.combo.update(
+                &live_parsed.buttons,
+                &self.ctrl.config,
+                self.ctrl.macro_mode,
+            );
             if command == Some(MacroCommand::StopPlayback) {
                 let effect = self.ctrl.execute(MacroCommand::StopPlayback);
                 self.apply_effect(effect);
@@ -137,11 +141,12 @@ impl Processor {
     /// Process live controller input: combo detection, recording, BT forwarding.
     fn process_live_input(&mut self, raw_report: &[u8; 64]) {
         let mut parsed = parse_hid_report(raw_report);
-        let (command, suppressed) = self.combo.update(&parsed.buttons, &self.ctrl.config);
+        let (command, suppressed) =
+            self.combo
+                .update(&parsed.buttons, &self.ctrl.config, self.ctrl.macro_mode);
 
         if let Some(cmd) = command {
             let effect = self.ctrl.execute(cmd);
-            self.combo.macro_mode = self.ctrl.macro_mode;
             self.apply_effect(effect);
         }
 
@@ -172,7 +177,6 @@ impl Processor {
     /// Sync combo detector and calibrator state after a command that may have
     /// changed config.
     fn sync_after_command(&mut self) {
-        self.combo.macro_mode = self.ctrl.macro_mode;
         self.sticks.set_deadzone(self.ctrl.config.stick_deadzone);
         self.io
             .calibration_samples

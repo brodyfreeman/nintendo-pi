@@ -114,10 +114,9 @@ impl SuppressedButtons {
 /// Combo detector state machine.
 ///
 /// Button bindings and timing come from `Config`, passed to `update()`.
-/// The detector only tracks its own internal state (macro mode, hold timer,
-/// previous buttons).
+/// The detector only tracks its own internal state (hold timer, previous
+/// buttons). `macro_mode` is owned by the caller and passed in.
 pub struct ComboDetector {
-    pub macro_mode: bool,
     hold_button_start: Option<Instant>,
     prev_buttons: ButtonState,
     prev_base_held: bool,
@@ -126,7 +125,6 @@ pub struct ComboDetector {
 impl ComboDetector {
     pub fn new() -> Self {
         Self {
-            macro_mode: false,
             hold_button_start: None,
             prev_buttons: ButtonState::default(),
             prev_base_held: false,
@@ -135,11 +133,13 @@ impl ComboDetector {
 
     /// Process button state. Returns (command, suppressed_buttons).
     ///
-    /// Reads button bindings and timing from `config`.
+    /// `macro_mode` gates recording combos — the caller (MacroController)
+    /// owns this state; the detector just reads it.
     pub fn update(
         &mut self,
         buttons: &ButtonState,
         config: &Config,
+        macro_mode: bool,
     ) -> (Option<MacroCommand>, SuppressedButtons) {
         let base_held =
             buttons.get(config.base_combo_button_1) && buttons.get(config.base_combo_button_2);
@@ -223,7 +223,7 @@ impl ComboDetector {
             ];
 
             for (btn, combo_cmd, requires_macro_mode) in edge_combos {
-                if requires_macro_mode && !self.macro_mode {
+                if requires_macro_mode && !macro_mode {
                     continue;
                 }
                 let pressed = buttons.get(btn);
@@ -271,12 +271,12 @@ mod tests {
         let cfg = default_config();
 
         // Pressing A alone does nothing
-        let (action, sup) = cd.update(&buttons_with(&[Button::A]), &cfg);
+        let (action, sup) = cd.update(&buttons_with(&[Button::A]), &cfg, false);
         assert_eq!(action, None);
         assert!(sup.is_empty());
 
         // DpadDown alone does nothing
-        let (action, sup) = cd.update(&buttons_with(&[Button::DpadDown]), &cfg);
+        let (action, sup) = cd.update(&buttons_with(&[Button::DpadDown]), &cfg, false);
         assert_eq!(action, None);
         assert!(sup.is_empty());
     }
@@ -285,7 +285,7 @@ mod tests {
     fn test_l3r3_suppressed() {
         let mut cd = ComboDetector::new();
         let cfg = default_config();
-        let (_, sup) = cd.update(&buttons_with(&[Button::L3, Button::R3]), &cfg);
+        let (_, sup) = cd.update(&buttons_with(&[Button::L3, Button::R3]), &cfg, false);
         assert!(!sup.is_empty());
         assert!(sup.buttons[..sup.count]
             .iter()
@@ -301,10 +301,14 @@ mod tests {
         let cfg = default_config();
 
         // First frame: L3+R3 (rising edge, but no combo button)
-        cd.update(&buttons_with(&[Button::L3, Button::R3]), &cfg);
+        cd.update(&buttons_with(&[Button::L3, Button::R3]), &cfg, false);
 
         // Second frame: L3+R3+A (A rising edge → PlayMacro)
-        let (action, sup) = cd.update(&buttons_with(&[Button::L3, Button::R3, Button::A]), &cfg);
+        let (action, sup) = cd.update(
+            &buttons_with(&[Button::L3, Button::R3, Button::A]),
+            &cfg,
+            false,
+        );
         assert_eq!(action, Some(MacroCommand::PlayMacro));
         assert!(sup.buttons[..sup.count]
             .iter()
@@ -315,9 +319,13 @@ mod tests {
     fn test_instant_combo_stop_playback() {
         let mut cd = ComboDetector::new();
         let cfg = default_config();
-        cd.update(&buttons_with(&[Button::L3, Button::R3]), &cfg);
+        cd.update(&buttons_with(&[Button::L3, Button::R3]), &cfg, false);
 
-        let (action, _) = cd.update(&buttons_with(&[Button::L3, Button::R3, Button::B]), &cfg);
+        let (action, _) = cd.update(
+            &buttons_with(&[Button::L3, Button::R3, Button::B]),
+            &cfg,
+            false,
+        );
         assert_eq!(action, Some(MacroCommand::StopPlayback));
     }
 
@@ -325,20 +333,22 @@ mod tests {
     fn test_instant_combo_prev_next_slot() {
         let mut cd = ComboDetector::new();
         let cfg = default_config();
-        cd.update(&buttons_with(&[Button::L3, Button::R3]), &cfg);
+        cd.update(&buttons_with(&[Button::L3, Button::R3]), &cfg, false);
 
         let (action, _) = cd.update(
             &buttons_with(&[Button::L3, Button::R3, Button::DpadLeft]),
             &cfg,
+            false,
         );
         assert_eq!(action, Some(MacroCommand::PrevSlot));
 
         // Release DpadLeft
-        cd.update(&buttons_with(&[Button::L3, Button::R3]), &cfg);
+        cd.update(&buttons_with(&[Button::L3, Button::R3]), &cfg, false);
 
         let (action, _) = cd.update(
             &buttons_with(&[Button::L3, Button::R3, Button::DpadRight]),
             &cfg,
+            false,
         );
         assert_eq!(action, Some(MacroCommand::NextSlot));
     }
@@ -347,14 +357,22 @@ mod tests {
     fn test_combo_not_retriggered_on_hold() {
         let mut cd = ComboDetector::new();
         let cfg = default_config();
-        cd.update(&buttons_with(&[Button::L3, Button::R3]), &cfg);
+        cd.update(&buttons_with(&[Button::L3, Button::R3]), &cfg, false);
 
         // First press: triggers
-        let (action, _) = cd.update(&buttons_with(&[Button::L3, Button::R3, Button::A]), &cfg);
+        let (action, _) = cd.update(
+            &buttons_with(&[Button::L3, Button::R3, Button::A]),
+            &cfg,
+            false,
+        );
         assert_eq!(action, Some(MacroCommand::PlayMacro));
 
         // Held: doesn't retrigger
-        let (action, _) = cd.update(&buttons_with(&[Button::L3, Button::R3, Button::A]), &cfg);
+        let (action, _) = cd.update(
+            &buttons_with(&[Button::L3, Button::R3, Button::A]),
+            &cfg,
+            false,
+        );
         assert_eq!(action, None);
     }
 
@@ -362,15 +380,15 @@ mod tests {
     fn test_toggle_recording_in_macro_mode() {
         let mut cd = ComboDetector::new();
         let cfg = default_config();
-        cd.macro_mode = true;
 
         // L3+R3 first (no combo button)
-        cd.update(&buttons_with(&[Button::L3, Button::R3]), &cfg);
+        cd.update(&buttons_with(&[Button::L3, Button::R3]), &cfg, true);
 
         // L3+R3+Minus rising edge in macro mode → ToggleRecording
         let (action, sup) = cd.update(
             &buttons_with(&[Button::L3, Button::R3, Button::Minus]),
             &cfg,
+            true,
         );
         assert_eq!(action, Some(MacroCommand::ToggleRecording));
         assert!(sup.buttons[..sup.count]
@@ -382,14 +400,14 @@ mod tests {
     fn test_no_recording_without_macro_mode() {
         let mut cd = ComboDetector::new();
         let cfg = default_config();
-        assert!(!cd.macro_mode);
 
-        cd.update(&buttons_with(&[Button::L3, Button::R3]), &cfg);
+        cd.update(&buttons_with(&[Button::L3, Button::R3]), &cfg, false);
 
         // L3+R3+Minus without macro mode → no recording (button suppressed but no action)
         let (action, _) = cd.update(
             &buttons_with(&[Button::L3, Button::R3, Button::Minus]),
             &cfg,
+            false,
         );
         assert_eq!(action, None);
     }
@@ -403,6 +421,7 @@ mod tests {
         cd.update(
             &buttons_with(&[Button::L3, Button::R3, Button::DpadDown]),
             &cfg,
+            false,
         );
 
         // Sleep just over the hold duration
@@ -411,6 +430,7 @@ mod tests {
         let (action, _) = cd.update(
             &buttons_with(&[Button::L3, Button::R3, Button::DpadDown]),
             &cfg,
+            false,
         );
         assert_eq!(action, Some(MacroCommand::ToggleMacroMode));
     }
@@ -424,11 +444,13 @@ mod tests {
         cd.update(
             &buttons_with(&[Button::L3, Button::R3, Button::DpadDown]),
             &cfg,
+            false,
         );
         std::thread::sleep(std::time::Duration::from_millis(100));
         let (action, _) = cd.update(
             &buttons_with(&[Button::L3, Button::R3, Button::DpadDown]),
             &cfg,
+            false,
         );
         assert_eq!(action, None);
     }
@@ -440,12 +462,13 @@ mod tests {
         cfg.toggle_macro_mode_trigger = TriggerMode::Edge;
 
         // First frame: L3+R3 (no combo button)
-        cd.update(&buttons_with(&[Button::L3, Button::R3]), &cfg);
+        cd.update(&buttons_with(&[Button::L3, Button::R3]), &cfg, false);
 
         // Second frame: L3+R3+DpadDown rising edge → instant ToggleMacroMode
         let (action, sup) = cd.update(
             &buttons_with(&[Button::L3, Button::R3, Button::DpadDown]),
             &cfg,
+            false,
         );
         assert_eq!(action, Some(MacroCommand::ToggleMacroMode));
         assert!(sup.buttons[..sup.count]
@@ -459,12 +482,13 @@ mod tests {
         let mut cfg = default_config();
         cfg.toggle_macro_mode_trigger = TriggerMode::Edge;
 
-        cd.update(&buttons_with(&[Button::L3, Button::R3]), &cfg);
+        cd.update(&buttons_with(&[Button::L3, Button::R3]), &cfg, false);
 
         // First press: triggers
         let (action, _) = cd.update(
             &buttons_with(&[Button::L3, Button::R3, Button::DpadDown]),
             &cfg,
+            false,
         );
         assert_eq!(action, Some(MacroCommand::ToggleMacroMode));
 
@@ -472,6 +496,7 @@ mod tests {
         let (action, _) = cd.update(
             &buttons_with(&[Button::L3, Button::R3, Button::DpadDown]),
             &cfg,
+            false,
         );
         assert_eq!(action, None);
     }
@@ -515,10 +540,13 @@ mod tests {
     fn test_recording_not_triggered_with_combo_button() {
         let mut cd = ComboDetector::new();
         let cfg = default_config();
-        cd.macro_mode = true;
 
         // L3+R3+A: should NOT trigger recording (A takes priority)
-        let (action, _) = cd.update(&buttons_with(&[Button::L3, Button::R3, Button::A]), &cfg);
+        let (action, _) = cd.update(
+            &buttons_with(&[Button::L3, Button::R3, Button::A]),
+            &cfg,
+            true,
+        );
         assert_eq!(action, Some(MacroCommand::PlayMacro));
     }
 
@@ -526,9 +554,13 @@ mod tests {
     fn test_instant_combo_toggle_loop() {
         let mut cd = ComboDetector::new();
         let cfg = default_config();
-        cd.update(&buttons_with(&[Button::L3, Button::R3]), &cfg);
+        cd.update(&buttons_with(&[Button::L3, Button::R3]), &cfg, false);
 
-        let (action, sup) = cd.update(&buttons_with(&[Button::L3, Button::R3, Button::Y]), &cfg);
+        let (action, sup) = cd.update(
+            &buttons_with(&[Button::L3, Button::R3, Button::Y]),
+            &cfg,
+            false,
+        );
         assert_eq!(action, Some(MacroCommand::ToggleLoop));
         assert!(sup.buttons[..sup.count]
             .iter()
@@ -539,11 +571,12 @@ mod tests {
     fn test_instant_combo_cycle_speed() {
         let mut cd = ComboDetector::new();
         let cfg = default_config();
-        cd.update(&buttons_with(&[Button::L3, Button::R3]), &cfg);
+        cd.update(&buttons_with(&[Button::L3, Button::R3]), &cfg, false);
 
         let (action, sup) = cd.update(
             &buttons_with(&[Button::L3, Button::R3, Button::DpadUp]),
             &cfg,
+            false,
         );
         assert_eq!(action, Some(MacroCommand::CycleSpeed));
         assert!(sup.buttons[..sup.count]
