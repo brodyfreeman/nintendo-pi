@@ -463,6 +463,43 @@
   }
 
   /* === Settings === */
+  .settings-group { margin-bottom: 0.3rem; }
+  .settings-group-header {
+    display: flex; align-items: center; justify-content: space-between;
+    cursor: pointer; padding: 0.6rem 0;
+    -webkit-tap-highlight-color: transparent;
+    -webkit-user-select: none; user-select: none;
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+  }
+  .settings-group-header:active { opacity: 0.7; }
+  .settings-group-title {
+    font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.1em;
+    color: var(--muted); font-weight: 800;
+    display: flex; align-items: center; gap: 0.4rem;
+  }
+  .settings-group-title::before {
+    content: ''; display: inline-block; width: 3px; height: 0.9em;
+    border-radius: 2px;
+  }
+  .settings-group.group-buttons .settings-group-title::before { background: var(--blue); }
+  .settings-group.group-playback .settings-group-title::before { background: var(--green); }
+  .settings-group.group-recording .settings-group-title::before { background: var(--red); }
+  .settings-group.group-combo .settings-group-title::before { background: var(--yellow); }
+  .settings-group.group-advanced .settings-group-title::before { background: var(--muted); }
+  .settings-group-arrow {
+    font-size: 0.6rem; color: var(--muted); transition: transform 0.2s ease;
+  }
+  .settings-group-arrow.open { transform: rotate(180deg); }
+  .settings-group-body {
+    max-height: 0; overflow: hidden; opacity: 0;
+    transition: max-height 0.3s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.25s ease;
+  }
+  .settings-group-body.open {
+    max-height: 2000px; opacity: 1;
+  }
+  .settings-group-body-inner {
+    padding: 0.5rem 0 0.3rem;
+  }
   .setting-row { margin-bottom: 0.3rem; }
   .setting-label {
     display: flex; align-items: center; justify-content: space-between;
@@ -807,282 +844,342 @@
 
 <div class="section controls-section" id="settingsSection">
   <div class="section-title">Settings</div>
-  <div class="setting-row">
-    <div class="setting-label">
-      <span class="setting-name">Stick Deadzone</span>
-      <span class="setting-value" id="deadzoneValue">10.0</span>
+
+  <!-- Button Mappings -->
+  <div class="settings-group group-buttons">
+    <div class="settings-group-header" onclick="toggleSettingsGroup(this)">
+      <span class="settings-group-title">Button Mappings</span>
+      <span class="settings-group-arrow">&#9660;</span>
     </div>
-    <input type="range" class="setting-slider" id="deadzoneSlider" min="0" max="50" step="0.5" value="10">
-    <div class="setting-range-labels">
-      <span>0 (none)</span>
-      <span>50 (max)</span>
-    </div>
-  </div>
-  <div class="setting-row">
-    <div class="setting-label">
-      <span class="setting-name">Combo Hold Time</span>
-      <span class="setting-value" id="holdTimeValue">0.5s</span>
-    </div>
-    <input type="range" class="setting-slider" id="holdTimeSlider" min="0.1" max="2.0" step="0.1" value="0.5">
-    <div class="setting-range-labels">
-      <span>0.1s (fast)</span>
-      <span>2.0s (slow)</span>
-    </div>
-  </div>
-  <div class="setting-row">
-    <div class="setting-label">
-      <span class="setting-name">Base Combo Button 1</span>
-      <span class="setting-value" id="baseCombo1Value">L3</span>
-    </div>
-    <select class="setting-select" id="baseCombo1Select">
-      <option value="L3">L3</option>
-      <option value="R3">R3</option>
-      <option value="L">L</option>
-      <option value="R">R</option>
-      <option value="ZL">ZL</option>
-      <option value="ZR">ZR</option>
-    </select>
-  </div>
-  <div class="setting-row">
-    <div class="setting-label">
-      <span class="setting-name">Base Combo Button 2</span>
-      <span class="setting-value" id="baseCombo2Value">R3</span>
-    </div>
-    <select class="setting-select" id="baseCombo2Select">
-      <option value="R3">R3</option>
-      <option value="L3">L3</option>
-      <option value="L">L</option>
-      <option value="R">R</option>
-      <option value="ZL">ZL</option>
-      <option value="ZR">ZR</option>
-    </select>
-  </div>
-  <div class="setting-row">
-    <div class="setting-label">
-      <span class="setting-name">Play Macro Button</span>
-      <span class="setting-value" id="playBtnValue">A</span>
-    </div>
-    <select class="setting-select" id="playBtnSelect">
-      <option value="A">A</option>
-      <option value="X">X</option>
-      <option value="L">L</option>
-      <option value="R">R</option>
-      <option value="ZL">ZL</option>
-      <option value="ZR">ZR</option>
-    </select>
-  </div>
-  <div class="setting-row">
-    <div class="setting-label">
-      <span class="setting-name">Stop Playback Button</span>
-      <span class="setting-value" id="stopBtnValue">B</span>
-    </div>
-    <select class="setting-select" id="stopBtnSelect">
-      <option value="B">B</option>
-      <option value="A">A</option>
-      <option value="X">X</option>
-      <option value="L">L</option>
-      <option value="R">R</option>
-      <option value="ZL">ZL</option>
-      <option value="ZR">ZR</option>
-    </select>
-  </div>
-  <div class="setting-row">
-    <div class="setting-label">
-      <span class="setting-name">Toggle Macro Mode Button</span>
-      <span class="setting-value" id="toggleModeBtnValue">D-pad Down</span>
-    </div>
-    <select class="setting-select" id="toggleModeBtnSelect">
-      <option value="DpadDown">D-pad Down</option>
-      <option value="A">A</option>
-      <option value="B">B</option>
-      <option value="X">X</option>
-      <option value="L">L</option>
-      <option value="R">R</option>
-      <option value="ZL">ZL</option>
-      <option value="ZR">ZR</option>
-    </select>
-  </div>
-  <div class="setting-row">
-    <div class="setting-label">
-      <span class="setting-name">Macro Mode Trigger</span>
-      <span class="setting-value" id="triggerModeValue">Hold</span>
-    </div>
-    <select class="setting-select" id="triggerModeSelect">
-      <option value="hold">Hold (default)</option>
-      <option value="edge">Instant Press</option>
-    </select>
-  </div>
-  <div class="setting-row">
-    <div class="setting-label">
-      <span class="setting-name">Toggle Loop Button</span>
-      <span class="setting-value" id="toggleLoopBtnValue">Y</span>
-    </div>
-    <select class="setting-select" id="toggleLoopBtnSelect">
-      <option value="Y">Y</option>
-      <option value="A">A</option>
-      <option value="B">B</option>
-      <option value="X">X</option>
-      <option value="L">L</option>
-      <option value="R">R</option>
-      <option value="ZL">ZL</option>
-      <option value="ZR">ZR</option>
-    </select>
-  </div>
-  <div class="setting-row">
-    <div class="setting-label">
-      <span class="setting-name">Cycle Speed Button</span>
-      <span class="setting-value" id="cycleSpeedBtnValue">DpadUp</span>
-    </div>
-    <select class="setting-select" id="cycleSpeedBtnSelect">
-      <option value="DpadUp">DpadUp</option>
-      <option value="A">A</option>
-      <option value="B">B</option>
-      <option value="X">X</option>
-      <option value="Y">Y</option>
-      <option value="L">L</option>
-      <option value="R">R</option>
-      <option value="ZL">ZL</option>
-      <option value="ZR">ZR</option>
-    </select>
-  </div>
-  <div class="setting-row">
-    <div class="setting-label">
-      <span class="setting-name">Prev Slot Button</span>
-      <span class="setting-value" id="prevSlotBtnValue">D-pad Left</span>
-    </div>
-    <select class="setting-select" id="prevSlotBtnSelect">
-      <option value="DpadLeft">D-pad Left</option>
-      <option value="A">A</option>
-      <option value="B">B</option>
-      <option value="X">X</option>
-      <option value="Y">Y</option>
-      <option value="L">L</option>
-      <option value="R">R</option>
-      <option value="ZL">ZL</option>
-      <option value="ZR">ZR</option>
-    </select>
-  </div>
-  <div class="setting-row">
-    <div class="setting-label">
-      <span class="setting-name">Next Slot Button</span>
-      <span class="setting-value" id="nextSlotBtnValue">D-pad Right</span>
-    </div>
-    <select class="setting-select" id="nextSlotBtnSelect">
-      <option value="DpadRight">D-pad Right</option>
-      <option value="A">A</option>
-      <option value="B">B</option>
-      <option value="X">X</option>
-      <option value="Y">Y</option>
-      <option value="L">L</option>
-      <option value="R">R</option>
-      <option value="ZL">ZL</option>
-      <option value="ZR">ZR</option>
-    </select>
-  </div>
-  <div class="setting-row">
-    <div class="setting-label">
-      <span class="setting-name">Toggle Recording Button</span>
-      <span class="setting-value" id="toggleRecBtnValue">-</span>
-    </div>
-    <select class="setting-select" id="toggleRecBtnSelect">
-      <option value="Minus">-</option>
-      <option value="Plus">+</option>
-      <option value="A">A</option>
-      <option value="B">B</option>
-      <option value="X">X</option>
-      <option value="Y">Y</option>
-      <option value="L">L</option>
-      <option value="R">R</option>
-      <option value="ZL">ZL</option>
-      <option value="ZR">ZR</option>
-    </select>
-  </div>
-  <div class="setting-row">
-    <div class="setting-label">
-      <span class="setting-name">Default Playback Speed</span>
-      <span class="setting-value" id="speedDefaultValue">1.0x</span>
-    </div>
-    <input type="range" class="setting-slider" id="speedDefaultSlider" min="0" max="4" step="1" value="2">
-    <div class="setting-range-labels">
-      <span>0.25x</span>
-      <span>4.0x</span>
+    <div class="settings-group-body">
+      <div class="settings-group-body-inner">
+        <div class="setting-row">
+          <div class="setting-label">
+            <span class="setting-name">Play Macro Button</span>
+            <span class="setting-value" id="playBtnValue">A</span>
+          </div>
+          <select class="setting-select" id="playBtnSelect">
+            <option value="A">A</option>
+            <option value="X">X</option>
+            <option value="L">L</option>
+            <option value="R">R</option>
+            <option value="ZL">ZL</option>
+            <option value="ZR">ZR</option>
+          </select>
+        </div>
+        <div class="setting-row">
+          <div class="setting-label">
+            <span class="setting-name">Stop Playback Button</span>
+            <span class="setting-value" id="stopBtnValue">B</span>
+          </div>
+          <select class="setting-select" id="stopBtnSelect">
+            <option value="B">B</option>
+            <option value="A">A</option>
+            <option value="X">X</option>
+            <option value="L">L</option>
+            <option value="R">R</option>
+            <option value="ZL">ZL</option>
+            <option value="ZR">ZR</option>
+          </select>
+        </div>
+        <div class="setting-row">
+          <div class="setting-label">
+            <span class="setting-name">Toggle Macro Mode</span>
+            <span class="setting-value" id="toggleModeBtnValue">D-pad Down</span>
+          </div>
+          <select class="setting-select" id="toggleModeBtnSelect">
+            <option value="DpadDown">D-pad Down</option>
+            <option value="A">A</option>
+            <option value="B">B</option>
+            <option value="X">X</option>
+            <option value="L">L</option>
+            <option value="R">R</option>
+            <option value="ZL">ZL</option>
+            <option value="ZR">ZR</option>
+          </select>
+        </div>
+        <div class="setting-row">
+          <div class="setting-label">
+            <span class="setting-name">Toggle Recording</span>
+            <span class="setting-value" id="toggleRecBtnValue">-</span>
+          </div>
+          <select class="setting-select" id="toggleRecBtnSelect">
+            <option value="Minus">-</option>
+            <option value="Plus">+</option>
+            <option value="A">A</option>
+            <option value="B">B</option>
+            <option value="X">X</option>
+            <option value="Y">Y</option>
+            <option value="L">L</option>
+            <option value="R">R</option>
+            <option value="ZL">ZL</option>
+            <option value="ZR">ZR</option>
+          </select>
+        </div>
+        <div class="setting-row">
+          <div class="setting-label">
+            <span class="setting-name">Toggle Loop</span>
+            <span class="setting-value" id="toggleLoopBtnValue">Y</span>
+          </div>
+          <select class="setting-select" id="toggleLoopBtnSelect">
+            <option value="Y">Y</option>
+            <option value="A">A</option>
+            <option value="B">B</option>
+            <option value="X">X</option>
+            <option value="L">L</option>
+            <option value="R">R</option>
+            <option value="ZL">ZL</option>
+            <option value="ZR">ZR</option>
+          </select>
+        </div>
+        <div class="setting-row">
+          <div class="setting-label">
+            <span class="setting-name">Cycle Speed</span>
+            <span class="setting-value" id="cycleSpeedBtnValue">DpadUp</span>
+          </div>
+          <select class="setting-select" id="cycleSpeedBtnSelect">
+            <option value="DpadUp">DpadUp</option>
+            <option value="A">A</option>
+            <option value="B">B</option>
+            <option value="X">X</option>
+            <option value="Y">Y</option>
+            <option value="L">L</option>
+            <option value="R">R</option>
+            <option value="ZL">ZL</option>
+            <option value="ZR">ZR</option>
+          </select>
+        </div>
+        <div class="setting-row">
+          <div class="setting-label">
+            <span class="setting-name">Prev Slot</span>
+            <span class="setting-value" id="prevSlotBtnValue">D-pad Left</span>
+          </div>
+          <select class="setting-select" id="prevSlotBtnSelect">
+            <option value="DpadLeft">D-pad Left</option>
+            <option value="A">A</option>
+            <option value="B">B</option>
+            <option value="X">X</option>
+            <option value="Y">Y</option>
+            <option value="L">L</option>
+            <option value="R">R</option>
+            <option value="ZL">ZL</option>
+            <option value="ZR">ZR</option>
+          </select>
+        </div>
+        <div class="setting-row">
+          <div class="setting-label">
+            <span class="setting-name">Next Slot</span>
+            <span class="setting-value" id="nextSlotBtnValue">D-pad Right</span>
+          </div>
+          <select class="setting-select" id="nextSlotBtnSelect">
+            <option value="DpadRight">D-pad Right</option>
+            <option value="A">A</option>
+            <option value="B">B</option>
+            <option value="X">X</option>
+            <option value="Y">Y</option>
+            <option value="L">L</option>
+            <option value="R">R</option>
+            <option value="ZL">ZL</option>
+            <option value="ZR">ZR</option>
+          </select>
+        </div>
+      </div>
     </div>
   </div>
-  <div class="setting-row">
-    <div class="setting-label">
-      <span class="setting-name">Auto-Loop Playback</span>
-      <button class="switch-toggle" id="autoLoopToggle" onclick="toggleAutoLoop()">
-        <span class="knob"></span>
-      </button>
+
+  <!-- Playback -->
+  <div class="settings-group group-playback">
+    <div class="settings-group-header" onclick="toggleSettingsGroup(this)">
+      <span class="settings-group-title">Playback</span>
+      <span class="settings-group-arrow">&#9660;</span>
     </div>
-    <div class="setting-range-labels">
-      <span>Loop macros by default when playing</span>
-    </div>
-  </div>
-  <div class="setting-row">
-    <div class="setting-label">
-      <span class="setting-name">Playback Start Delay</span>
-      <span class="setting-value" id="startDelayValue">0.0s</span>
-    </div>
-    <input type="range" class="setting-slider" id="startDelaySlider" min="0" max="5" step="0.5" value="0">
-    <div class="setting-range-labels">
-      <span>0s (instant)</span>
-      <span>5s (max)</span>
-    </div>
-  </div>
-  <div class="setting-row">
-    <div class="setting-label">
-      <span class="setting-name">Loop Restart Delay</span>
-      <span class="setting-value" id="loopDelayValue">0.0s</span>
-    </div>
-    <input type="range" class="setting-slider" id="loopDelaySlider" min="0" max="5" step="0.5" value="0">
-    <div class="setting-range-labels">
-      <span>0s (instant)</span>
-      <span>5s (max)</span>
-    </div>
-  </div>
-  <div class="setting-row">
-    <div class="setting-label">
-      <span class="setting-name">Recording Trim End</span>
-      <span class="setting-value" id="trimEndValue">0.0s</span>
-    </div>
-    <input type="range" class="setting-slider" id="trimEndSlider" min="0" max="2" step="0.1" value="0">
-    <div class="setting-range-labels">
-      <span>0s (none)</span>
-      <span>2s (max)</span>
-    </div>
-  </div>
-  <div class="setting-row">
-    <div class="setting-label">
-      <span class="setting-name">Recording Start Delay</span>
-      <span class="setting-value" id="recDelayValue">0.0s</span>
-    </div>
-    <input type="range" class="setting-slider" id="recDelaySlider" min="0" max="5" step="0.5" value="0">
-    <div class="setting-range-labels">
-      <span>0s (instant)</span>
-      <span>5s (max)</span>
-    </div>
-  </div>
-  <div class="setting-row">
-    <div class="setting-label">
-      <span class="setting-name">UI Update Rate</span>
-      <span class="setting-value" id="uiIntervalValue">200ms</span>
-    </div>
-    <input type="range" class="setting-slider" id="uiIntervalSlider" min="50" max="500" step="50" value="200">
-    <div class="setting-range-labels">
-      <span>50ms (fast)</span>
-      <span>500ms (slow)</span>
+    <div class="settings-group-body">
+      <div class="settings-group-body-inner">
+        <div class="setting-row">
+          <div class="setting-label">
+            <span class="setting-name">Default Speed</span>
+            <span class="setting-value" id="speedDefaultValue">1.0x</span>
+          </div>
+          <input type="range" class="setting-slider" id="speedDefaultSlider" min="0" max="4" step="1" value="2">
+          <div class="setting-range-labels">
+            <span>0.25x</span>
+            <span>4.0x</span>
+          </div>
+        </div>
+        <div class="setting-row">
+          <div class="setting-label">
+            <span class="setting-name">Auto-Loop</span>
+            <button class="switch-toggle" id="autoLoopToggle" onclick="toggleAutoLoop()">
+              <span class="knob"></span>
+            </button>
+          </div>
+          <div class="setting-range-labels">
+            <span>Loop macros by default when playing</span>
+          </div>
+        </div>
+        <div class="setting-row">
+          <div class="setting-label">
+            <span class="setting-name">Start Delay</span>
+            <span class="setting-value" id="startDelayValue">0.0s</span>
+          </div>
+          <input type="range" class="setting-slider" id="startDelaySlider" min="0" max="5" step="0.5" value="0">
+          <div class="setting-range-labels">
+            <span>0s (instant)</span>
+            <span>5s (max)</span>
+          </div>
+        </div>
+        <div class="setting-row">
+          <div class="setting-label">
+            <span class="setting-name">Loop Restart Delay</span>
+            <span class="setting-value" id="loopDelayValue">0.0s</span>
+          </div>
+          <input type="range" class="setting-slider" id="loopDelaySlider" min="0" max="5" step="0.5" value="0">
+          <div class="setting-range-labels">
+            <span>0s (instant)</span>
+            <span>5s (max)</span>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
-  <div class="setting-row">
-    <div class="setting-label">
-      <span class="setting-name">Calibration Samples</span>
-      <span class="setting-value" id="calSamplesValue">20</span>
+
+  <!-- Recording -->
+  <div class="settings-group group-recording">
+    <div class="settings-group-header" onclick="toggleSettingsGroup(this)">
+      <span class="settings-group-title">Recording</span>
+      <span class="settings-group-arrow">&#9660;</span>
     </div>
-    <input type="range" class="setting-slider" id="calSamplesSlider" min="5" max="100" step="5" value="20">
-    <div class="setting-range-labels">
-      <span>5 (fast)</span>
-      <span>100 (precise)</span>
+    <div class="settings-group-body">
+      <div class="settings-group-body-inner">
+        <div class="setting-row">
+          <div class="setting-label">
+            <span class="setting-name">Start Delay</span>
+            <span class="setting-value" id="recDelayValue">0.0s</span>
+          </div>
+          <input type="range" class="setting-slider" id="recDelaySlider" min="0" max="5" step="0.5" value="0">
+          <div class="setting-range-labels">
+            <span>0s (instant)</span>
+            <span>5s (max)</span>
+          </div>
+        </div>
+        <div class="setting-row">
+          <div class="setting-label">
+            <span class="setting-name">Trim End</span>
+            <span class="setting-value" id="trimEndValue">0.0s</span>
+          </div>
+          <input type="range" class="setting-slider" id="trimEndSlider" min="0" max="2" step="0.1" value="0">
+          <div class="setting-range-labels">
+            <span>0s (none)</span>
+            <span>2s (max)</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Combo Settings -->
+  <div class="settings-group group-combo">
+    <div class="settings-group-header" onclick="toggleSettingsGroup(this)">
+      <span class="settings-group-title">Combo Activation</span>
+      <span class="settings-group-arrow">&#9660;</span>
+    </div>
+    <div class="settings-group-body">
+      <div class="settings-group-body-inner">
+        <div class="setting-row">
+          <div class="setting-label">
+            <span class="setting-name">Base Button 1</span>
+            <span class="setting-value" id="baseCombo1Value">L3</span>
+          </div>
+          <select class="setting-select" id="baseCombo1Select">
+            <option value="L3">L3</option>
+            <option value="R3">R3</option>
+            <option value="L">L</option>
+            <option value="R">R</option>
+            <option value="ZL">ZL</option>
+            <option value="ZR">ZR</option>
+          </select>
+        </div>
+        <div class="setting-row">
+          <div class="setting-label">
+            <span class="setting-name">Base Button 2</span>
+            <span class="setting-value" id="baseCombo2Value">R3</span>
+          </div>
+          <select class="setting-select" id="baseCombo2Select">
+            <option value="R3">R3</option>
+            <option value="L3">L3</option>
+            <option value="L">L</option>
+            <option value="R">R</option>
+            <option value="ZL">ZL</option>
+            <option value="ZR">ZR</option>
+          </select>
+        </div>
+        <div class="setting-row">
+          <div class="setting-label">
+            <span class="setting-name">Hold Time</span>
+            <span class="setting-value" id="holdTimeValue">0.5s</span>
+          </div>
+          <input type="range" class="setting-slider" id="holdTimeSlider" min="0.1" max="2.0" step="0.1" value="0.5">
+          <div class="setting-range-labels">
+            <span>0.1s (fast)</span>
+            <span>2.0s (slow)</span>
+          </div>
+        </div>
+        <div class="setting-row">
+          <div class="setting-label">
+            <span class="setting-name">Mode Trigger</span>
+            <span class="setting-value" id="triggerModeValue">Hold</span>
+          </div>
+          <select class="setting-select" id="triggerModeSelect">
+            <option value="hold">Hold (default)</option>
+            <option value="edge">Instant Press</option>
+          </select>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Advanced -->
+  <div class="settings-group group-advanced">
+    <div class="settings-group-header" onclick="toggleSettingsGroup(this)">
+      <span class="settings-group-title">Advanced</span>
+      <span class="settings-group-arrow">&#9660;</span>
+    </div>
+    <div class="settings-group-body">
+      <div class="settings-group-body-inner">
+        <div class="setting-row">
+          <div class="setting-label">
+            <span class="setting-name">Stick Deadzone</span>
+            <span class="setting-value" id="deadzoneValue">10.0</span>
+          </div>
+          <input type="range" class="setting-slider" id="deadzoneSlider" min="0" max="50" step="0.5" value="10">
+          <div class="setting-range-labels">
+            <span>0 (none)</span>
+            <span>50 (max)</span>
+          </div>
+        </div>
+        <div class="setting-row">
+          <div class="setting-label">
+            <span class="setting-name">UI Update Rate</span>
+            <span class="setting-value" id="uiIntervalValue">200ms</span>
+          </div>
+          <input type="range" class="setting-slider" id="uiIntervalSlider" min="50" max="500" step="50" value="200">
+          <div class="setting-range-labels">
+            <span>50ms (fast)</span>
+            <span>500ms (slow)</span>
+          </div>
+        </div>
+        <div class="setting-row">
+          <div class="setting-label">
+            <span class="setting-name">Calibration Samples</span>
+            <span class="setting-value" id="calSamplesValue">20</span>
+          </div>
+          <input type="range" class="setting-slider" id="calSamplesSlider" min="5" max="100" step="5" value="20">
+          <div class="setting-range-labels">
+            <span>5 (fast)</span>
+            <span>100 (precise)</span>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 </div>
@@ -1545,6 +1642,14 @@
     var collapse = document.getElementById('speedCollapse');
     var arrow = document.getElementById('speedArrow');
     collapse.classList.toggle('open');
+    arrow.classList.toggle('open');
+  };
+
+  window.toggleSettingsGroup = function(headerEl) {
+    sfx.press();
+    var body = headerEl.nextElementSibling;
+    var arrow = headerEl.querySelector('.settings-group-arrow');
+    body.classList.toggle('open');
     arrow.classList.toggle('open');
   };
 
