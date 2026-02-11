@@ -1,18 +1,14 @@
-//! L2CAP server for Pro Controller emulation.
+//! Pro Controller emulation over L2CAP.
 //!
-//! Uses raw AF_BLUETOOTH L2CAP sockets (not bluer) for compatibility
-//! with the Nintendo Switch 2. Listens on PSM 17 (control) and PSM 19
-//! (interrupt) for the Switch to connect, then handles the pairing
-//! subcommand sequence before forwarding 0x30 input reports.
+//! Listens on PSM 17 (control) and PSM 19 (interrupt) for the Switch to
+//! connect, handles the pairing subcommand sequence, then forwards 0x30
+//! input reports.
 
-use std::io;
-use std::os::unix::io::{AsRawFd, RawFd};
 use std::time::{Duration, Instant};
 
-use tokio::io::unix::AsyncFd;
-use tokio::io::Interest;
 use tracing::{debug, info, warn};
 
+use super::l2cap::L2capSocket;
 use super::protocol;
 
 /// Human-readable name for a BT subcommand ID.
@@ -39,206 +35,11 @@ const PSM_CONTROL: u16 = 17;
 /// PSM for HID Interrupt channel.
 const PSM_INTERRUPT: u16 = 19;
 
-// Bluetooth socket constants
-const AF_BLUETOOTH: i32 = 31;
-const BTPROTO_L2CAP: i32 = 0;
-const BDADDR_ANY: [u8; 6] = [0; 6];
-
-/// sockaddr_l2 structure for L2CAP sockets.
-#[repr(C)]
-struct SockAddrL2 {
-    l2_family: u16,
-    l2_psm: u16, // little-endian
-    l2_bdaddr: [u8; 6],
-    l2_cid: u16,
-    l2_bdaddr_type: u8,
-}
-
-/// An async wrapper around a raw L2CAP socket file descriptor.
-struct L2capSocket {
-    inner: AsyncFd<RawFdWrapper>,
-}
-
-/// Wrapper to impl AsRawFd for a raw fd.
-struct RawFdWrapper(RawFd);
-
-impl AsRawFd for RawFdWrapper {
-    fn as_raw_fd(&self) -> RawFd {
-        self.0
-    }
-}
-
-impl Drop for RawFdWrapper {
-    fn drop(&mut self) {
-        unsafe {
-            libc::close(self.0);
-        }
-    }
-}
-
-impl L2capSocket {
-    fn from_raw_fd(fd: RawFd) -> io::Result<Self> {
-        // Set non-blocking for tokio
-        let flags = unsafe { libc::fcntl(fd, libc::F_GETFL) };
-        if flags < 0 {
-            return Err(io::Error::last_os_error());
-        }
-        if unsafe { libc::fcntl(fd, libc::F_SETFL, flags | libc::O_NONBLOCK) } < 0 {
-            return Err(io::Error::last_os_error());
-        }
-        Ok(Self {
-            inner: AsyncFd::new(RawFdWrapper(fd))?,
-        })
-    }
-
-    async fn read(&self, buf: &mut [u8]) -> io::Result<usize> {
-        loop {
-            let mut guard = self.inner.readable().await?;
-            match guard.try_io(|inner| {
-                let n = unsafe {
-                    libc::recv(inner.as_raw_fd(), buf.as_mut_ptr() as *mut _, buf.len(), 0)
-                };
-                if n < 0 {
-                    Err(io::Error::last_os_error())
-                } else {
-                    Ok(n as usize)
-                }
-            }) {
-                Ok(result) => return result,
-                Err(_would_block) => continue,
-            }
-        }
-    }
-
-    async fn write_all(&self, data: &[u8]) -> io::Result<()> {
-        let mut written = 0;
-        while written < data.len() {
-            let mut guard = self.inner.writable().await?;
-            match guard.try_io(|inner| {
-                let n = unsafe {
-                    libc::send(
-                        inner.as_raw_fd(),
-                        data[written..].as_ptr() as *const _,
-                        data.len() - written,
-                        0,
-                    )
-                };
-                if n < 0 {
-                    Err(io::Error::last_os_error())
-                } else {
-                    Ok(n as usize)
-                }
-            }) {
-                Ok(Ok(n)) => written += n,
-                Ok(Err(e)) => return Err(e),
-                Err(_would_block) => continue,
-            }
-        }
-        Ok(())
-    }
-}
-
 /// A connected BT session with the Switch.
 pub struct BtSession {
     /// Held open to keep the L2CAP control channel alive (PSM 17).
     _control: L2capSocket,
     interrupt: L2capSocket,
-}
-
-/// Create and bind a raw L2CAP listener socket.
-fn bind_l2cap(psm: u16) -> io::Result<RawFd> {
-    let fd = unsafe { libc::socket(AF_BLUETOOTH, libc::SOCK_SEQPACKET, BTPROTO_L2CAP) };
-    if fd < 0 {
-        let err = io::Error::last_os_error();
-        warn!("[BT] Failed to create L2CAP socket for PSM {psm}: {err}");
-        return Err(err);
-    }
-
-    let addr = SockAddrL2 {
-        l2_family: AF_BLUETOOTH as u16,
-        l2_psm: psm.to_le(),
-        l2_bdaddr: BDADDR_ANY,
-        l2_cid: 0,
-        l2_bdaddr_type: 0, // BREDR
-    };
-
-    let ret = unsafe {
-        libc::bind(
-            fd,
-            &addr as *const SockAddrL2 as *const libc::sockaddr,
-            std::mem::size_of::<SockAddrL2>() as u32,
-        )
-    };
-    if ret < 0 {
-        let err = io::Error::last_os_error();
-        unsafe {
-            libc::close(fd);
-        }
-        if err.kind() == io::ErrorKind::AddrInUse {
-            return Err(io::Error::new(
-                io::ErrorKind::AddrInUse,
-                format!(
-                    "L2CAP PSM {psm} already in use — \
-                     ensure bluetoothd runs with --noplugin=input \
-                     (edit /lib/systemd/system/bluetooth.service, add --noplugin=input to ExecStart)"
-                ),
-            ));
-        }
-        warn!("[BT] Failed to bind L2CAP socket on PSM {psm}: {err}");
-        return Err(err);
-    }
-
-    let ret = unsafe { libc::listen(fd, 1) };
-    if ret < 0 {
-        let err = io::Error::last_os_error();
-        unsafe {
-            libc::close(fd);
-        }
-        warn!("[BT] Failed to listen on L2CAP PSM {psm}: {err}");
-        return Err(err);
-    }
-
-    debug!("[BT] L2CAP listener bound on PSM {psm} (fd={fd})");
-    Ok(fd)
-}
-
-/// Async accept on a raw listening socket.
-async fn async_accept(listener_fd: RawFd) -> io::Result<RawFd> {
-    // Set listener non-blocking for async accept
-    let flags = unsafe { libc::fcntl(listener_fd, libc::F_GETFL) };
-    if flags < 0 {
-        return Err(io::Error::last_os_error());
-    }
-    unsafe { libc::fcntl(listener_fd, libc::F_SETFL, flags | libc::O_NONBLOCK) };
-
-    let async_fd = AsyncFd::with_interest(RawFdWrapper(listener_fd), Interest::READABLE)?;
-
-    loop {
-        let mut guard = async_fd.readable().await?;
-        match guard.try_io(|inner| {
-            let mut peer_addr: SockAddrL2 = unsafe { std::mem::zeroed() };
-            let mut addr_len = std::mem::size_of::<SockAddrL2>() as u32;
-            let client_fd = unsafe {
-                libc::accept(
-                    inner.as_raw_fd(),
-                    &mut peer_addr as *mut SockAddrL2 as *mut libc::sockaddr,
-                    &mut addr_len,
-                )
-            };
-            if client_fd < 0 {
-                Err(io::Error::last_os_error())
-            } else {
-                Ok(client_fd)
-            }
-        }) {
-            Ok(result) => {
-                // Prevent the AsyncFd from closing the listener fd on drop
-                let _ = std::mem::ManuallyDrop::new(async_fd);
-                return result;
-            }
-            Err(_would_block) => continue,
-        }
-    }
 }
 
 /// Accept a connection from the Switch on both L2CAP channels.
@@ -250,8 +51,8 @@ async fn async_accept(listener_fd: RawFd) -> io::Result<RawFd> {
 pub async fn accept_connection() -> anyhow::Result<BtSession> {
     info!("[BT] Starting L2CAP listeners on PSM {PSM_CONTROL} (control) and {PSM_INTERRUPT} (interrupt)...");
 
-    let ctrl_listener = bind_l2cap(PSM_CONTROL)?;
-    let itr_listener = bind_l2cap(PSM_INTERRUPT)?;
+    let ctrl_listener = super::l2cap::bind_and_listen(PSM_CONTROL)?;
+    let itr_listener = super::l2cap::bind_and_listen(PSM_INTERRUPT)?;
 
     info!("[BT] Waiting for Switch to connect...");
     info!("[BT] >> Open 'Change Grip/Order' on the Switch <<");
@@ -259,8 +60,10 @@ pub async fn accept_connection() -> anyhow::Result<BtSession> {
     let wait_start = Instant::now();
 
     // Accept both channels concurrently — the Switch may connect them in either order
-    let (ctrl_result, itr_result) =
-        tokio::join!(async_accept(ctrl_listener), async_accept(itr_listener),);
+    let (ctrl_result, itr_result) = tokio::join!(
+        super::l2cap::accept(ctrl_listener),
+        super::l2cap::accept(itr_listener),
+    );
 
     // Close listeners regardless of result
     unsafe {
@@ -270,16 +73,13 @@ pub async fn accept_connection() -> anyhow::Result<BtSession> {
         libc::close(itr_listener);
     }
 
-    let ctrl_fd = ctrl_result?;
+    let control = ctrl_result?;
     info!("[BT] Control channel connected");
-    let itr_fd = itr_result?;
+    let interrupt = itr_result?;
     info!(
         "[BT] Interrupt channel connected (both channels up in {:.1}s)",
         wait_start.elapsed().as_secs_f64()
     );
-
-    let control = L2capSocket::from_raw_fd(ctrl_fd)?;
-    let interrupt = L2capSocket::from_raw_fd(itr_fd)?;
 
     Ok(BtSession {
         _control: control,
