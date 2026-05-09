@@ -6,10 +6,11 @@ use std::time::Instant;
 use tracing::{debug, info, warn};
 
 use super::storage;
+use crate::input::LogicalInput;
 
 pub struct MacroRecorder {
     pub recording: bool,
-    frames: Vec<(u64, [u8; 64])>,
+    frames: Vec<(u64, LogicalInput)>,
     start: Option<Instant>,
     countdown_deadline: Option<Instant>,
 }
@@ -47,8 +48,8 @@ impl MacroRecorder {
             .unwrap_or(false)
     }
 
-    /// Add a 64-byte raw HID report to the recording.
-    pub fn add_frame(&mut self, raw_report: &[u8; 64]) {
+    /// Add a logical input frame to the recording.
+    pub fn add_frame(&mut self, input: &LogicalInput) {
         if !self.recording {
             return;
         }
@@ -66,7 +67,7 @@ impl MacroRecorder {
             .start
             .map(|s| s.elapsed().as_micros() as u64)
             .unwrap_or(0);
-        self.frames.push((elapsed_us, *raw_report));
+        self.frames.push((elapsed_us, input.clone()));
         let count = self.frames.len();
         if count == 1 {
             debug!("[MACRO] First frame captured");
@@ -133,15 +134,15 @@ impl MacroRecorder {
 mod tests {
     use super::*;
 
-    fn report(byte: u8) -> [u8; 64] {
-        [byte; 64]
+    fn input() -> LogicalInput {
+        LogicalInput::neutral()
     }
 
     #[test]
     fn stop_without_trim_keeps_recorded_frames() {
         let mut recorder = MacroRecorder::new();
         recorder.recording = true;
-        recorder.frames = vec![(0, report(0)), (250_000, report(1)), (500_000, report(2))];
+        recorder.frames = vec![(0, input()), (250_000, input()), (500_000, input())];
 
         let (frame_count, duration_us) = recorder.stop(0.0);
 
@@ -162,11 +163,11 @@ mod tests {
         let mut recorder = MacroRecorder::new();
         recorder.recording = true;
         recorder.frames = vec![
-            (0, report(0)),
-            (250_000, report(1)),
-            (500_000, report(2)),
-            (750_000, report(3)),
-            (1_000_000, report(4)),
+            (0, input()),
+            (250_000, input()),
+            (500_000, input()),
+            (750_000, input()),
+            (1_000_000, input()),
         ];
 
         let (frame_count, duration_us) = recorder.stop(0.3);
@@ -187,7 +188,7 @@ mod tests {
     fn stop_with_trim_longer_than_recording_discards_recording() {
         let mut recorder = MacroRecorder::new();
         recorder.recording = true;
-        recorder.frames = vec![(0, report(0)), (400_000, report(1))];
+        recorder.frames = vec![(0, input()), (400_000, input())];
 
         let (frame_count, duration_us) = recorder.stop(1.0);
 

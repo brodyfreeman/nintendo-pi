@@ -23,8 +23,8 @@
     font-family: 'Nunito', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     background: var(--bg); color: var(--text);
     min-height: 100vh;
-    padding: 0 var(--rail-width) 80px;
-    padding: 0 var(--rail-width) calc(80px + env(safe-area-inset-bottom, 0px));
+    padding: 0 var(--rail-width) 132px;
+    padding: 0 var(--rail-width) calc(132px + env(safe-area-inset-bottom, 0px));
     -webkit-tap-highlight-color: transparent;
   }
   .content-wrap {
@@ -383,6 +383,73 @@
   .transport-dock .controls-playback-progress { margin: 0 0 0.25rem; }
   .transport-dock .controls-playback-progress.show { max-height: 8px; }
   .transport-dock .progress-label { display: none; }
+  .dock-action-strip {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: center;
+    gap: 0.45rem;
+    max-height: 0;
+    opacity: 0;
+    overflow: hidden;
+    margin: 0;
+    transition: max-height 0.25s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.2s ease, margin 0.2s ease;
+  }
+  .dock-action-strip.show {
+    max-height: 38px;
+    opacity: 1;
+    margin: 0.15rem 0 0.35rem;
+  }
+  .dock-action-label {
+    font-size: 0.58rem;
+    line-height: 1;
+    color: var(--muted);
+    font-weight: 900;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+  .dock-action-list {
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+    min-width: 0;
+    overflow-x: auto;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+  .dock-action-list::-webkit-scrollbar { display: none; }
+  .dock-action-chip {
+    flex: 0 0 auto;
+    min-width: 2.1rem;
+    max-width: 8.5rem;
+    height: 26px;
+    padding: 0 0.55rem;
+    border-radius: 13px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(255,255,255,0.1);
+    border: 1px solid rgba(255,255,255,0.08);
+    color: var(--text);
+    font-size: 0.72rem;
+    font-weight: 900;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .dock-action-chip.face-a { background: rgba(73,184,79,0.9); color: #fff; }
+  .dock-action-chip.face-b { background: rgba(230,0,18,0.9); color: #fff; }
+  .dock-action-chip.face-x { background: rgba(74,155,217,0.95); color: #fff; }
+  .dock-action-chip.face-y { background: rgba(245,197,24,0.95); color: #181818; }
+  .dock-action-chip.stick {
+    background: rgba(0,195,227,0.16);
+    border-color: rgba(0,195,227,0.25);
+    color: #bceff7;
+  }
+  .dock-action-chip.empty {
+    color: var(--muted);
+    font-weight: 800;
+  }
   .transport-dock .transport-area {
     flex-direction: row; align-items: center; gap: 0.4rem; margin-bottom: 0;
   }
@@ -712,6 +779,7 @@
     .controller-svg-wrap { max-width: 380px; }
     .controller-section { padding: 1rem 0.5rem 0.8rem; margin: 0.75rem 0.5rem; }
     .transport-dock { padding: 0.3rem 1rem; }
+    .dock-action-list { justify-content: center; }
   }
 
   /* Wide desktop: 3-column — controls | library | controller+settings */
@@ -1176,6 +1244,12 @@
     <div class="progress-bar-outer"><div class="progress-bar-inner" id="controlsProgress"></div></div>
     <div class="progress-label" id="controlsProgressLabel">0 / 0</div>
   </div>
+  <div class="dock-action-strip" id="dockActionStrip">
+    <div class="dock-action-label">Input</div>
+    <div class="dock-action-list" id="dockActionList">
+      <span class="dock-action-chip empty">Neutral</span>
+    </div>
+  </div>
   <div class="transport-area">
     <button class="btn dpad-btn dock-nav" onclick="sendCmd('PREV_SLOT')">&larr;</button>
     <button class="btn dpad-btn dock-nav" onclick="sendCmd('NEXT_SLOT')">&rarr;</button>
@@ -1485,6 +1559,78 @@
 
     // Update controller visualization
     updateController();
+    updateDockActions();
+  }
+
+  function updateDockActions() {
+    var strip = document.getElementById('dockActionStrip');
+    var list = document.getElementById('dockActionList');
+    if (!strip || !list) return;
+
+    var input = state.playing ? state.playback_input : null;
+    if (!input) {
+      strip.classList.remove('show');
+      list.innerHTML = '<span class="dock-action-chip empty">Neutral</span>';
+      return;
+    }
+
+    strip.classList.add('show');
+    var actions = [];
+    var buttons = input.buttons || [];
+    for (var i = 0; i < buttons.length; i++) {
+      actions.push({
+        label: formatButtonLabel(buttons[i]),
+        cls: buttonChipClass(buttons[i])
+      });
+    }
+    addStickAction(actions, 'L', input.left_stick);
+    addStickAction(actions, 'R', input.right_stick);
+
+    if (actions.length === 0) {
+      list.innerHTML = '<span class="dock-action-chip empty">Neutral</span>';
+      return;
+    }
+
+    var html = '';
+    for (var j = 0; j < actions.length; j++) {
+      html += '<span class="dock-action-chip ' + actions[j].cls + '">' + escHtml(actions[j].label) + '</span>';
+    }
+    list.innerHTML = html;
+  }
+
+  function formatButtonLabel(btn) {
+    var labels = {
+      'Up': 'D-up', 'Down': 'D-down', 'Left': 'D-left', 'Right': 'D-right',
+      '+': 'Plus', '-': 'Minus', 'Cap': 'Capture'
+    };
+    return labels[btn] || btn;
+  }
+
+  function buttonChipClass(btn) {
+    if (btn === 'A') return 'face-a';
+    if (btn === 'B') return 'face-b';
+    if (btn === 'X') return 'face-x';
+    if (btn === 'Y') return 'face-y';
+    return '';
+  }
+
+  function addStickAction(actions, label, stick) {
+    if (!stick || stick.length < 2) return;
+    var x = stick[0] || 0;
+    var y = stick[1] || 0;
+    var mag = Math.min(1, Math.sqrt(x * x + y * y));
+    if (mag < 0.08) return;
+    actions.push({
+      label: label + ' ' + stickDirection(x, y) + ' ' + Math.round(mag * 100) + '%',
+      cls: 'stick'
+    });
+  }
+
+  function stickDirection(x, y) {
+    var horiz = x > 0.35 ? 'right' : (x < -0.35 ? 'left' : '');
+    var vert = y > 0.35 ? 'up' : (y < -0.35 ? 'down' : '');
+    if (horiz && vert) return vert + '-' + horiz;
+    return horiz || vert || 'tilt';
   }
 
   // === Controller visualization ===

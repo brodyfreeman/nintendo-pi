@@ -21,6 +21,34 @@ pub struct InputState {
     pub right_stick_raw: (u16, u16),
 }
 
+/// Controller input in the macro runtime's device-independent format.
+///
+/// Stick values are normalized percentages in the range `[-100.0, 100.0]`.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct LogicalInput {
+    pub buttons: ButtonState,
+    pub left_stick: (f64, f64),
+    pub right_stick: (f64, f64),
+}
+
+impl LogicalInput {
+    pub fn neutral() -> Self {
+        Self::default()
+    }
+
+    pub fn from_parts(
+        buttons: ButtonState,
+        left_stick: (f64, f64),
+        right_stick: (f64, f64),
+    ) -> Self {
+        Self {
+            buttons,
+            left_stick,
+            right_stick,
+        }
+    }
+}
+
 /// All button states packed as 3 bytes (USB HID bit layout).
 ///
 /// Use [`Button`] with `get()`/`set()` to access individual buttons.
@@ -81,6 +109,27 @@ pub enum Button {
 }
 
 impl Button {
+    pub const ALL: [Button; 18] = [
+        Button::B,
+        Button::A,
+        Button::Y,
+        Button::X,
+        Button::R,
+        Button::ZR,
+        Button::Plus,
+        Button::R3,
+        Button::DpadDown,
+        Button::DpadRight,
+        Button::DpadLeft,
+        Button::DpadUp,
+        Button::L,
+        Button::ZL,
+        Button::Minus,
+        Button::L3,
+        Button::Home,
+        Button::Capture,
+    ];
+
     /// Parse a button from its string name (case-insensitive).
     pub fn from_str_name(s: &str) -> Option<Self> {
         match s.to_uppercase().as_str() {
@@ -132,7 +181,7 @@ impl Button {
 }
 
 impl Button {
-    /// (byte_index_in_button_field, bitmask) for raw report filtering.
+    /// (byte_index_in_button_field, bitmask) in the USB HID button field.
     pub fn position(self) -> (usize, u8) {
         match self {
             Button::B => (0, 0x01),
@@ -160,6 +209,27 @@ impl Button {
 impl ButtonState {
     pub fn from_bytes(bytes: [u8; 3]) -> Self {
         Self { bytes }
+    }
+
+    pub fn to_mask(&self) -> u32 {
+        Button::ALL
+            .iter()
+            .enumerate()
+            .fold(0u32, |mask, (idx, &button)| {
+                if self.get(button) {
+                    mask | (1 << idx)
+                } else {
+                    mask
+                }
+            })
+    }
+
+    pub fn from_mask(mask: u32) -> Self {
+        let mut state = Self::default();
+        for (idx, &button) in Button::ALL.iter().enumerate() {
+            state.set(button, mask & (1 << idx) != 0);
+        }
+        state
     }
 
     pub fn get(&self, btn: Button) -> bool {

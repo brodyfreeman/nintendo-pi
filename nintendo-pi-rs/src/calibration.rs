@@ -89,6 +89,7 @@ impl StickCalibrator {
 /// Both sticks with their calibrators and auto-calibrated centers.
 ///
 /// Full pipeline: raw 12-bit stick → centered → radial calibration → normalized to [-100, 100].
+#[derive(Clone)]
 pub struct StickPair {
     left: StickCalibrator,
     right: StickCalibrator,

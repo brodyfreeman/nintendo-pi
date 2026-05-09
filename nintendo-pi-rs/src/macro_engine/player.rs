@@ -7,8 +7,9 @@ use std::time::Instant;
 use memmap2::Mmap;
 use tracing::{debug, error, info, warn};
 
-use super::storage::{self, FRAME_SIZE, HEADER_SIZE, MAGIC, MAGIC_V1};
+use super::storage::{self, FORMAT_VERSION, FRAME_SIZE, HEADER_SIZE, MAGIC};
 use crate::config::SPEED_PRESETS;
+use crate::input::LogicalInput;
 
 pub struct MacroPlayer {
     pub playing: bool,
@@ -20,7 +21,7 @@ pub struct MacroPlayer {
     frame_count: usize,
     frame_index: usize,
     start: Option<Instant>,
-    last_report: Option<[u8; 64]>,
+    last_input: Option<LogicalInput>,
     delay_us: u64,
 }
 
@@ -36,7 +37,7 @@ impl MacroPlayer {
             frame_count: 0,
             frame_index: 0,
             start: None,
-            last_report: None,
+            last_input: None,
             delay_us: 0,
         }
     }
@@ -80,16 +81,23 @@ impl MacroPlayer {
             return false;
         }
 
-        // Validate magic (accept both MAC2 and MACO)
+        // Validate runtime format. Old MACO/MAC2 files are handled only by
+        // startup migration, not by the player.
         let magic = &mmap[0..4];
-        if magic != MAGIC && magic != MAGIC_V1 {
+        if magic != MAGIC {
             warn!("[MACRO] Invalid magic: {:?}", magic);
             return false;
         }
 
-        let report_size = u16::from_le_bytes([mmap[6], mmap[7]]);
-        if report_size != storage::REPORT_SIZE {
-            warn!("[MACRO] Unsupported report size in macro file: {report_size}");
+        let version = u16::from_le_bytes([mmap[4], mmap[5]]);
+        if version != FORMAT_VERSION {
+            warn!("[MACRO] Unsupported macro format version: {version}");
+            return false;
+        }
+
+        let frame_size = u16::from_le_bytes([mmap[6], mmap[7]]) as usize;
+        if frame_size != FRAME_SIZE {
+            warn!("[MACRO] Unsupported frame size in macro file: {frame_size}");
             return false;
         }
 
@@ -115,7 +123,7 @@ impl MacroPlayer {
         self._file = Some(file);
         self.frame_count = frame_count;
         self.frame_index = 0;
-        self.last_report = None;
+        self.last_input = None;
 
         info!("[MACRO] Loaded macro {macro_id} ({frame_count} frames)");
         true
@@ -131,7 +139,7 @@ impl MacroPlayer {
         self.looping = looping;
         self.frame_index = 0;
         self.start = Some(Instant::now());
-        self.last_report = None;
+        self.last_input = None;
         self.delay_us = (delay_secs.max(0.0) * 1_000_000.0) as u64;
         if self.delay_us > 0 {
             info!("[MACRO] Playback starting in {delay_secs:.1}s (loop={looping})");
@@ -165,8 +173,8 @@ impl MacroPlayer {
 
     /// Get the current frame if its timestamp has been reached.
     ///
-    /// Returns Some(report) with the current 64-byte report, or None if done.
-    pub fn get_frame(&mut self) -> Option<[u8; 64]> {
+    /// Returns Some(input) with the current logical input, or None if done.
+    pub fn get_frame(&mut self) -> Option<LogicalInput> {
         if !self.playing {
             return None;
         }
@@ -187,10 +195,8 @@ impl MacroPlayer {
             let ts_us = u64::from_le_bytes(mmap[offset..offset + 8].try_into().unwrap());
 
             if ts_us <= elapsed_us {
-                let report_offset = offset + 8;
-                let mut report = [0u8; 64];
-                report.copy_from_slice(&mmap[report_offset..report_offset + 64]);
-                self.last_report = Some(report);
+                let frame = storage::decode_frame(&mmap[offset..offset + FRAME_SIZE])?;
+                self.last_input = Some(frame.1);
                 self.frame_index += 1;
             } else {
                 break;
@@ -211,12 +217,12 @@ impl MacroPlayer {
             } else {
                 self.playing = false;
                 info!("[MACRO] Playback finished ({} frames)", self.frame_count);
-                let report = self.last_report.take();
-                return report;
+                let input = self.last_input.take();
+                return input;
             }
         }
 
-        self.last_report
+        self.last_input.clone()
     }
 
     pub fn frame_index(&self) -> usize {
@@ -300,8 +306,15 @@ mod tests {
     #[test]
     fn test_load_rejects_truncated_macro_file() {
         let dir = TempDir::new().unwrap();
-        let frame: [u8; 64] = [0; 64];
-        let id = storage::save_macro(dir.path(), &[(0, frame), (1000, frame)], None).unwrap();
+        let id = storage::save_macro(
+            dir.path(),
+            &[
+                (0, LogicalInput::neutral()),
+                (1000, LogicalInput::neutral()),
+            ],
+            None,
+        )
+        .unwrap();
         let entry = storage::get_macro_info(dir.path(), id).unwrap();
         let path = dir.path().join(entry.filename);
 

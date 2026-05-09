@@ -59,16 +59,6 @@ impl SuppressedButtons {
             buttons.set(*btn, false);
         }
     }
-
-    /// Filter raw HID report: zero out suppressed button bits.
-    /// Button bytes are at report[3..6] (payload offset 0x2).
-    pub fn filter_raw_report(&self, report: &mut [u8; 64]) {
-        const BTN_BASE: usize = 3;
-        for btn in self.buttons[..self.count].iter().flatten() {
-            let (byte_idx, mask) = btn.position();
-            report[BTN_BASE + byte_idx] &= !mask;
-        }
-    }
 }
 
 /// Combo detector state machine.
@@ -183,12 +173,8 @@ mod tests {
         let cfg = default_config();
         let (_, sup) = cd.update(&buttons_with(&[Button::L3, Button::R3]), &cfg);
         assert!(!sup.is_empty());
-        assert!(sup.buttons[..sup.count]
-            .iter()
-            .any(|b| *b == Some(Button::L3)));
-        assert!(sup.buttons[..sup.count]
-            .iter()
-            .any(|b| *b == Some(Button::R3)));
+        assert!(sup.buttons[..sup.count].contains(&Some(Button::L3)));
+        assert!(sup.buttons[..sup.count].contains(&Some(Button::R3)));
     }
 
     #[test]
@@ -202,9 +188,7 @@ mod tests {
         // Second frame: L3+R3+A (A rising edge → PlayMacro)
         let (action, sup) = cd.update(&buttons_with(&[Button::L3, Button::R3, Button::A]), &cfg);
         assert_eq!(action, Some(MacroCommand::PlayMacro));
-        assert!(sup.buttons[..sup.count]
-            .iter()
-            .any(|b| *b == Some(Button::A)));
+        assert!(sup.buttons[..sup.count].contains(&Some(Button::A)));
     }
 
     #[test]
@@ -267,9 +251,7 @@ mod tests {
         );
 
         assert_eq!(action, None);
-        assert!(!sup.buttons[..sup.count]
-            .iter()
-            .any(|b| *b == Some(Button::Minus)));
+        assert!(!sup.buttons[..sup.count].contains(&Some(Button::Minus)));
     }
 
     #[test]
@@ -289,25 +271,6 @@ mod tests {
     }
 
     #[test]
-    fn test_suppressed_filter_raw_report() {
-        let mut sup = SuppressedButtons::default();
-        sup.add(Button::B); // byte0, 0x01
-        sup.add(Button::L3); // byte1, 0x80
-        sup.add(Button::Home); // byte2, 0x01
-
-        let mut report = [0u8; 64];
-        report[3] = 0xFF; // all byte0 buttons
-        report[4] = 0xFF; // all byte1 buttons
-        report[5] = 0xFF; // all byte2 buttons
-
-        sup.filter_raw_report(&mut report);
-
-        assert_eq!(report[3], 0xFE); // B (0x01) cleared
-        assert_eq!(report[4], 0x7F); // L3 (0x80) cleared
-        assert_eq!(report[5], 0xFE); // Home (0x01) cleared
-    }
-
-    #[test]
     fn test_play_combo_takes_priority_over_non_combo_buttons() {
         let mut cd = ComboDetector::new();
         let cfg = default_config();
@@ -324,9 +287,7 @@ mod tests {
 
         let (action, sup) = cd.update(&buttons_with(&[Button::L3, Button::R3, Button::Y]), &cfg);
         assert_eq!(action, Some(MacroCommand::ToggleLoop));
-        assert!(sup.buttons[..sup.count]
-            .iter()
-            .any(|b| *b == Some(Button::Y)));
+        assert!(sup.buttons[..sup.count].contains(&Some(Button::Y)));
     }
 
     #[test]
@@ -340,8 +301,6 @@ mod tests {
             &cfg,
         );
         assert_eq!(action, Some(MacroCommand::CycleSpeed));
-        assert!(sup.buttons[..sup.count]
-            .iter()
-            .any(|b| *b == Some(Button::DpadUp)));
+        assert!(sup.buttons[..sup.count].contains(&Some(Button::DpadUp)));
     }
 }

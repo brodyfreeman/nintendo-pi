@@ -16,6 +16,7 @@ mod usb;
 mod web;
 
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, AtomicU32};
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -23,8 +24,8 @@ use clap::Parser;
 use tokio::sync::{broadcast, mpsc};
 use tracing::{error, info, warn};
 
-use lifecycle::LifecycleIO;
 use macro_engine::command::MacroCommand;
+use processing::{MacroRuntime, RuntimeIO};
 use web::state::MitmState;
 
 #[derive(Parser)]
@@ -66,13 +67,37 @@ async fn main() -> anyhow::Result<()> {
 
     // Ensure macros directory exists
     std::fs::create_dir_all(&args.macros_dir).ok();
+    if let Some(backup_dir) = macro_engine::storage::migrate_old_macros(&args.macros_dir)? {
+        info!(
+            "[MACRO] Old macro format migrated. Backup kept at {}",
+            backup_dir.display()
+        );
+    }
 
-    // --- Web UI setup (start early so it's available during hardware init) ---
+    // --- Shared runtime setup ---
     let mitm_state = Arc::new(MitmState::new());
     let (cmd_tx, cmd_rx) = mpsc::channel::<MacroCommand>(32);
+    let (usb_tx, usb_rx) = mpsc::channel::<processing::UsbEvent>(32);
+    let (report_tx, mut report_rx) = mpsc::channel::<[u8; 50]>(4);
     let (state_broadcast, _) = broadcast::channel::<String>(16);
+    let bt_connected = Arc::new(AtomicBool::new(false));
+    let calibration_samples = Arc::new(AtomicU32::new(20));
 
-    // Spawn web server
+    let runtime = MacroRuntime::new(
+        RuntimeIO {
+            cmd_rx,
+            usb_rx,
+            report_tx,
+            mitm_state: mitm_state.clone(),
+            state_broadcast: state_broadcast.clone(),
+            bt_connected: bt_connected.clone(),
+            calibration_samples: calibration_samples.clone(),
+        },
+        args.macros_dir.clone(),
+    );
+    tokio::spawn(runtime.run());
+
+    // --- Web UI setup (start early so it's available during hardware init) ---
     let web_state = mitm_state.clone();
     let web_broadcast = state_broadcast.clone();
     let web_macros_dir = args.macros_dir.clone();
@@ -84,6 +109,31 @@ async fn main() -> anyhow::Result<()> {
             error!("[WEB] Server error: {e}");
         }
     });
+
+    // --- State emitter task (throttled broadcast on change) ---
+    let mut state_rx = mitm_state.subscribe();
+    let emitter_broadcast = state_broadcast.clone();
+    tokio::spawn(async move {
+        loop {
+            if state_rx.changed().await.is_err() {
+                break; // sender dropped
+            }
+            let snapshot = state_rx.borrow_and_update().clone();
+            let interval_ms = snapshot.config.ui_update_interval_ms;
+            let msg = serde_json::json!({
+                "type": "state_update",
+                "state": snapshot,
+            });
+            let _ = emitter_broadcast.send(msg.to_string());
+            tokio::time::sleep(Duration::from_millis(interval_ms)).await;
+        }
+    });
+
+    // --- USB lifecycle task ---
+    tokio::spawn(lifecycle::run_usb(lifecycle::UsbLifecycleIO {
+        usb_tx,
+        calibration_samples,
+    }));
 
     // Give the web server a moment to bind
     tokio::time::sleep(Duration::from_millis(100)).await;
@@ -108,31 +158,5 @@ async fn main() -> anyhow::Result<()> {
         }
     };
 
-    // --- State emitter task (throttled broadcast on change) ---
-    let mut state_rx = mitm_state.subscribe();
-    let emitter_broadcast = state_broadcast.clone();
-    tokio::spawn(async move {
-        loop {
-            if state_rx.changed().await.is_err() {
-                break; // sender dropped
-            }
-            let snapshot = state_rx.borrow_and_update().clone();
-            let interval_ms = snapshot.config.ui_update_interval_ms;
-            let msg = serde_json::json!({
-                "type": "state_update",
-                "state": snapshot,
-            });
-            let _ = emitter_broadcast.send(msg.to_string());
-            tokio::time::sleep(Duration::from_millis(interval_ms)).await;
-        }
-    });
-
-    // --- Hardware lifecycle loop ---
-    lifecycle::run(LifecycleIO {
-        macros_dir: args.macros_dir,
-        cmd_rx,
-        mitm_state,
-        state_broadcast,
-    })
-    .await
+    lifecycle::run_bt_loop(&mut report_rx, bt_connected).await
 }

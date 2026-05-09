@@ -114,15 +114,6 @@ async fn cmd_handler(
     match parse_web_command(&val) {
         Some(cmd) => {
             debug!("[WEB] Command received: {cmd:?}");
-            if let Some(applied) = apply_web_storage_command(&state.macros_dir, &cmd) {
-                if applied {
-                    broadcast_macro_list(&state);
-                    notify_macro_cache_refresh(&state);
-                    return StatusCode::OK;
-                }
-                return StatusCode::NOT_FOUND;
-            }
-
             if let Err(e) = state.cmd_tx.send(cmd).await {
                 error!("[WEB] Failed to send command: {e}");
                 StatusCode::INTERNAL_SERVER_ERROR
@@ -134,26 +125,6 @@ async fn cmd_handler(
             warn!("[WEB] Invalid command payload: {val}");
             StatusCode::BAD_REQUEST
         }
-    }
-}
-
-fn apply_web_storage_command(macros_dir: &std::path::Path, cmd: &MacroCommand) -> Option<bool> {
-    match cmd {
-        MacroCommand::RenameMacro(id, name) => Some(storage::rename_macro(macros_dir, *id, name)),
-        MacroCommand::DeleteMacro(id) => Some(storage::delete_macro(macros_dir, *id)),
-        _ => None,
-    }
-}
-
-fn broadcast_macro_list(state: &WebState) {
-    let macros = storage::list_macros(&state.macros_dir);
-    let msg = serde_json::json!({ "type": "macro_list", "macros": macros });
-    let _ = state.state_rx.send(msg.to_string());
-}
-
-fn notify_macro_cache_refresh(state: &WebState) {
-    if let Err(e) = state.cmd_tx.try_send(MacroCommand::RefreshMacros) {
-        debug!("[WEB] Macro cache refresh not queued: {e}");
     }
 }
 
@@ -216,7 +187,6 @@ fn parse_web_command(val: &serde_json::Value) -> Option<MacroCommand> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tempfile::TempDir;
 
     #[test]
     fn test_parse_web_command_preserves_zero_config_value() {
@@ -246,51 +216,5 @@ mod tests {
 
         assert_eq!(update.field_name, "ui_update_interval_ms");
         assert_eq!(update.value, serde_json::json!(50));
-    }
-
-    #[test]
-    fn test_delete_macro_storage_command_runs_without_processor() {
-        let dir = TempDir::new().unwrap();
-        let frame = [0; 64];
-        let id = storage::save_macro(dir.path(), &[(0, frame)], Some("delete_me")).unwrap();
-        let filename = storage::get_macro_info(dir.path(), id).unwrap().filename;
-
-        assert_eq!(
-            apply_web_storage_command(dir.path(), &MacroCommand::DeleteMacro(id)),
-            Some(true)
-        );
-
-        assert!(storage::list_macros(dir.path()).is_empty());
-        assert!(!dir.path().join(filename).exists());
-    }
-
-    #[test]
-    fn test_rename_macro_storage_command_runs_without_processor() {
-        let dir = TempDir::new().unwrap();
-        let frame = [0; 64];
-        let id = storage::save_macro(dir.path(), &[(0, frame)], Some("old_name")).unwrap();
-
-        assert_eq!(
-            apply_web_storage_command(
-                dir.path(),
-                &MacroCommand::RenameMacro(id, "new_name".into())
-            ),
-            Some(true)
-        );
-
-        let info = storage::get_macro_info(dir.path(), id).unwrap();
-        assert_eq!(info.name, "new_name");
-        assert_eq!(info.filename, "001_new_name.bin");
-        assert!(dir.path().join(info.filename).exists());
-    }
-
-    #[test]
-    fn test_non_storage_command_is_not_applied_by_web_layer() {
-        let dir = TempDir::new().unwrap();
-
-        assert_eq!(
-            apply_web_storage_command(dir.path(), &MacroCommand::PlayMacro),
-            None
-        );
     }
 }

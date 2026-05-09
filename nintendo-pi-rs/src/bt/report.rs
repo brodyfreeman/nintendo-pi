@@ -3,7 +3,7 @@
 //! Converts parsed USB input state into the BT Pro Controller wire format
 //! (NXBT-compatible 50-byte reports).
 
-use crate::input::{Button, ButtonState, InputState};
+use crate::input::{Button, ButtonState, LogicalInput};
 
 /// BT button mapping: (Button, bt_byte_index, bt_mask).
 ///
@@ -52,7 +52,7 @@ fn pack_stick_12bit(out: &mut [u8], calibrated_stick: (f64, f64)) {
     out[2] = ((y >> 4) & 0xFF) as u8;
 }
 
-/// Build BT 0x30 report bytes from InputState + calibrated sticks.
+/// Build BT 0x30 report bytes from logical input.
 ///
 /// NXBT-compatible layout (50 bytes):
 ///   [0]  = 0xA1 (HID transaction header)
@@ -67,8 +67,12 @@ fn pack_stick_12bit(out: &mut [u8], calibrated_stick: (f64, f64)) {
 ///   [13] = vibrator byte
 ///
 /// Stick encoding: 12-bit packed, center = 0x800 (2048), range 0-4095.
-pub fn build_bt_report(
-    input: &InputState,
+pub fn build_bt_report_from_logical(input: &LogicalInput, timer: u8) -> [u8; 50] {
+    build_bt_report_from_parts(&input.buttons, input.left_stick, input.right_stick, timer)
+}
+
+fn build_bt_report_from_parts(
+    buttons: &ButtonState,
     left_calibrated: (f64, f64),
     right_calibrated: (f64, f64),
     timer: u8,
@@ -82,7 +86,7 @@ pub fn build_bt_report(
 
     // --- BT button encoding ---
     // Each entry: (Button, bt_byte_offset, bt_mask)
-    let [bt0, bt1, bt2] = encode_bt_buttons(&input.buttons);
+    let [bt0, bt1, bt2] = encode_bt_buttons(buttons);
     report[4] = bt0;
     report[5] = bt1;
     report[6] = bt2;
@@ -104,8 +108,8 @@ mod tests {
 
     #[test]
     fn test_build_bt_report_header() {
-        let input = InputState::default();
-        let report = build_bt_report(&input, (0.0, 0.0), (0.0, 0.0), 42);
+        let input = LogicalInput::neutral();
+        let report = build_bt_report_from_logical(&input, 42);
         assert_eq!(report[0], 0xA1);
         assert_eq!(report[1], 0x30);
         assert_eq!(report[2], 42); // timer
@@ -115,7 +119,7 @@ mod tests {
 
     #[test]
     fn test_build_bt_report_buttons() {
-        let mut input = InputState::default();
+        let mut input = LogicalInput::neutral();
         input.buttons.set(Button::A, true);
         input.buttons.set(Button::B, true);
         input.buttons.set(Button::Y, true);
@@ -124,7 +128,7 @@ mod tests {
         input.buttons.set(Button::DpadDown, true);
         input.buttons.set(Button::ZL, true);
 
-        let report = build_bt_report(&input, (0.0, 0.0), (0.0, 0.0), 0);
+        let report = build_bt_report_from_logical(&input, 0);
 
         // Byte 4: Y=0x01, B=0x04, A=0x08
         assert_eq!(report[4] & 0x01, 0x01); // Y
@@ -142,8 +146,8 @@ mod tests {
 
     #[test]
     fn test_build_bt_report_sticks_center() {
-        let input = InputState::default();
-        let report = build_bt_report(&input, (0.0, 0.0), (0.0, 0.0), 0);
+        let input = LogicalInput::neutral();
+        let report = build_bt_report_from_logical(&input, 0);
 
         // Center = 2048 = 0x800
         // Byte 7: lx & 0xFF = 0x00
@@ -156,9 +160,10 @@ mod tests {
 
     #[test]
     fn test_build_bt_report_sticks_full_tilt() {
-        let input = InputState::default();
+        let input =
+            LogicalInput::from_parts(ButtonState::default(), (100.0, 100.0), (-100.0, -100.0));
         // Full right: x=100 → lx = (100 * 2048/100 + 2048) = 4096 → clamped to 4095
-        let report = build_bt_report(&input, (100.0, 100.0), (-100.0, -100.0), 0);
+        let report = build_bt_report_from_logical(&input, 0);
 
         // Left stick full positive: 4095 = 0xFFF
         let lx = report[7] as u16 | (((report[8] & 0x0F) as u16) << 8);

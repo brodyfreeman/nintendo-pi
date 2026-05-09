@@ -4,7 +4,7 @@ use serde::Serialize;
 use tokio::sync::watch;
 
 use crate::config::Config;
-use crate::input::{Button, InputState};
+use crate::input::{Button, LogicalInput};
 
 const ALL_BUTTONS: [(Button, &str); 18] = [
     (Button::A, "A"),
@@ -36,24 +36,24 @@ pub struct PlaybackInput {
 }
 
 impl PlaybackInput {
-    pub fn from_input_state(input: &InputState) -> Self {
+    pub fn from_logical_input(input: &LogicalInput) -> Self {
         let buttons = ALL_BUTTONS
             .iter()
             .filter(|(btn, _)| input.buttons.get(*btn))
             .map(|(_, name)| *name)
             .collect();
 
-        let normalize_to_unit_range = |raw: u16| ((raw as f64 - 2048.0) / 2048.0).clamp(-1.0, 1.0);
+        let normalize_to_unit_range = |value: f64| (value / 100.0).clamp(-1.0, 1.0);
 
         Self {
             buttons,
             left_stick: (
-                normalize_to_unit_range(input.left_stick_raw.0),
-                normalize_to_unit_range(input.left_stick_raw.1),
+                normalize_to_unit_range(input.left_stick.0),
+                normalize_to_unit_range(input.left_stick.1),
             ),
             right_stick: (
-                normalize_to_unit_range(input.right_stick_raw.0),
-                normalize_to_unit_range(input.right_stick_raw.1),
+                normalize_to_unit_range(input.right_stick.0),
+                normalize_to_unit_range(input.right_stick.1),
             ),
         }
     }

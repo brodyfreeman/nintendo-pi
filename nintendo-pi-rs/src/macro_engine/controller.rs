@@ -13,6 +13,7 @@ use super::player::MacroPlayer;
 use super::recorder::MacroRecorder;
 use super::storage;
 use crate::config::Config;
+use crate::input::LogicalInput;
 use crate::led;
 
 /// Owns all macro state and provides a single `execute()` entry point.
@@ -55,10 +56,6 @@ impl MacroController {
             MacroCommand::StopPlayback => self.stop_playback(),
             MacroCommand::RenameMacro(id, name) => self.rename_macro(id, &name),
             MacroCommand::DeleteMacro(id) => self.delete_macro(id),
-            MacroCommand::RefreshMacros => {
-                self.refresh_cache();
-                MacroEffect::none()
-            }
             MacroCommand::CycleSpeed => self.cycle_speed(),
             MacroCommand::SetPlaybackSpeed(speed) => self.set_playback_speed(speed),
             MacroCommand::ToggleLoop => self.toggle_loop(),
@@ -106,13 +103,13 @@ impl MacroController {
     }
 
     /// Get the next playback frame if its timestamp has been reached.
-    pub fn get_playback_frame(&mut self) -> Option<[u8; 64]> {
+    pub fn get_playback_frame(&mut self) -> Option<LogicalInput> {
         self.player.get_frame()
     }
 
-    /// Add a raw HID frame to the active recording.
-    pub fn add_recording_frame(&mut self, raw_report: &[u8; 64]) {
-        self.recorder.add_frame(raw_report);
+    /// Add a logical input frame to the active recording.
+    pub fn add_recording_frame(&mut self, input: &LogicalInput) {
+        self.recorder.add_frame(input);
     }
 
     fn refresh_cache(&mut self) {
@@ -290,6 +287,10 @@ mod tests {
         (ctrl, dir)
     }
 
+    fn frame(ts: u64) -> (u64, LogicalInput) {
+        (ts, LogicalInput::neutral())
+    }
+
     #[test]
     fn test_slot_navigation_empty() {
         let (mut ctrl, _dir) = make_controller();
@@ -307,9 +308,8 @@ mod tests {
         let (mut ctrl, _dir) = make_controller();
 
         // Create 3 macros by saving frames
-        let frame: [u8; 64] = [0; 64];
         for _ in 0..3 {
-            storage::save_macro(ctrl.macros_dir(), &[(0, frame), (1000, frame)], None);
+            storage::save_macro(ctrl.macros_dir(), &[frame(0), frame(1000)], None);
         }
         ctrl.cached_slot_count = storage::get_slot_count(ctrl.macros_dir());
         assert_eq!(ctrl.cached_slot_count, 3);
@@ -359,8 +359,7 @@ mod tests {
         assert_eq!(ctrl.current_slot, 0);
 
         // Create a macro
-        let frame: [u8; 64] = [0; 64];
-        storage::save_macro(ctrl.macros_dir(), &[(0, frame)], None);
+        storage::save_macro(ctrl.macros_dir(), &[frame(0)], None);
         ctrl.cached_slot_count = storage::get_slot_count(ctrl.macros_dir());
 
         ctrl.execute(MacroCommand::SelectSlot(0));
@@ -372,9 +371,8 @@ mod tests {
         let (mut ctrl, _dir) = make_controller();
 
         // Create 2 macros
-        let frame: [u8; 64] = [0; 64];
-        let _id1 = storage::save_macro(ctrl.macros_dir(), &[(0, frame)], None).unwrap();
-        let _id2 = storage::save_macro(ctrl.macros_dir(), &[(0, frame)], None).unwrap();
+        let _id1 = storage::save_macro(ctrl.macros_dir(), &[frame(0)], None).unwrap();
+        let _id2 = storage::save_macro(ctrl.macros_dir(), &[frame(0)], None).unwrap();
         ctrl.cached_slot_count = storage::get_slot_count(ctrl.macros_dir());
         ctrl.current_slot = 1;
 
@@ -389,8 +387,7 @@ mod tests {
     fn test_rename_macro() {
         let (mut ctrl, _dir) = make_controller();
 
-        let frame: [u8; 64] = [0; 64];
-        let id = storage::save_macro(ctrl.macros_dir(), &[(0, frame)], Some("old_name")).unwrap();
+        let id = storage::save_macro(ctrl.macros_dir(), &[frame(0)], Some("old_name")).unwrap();
         ctrl.cached_slot_count = storage::get_slot_count(ctrl.macros_dir());
 
         let effect = ctrl.execute(MacroCommand::RenameMacro(id, "new_name".into()));
