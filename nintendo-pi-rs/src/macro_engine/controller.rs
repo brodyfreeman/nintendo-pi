@@ -55,6 +55,10 @@ impl MacroController {
             MacroCommand::StopPlayback => self.stop_playback(),
             MacroCommand::RenameMacro(id, name) => self.rename_macro(id, &name),
             MacroCommand::DeleteMacro(id) => self.delete_macro(id),
+            MacroCommand::RefreshMacros => {
+                self.refresh_cache();
+                MacroEffect::none()
+            }
             MacroCommand::CycleSpeed => self.cycle_speed(),
             MacroCommand::SetPlaybackSpeed(speed) => self.set_playback_speed(speed),
             MacroCommand::ToggleLoop => self.toggle_loop(),

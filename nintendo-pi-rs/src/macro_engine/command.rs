@@ -17,6 +17,7 @@ pub enum MacroCommand {
     StopPlayback,
     RenameMacro(u32, String),
     DeleteMacro(u32),
+    RefreshMacros,
     CycleSpeed,
     SetPlaybackSpeed(f64),
     ToggleLoop,
