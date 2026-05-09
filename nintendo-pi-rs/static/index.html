@@ -615,7 +615,7 @@
   }
   .slot-num.pop { animation: slot-pop 0.25s cubic-bezier(0.22, 1, 0.36, 1); }
 
-  /* === Switch-style slide toggle for macro mode === */
+  /* === Switch-style slide toggle === */
   .switch-toggle {
     width: 58px; height: 30px; border-radius: 15px; padding: 2px;
     background: rgba(255,255,255,0.12); border: none; cursor: pointer;
@@ -761,18 +761,8 @@
 
   <div class="controls-separator"></div>
 
-  <!-- Mode & Recording (secondary actions, bottom of card) -->
+  <!-- Recording control -->
   <div class="mode-rec-bar">
-    <div class="control-group">
-      <span class="control-label">Macro Mode</span>
-      <div class="control-inline">
-        <span class="toggle-status off" id="macroModeStatus">OFF</span>
-        <button class="switch-toggle" id="btnMacroMode" onclick="sendCmd('TOGGLE_MACRO_MODE')">
-          <span class="knob"></span>
-        </button>
-      </div>
-    </div>
-    <div class="controls-divider"></div>
     <div class="control-group">
       <button class="btn btn-accent btn-face rec-btn-compact" id="btnRecord" onclick="sendCmd('TOGGLE_RECORDING')">
         REC
@@ -898,40 +888,6 @@
             <option value="B">B</option>
             <option value="A">A</option>
             <option value="X">X</option>
-            <option value="L">L</option>
-            <option value="R">R</option>
-            <option value="ZL">ZL</option>
-            <option value="ZR">ZR</option>
-          </select>
-        </div>
-        <div class="setting-row">
-          <div class="setting-label">
-            <span class="setting-name">Toggle Macro Mode</span>
-            <span class="setting-value" id="toggleModeBtnValue">D-pad Down</span>
-          </div>
-          <select class="setting-select" id="toggleModeBtnSelect">
-            <option value="DpadDown">D-pad Down</option>
-            <option value="A">A</option>
-            <option value="B">B</option>
-            <option value="X">X</option>
-            <option value="L">L</option>
-            <option value="R">R</option>
-            <option value="ZL">ZL</option>
-            <option value="ZR">ZR</option>
-          </select>
-        </div>
-        <div class="setting-row">
-          <div class="setting-label">
-            <span class="setting-name">Toggle Recording</span>
-            <span class="setting-value" id="toggleRecBtnValue">-</span>
-          </div>
-          <select class="setting-select" id="toggleRecBtnSelect">
-            <option value="Minus">-</option>
-            <option value="Plus">+</option>
-            <option value="A">A</option>
-            <option value="B">B</option>
-            <option value="X">X</option>
-            <option value="Y">Y</option>
             <option value="L">L</option>
             <option value="R">R</option>
             <option value="ZL">ZL</option>
@@ -1133,27 +1089,6 @@
             <option value="R">R</option>
             <option value="ZL">ZL</option>
             <option value="ZR">ZR</option>
-          </select>
-        </div>
-        <div class="setting-row">
-          <div class="setting-label">
-            <span class="setting-name">Hold Time</span>
-            <span class="setting-value" id="holdTimeValue">0.5s</span>
-          </div>
-          <input type="range" class="setting-slider" id="holdTimeSlider" min="0.1" max="2.0" step="0.1" value="0.5">
-          <div class="setting-range-labels">
-            <span>0.1s (fast)</span>
-            <span>2.0s (slow)</span>
-          </div>
-        </div>
-        <div class="setting-row">
-          <div class="setting-label">
-            <span class="setting-name">Mode Trigger</span>
-            <span class="setting-value" id="triggerModeValue">Hold</span>
-          </div>
-          <select class="setting-select" id="triggerModeSelect">
-            <option value="hold">Hold (default)</option>
-            <option value="edge">Instant Press</option>
           </select>
         </div>
       </div>
@@ -1437,18 +1372,6 @@
     // Update hardware status dots
     setStatusDot('ctrlDot', state.usb_connected ? 'green' : 'yellow');
     setStatusDot('switchDot', state.bt_connected ? 'green' : 'red');
-    var modeEl = document.getElementById('macroModeStatus');
-    var toggleBtn = document.getElementById('btnMacroMode');
-    if (state.macro_mode) {
-      modeEl.textContent = 'ON';
-      modeEl.className = 'toggle-status on';
-      toggleBtn.classList.add('on');
-    } else {
-      modeEl.textContent = 'OFF';
-      modeEl.className = 'toggle-status off';
-      toggleBtn.classList.remove('on');
-    }
-
     var slotEl = document.getElementById('slotNum');
     var newSlotText = state.slot_count > 0
       ? (state.current_slot + 1) + ' / ' + state.slot_count
@@ -1543,18 +1466,14 @@
 
     // Sync settings
     syncDeadzone();
-    syncHoldTime();
     syncBaseCombo1();
     syncBaseCombo2();
     syncPlayBtn();
     syncStopBtn();
-    syncToggleModeBtn();
-    syncTriggerMode();
     syncToggleLoopBtn();
     syncCycleSpeedBtn();
     syncPrevSlotBtn();
     syncNextSlotBtn();
-    syncToggleRecBtn();
     syncAutoLoop();
     syncSpeedDefault();
     syncStartDelay();
@@ -1613,9 +1532,6 @@
     } else if (state.playing) {
       statusText.textContent = 'Playing';
       statusText.className = 'ctrl-status-text playing';
-    } else if (state.macro_mode) {
-      statusText.textContent = 'Macro mode active';
-      statusText.className = 'ctrl-status-text';
     } else if (state.live_input) {
       statusText.textContent = 'Live';
       statusText.className = 'ctrl-status-text';
@@ -1765,8 +1681,6 @@
   window.sendCmd = function(cmd, data) {
     // Play appropriate sound effect per command
     switch (cmd) {
-      case 'TOGGLE_MACRO_MODE':
-        (state.macro_mode ? sfx.toggleOff : sfx.toggleOn)(); break;
       case 'TOGGLE_RECORDING':
         (state.recording ? sfx.recStop : sfx.recStart)(); break;
       case 'PREV_SLOT':
@@ -1786,7 +1700,7 @@
     fetch('/api/cmd', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ cmd: cmd, data: data || null })
+      body: JSON.stringify({ cmd: cmd, data: data === undefined ? null : data })
     });
   };
 
@@ -1900,31 +1814,6 @@
     }
   }
 
-  // === Combo hold time slider ===
-  var holdTimeSlider = document.getElementById('holdTimeSlider');
-  var holdTimeValue = document.getElementById('holdTimeValue');
-
-  holdTimeSlider.addEventListener('input', function() {
-    var val = parseFloat(holdTimeSlider.value);
-    holdTimeValue.textContent = val.toFixed(1) + 's';
-  });
-
-  holdTimeSlider.addEventListener('change', function() {
-    var val = parseFloat(holdTimeSlider.value);
-    sfx.nav();
-    sendCmd('SET_COMBO_HOLD_TIME', val);
-  });
-
-  function syncHoldTime() {
-    if (state.combo_hold_time !== undefined) {
-      var val = state.combo_hold_time;
-      holdTimeValue.textContent = val.toFixed(1) + 's';
-      if (document.activeElement !== holdTimeSlider) {
-        holdTimeSlider.value = val;
-      }
-    }
-  }
-
   // === Base combo button 1 select ===
   var baseCombo1Select = document.getElementById('baseCombo1Select');
   var baseCombo1Value = document.getElementById('baseCombo1Value');
@@ -2014,54 +1903,6 @@
       stopBtnValue.textContent = STOP_BTN_LABELS[val] || val;
       if (document.activeElement !== stopBtnSelect) {
         stopBtnSelect.value = val;
-      }
-    }
-  }
-
-  // === Toggle macro mode button select ===
-  var toggleModeBtnSelect = document.getElementById('toggleModeBtnSelect');
-  var toggleModeBtnValue = document.getElementById('toggleModeBtnValue');
-  var TOGGLE_MODE_BTN_LABELS = {
-    'DpadDown': 'D-pad Down', 'A': 'A', 'B': 'B', 'X': 'X', 'L': 'L', 'R': 'R', 'ZL': 'ZL', 'ZR': 'ZR'
-  };
-
-  toggleModeBtnSelect.addEventListener('change', function() {
-    var val = toggleModeBtnSelect.value;
-    toggleModeBtnValue.textContent = TOGGLE_MODE_BTN_LABELS[val] || val;
-    sfx.nav();
-    sendCmd('SET_TOGGLE_MACRO_MODE_BUTTON', val);
-  });
-
-  function syncToggleModeBtn() {
-    if (state.toggle_macro_mode_button !== undefined) {
-      var val = state.toggle_macro_mode_button;
-      toggleModeBtnValue.textContent = TOGGLE_MODE_BTN_LABELS[val] || val;
-      if (document.activeElement !== toggleModeBtnSelect) {
-        toggleModeBtnSelect.value = val;
-      }
-    }
-  }
-
-  // === Macro mode trigger mode select ===
-  var triggerModeSelect = document.getElementById('triggerModeSelect');
-  var triggerModeValue = document.getElementById('triggerModeValue');
-  var TRIGGER_MODE_LABELS = {
-    'hold': 'Hold', 'edge': 'Instant Press'
-  };
-
-  triggerModeSelect.addEventListener('change', function() {
-    var val = triggerModeSelect.value;
-    triggerModeValue.textContent = TRIGGER_MODE_LABELS[val] || val;
-    sfx.nav();
-    sendCmd('SET_TOGGLE_MACRO_MODE_TRIGGER', val);
-  });
-
-  function syncTriggerMode() {
-    if (state.toggle_macro_mode_trigger !== undefined) {
-      var val = state.toggle_macro_mode_trigger;
-      triggerModeValue.textContent = TRIGGER_MODE_LABELS[val] || val;
-      if (document.activeElement !== triggerModeSelect) {
-        triggerModeSelect.value = val;
       }
     }
   }
@@ -2158,30 +1999,6 @@
       nextSlotBtnValue.textContent = NEXT_SLOT_BTN_LABELS[val] || val;
       if (document.activeElement !== nextSlotBtnSelect) {
         nextSlotBtnSelect.value = val;
-      }
-    }
-  }
-
-  // === Toggle recording button select ===
-  var toggleRecBtnSelect = document.getElementById('toggleRecBtnSelect');
-  var toggleRecBtnValue = document.getElementById('toggleRecBtnValue');
-  var TOGGLE_REC_BTN_LABELS = {
-    'Minus': '-', 'Plus': '+', 'A': 'A', 'B': 'B', 'X': 'X', 'Y': 'Y', 'L': 'L', 'R': 'R', 'ZL': 'ZL', 'ZR': 'ZR'
-  };
-
-  toggleRecBtnSelect.addEventListener('change', function() {
-    var val = toggleRecBtnSelect.value;
-    toggleRecBtnValue.textContent = TOGGLE_REC_BTN_LABELS[val] || val;
-    sfx.nav();
-    sendCmd('SET_TOGGLE_RECORDING_BUTTON', val);
-  });
-
-  function syncToggleRecBtn() {
-    if (state.toggle_recording_button !== undefined) {
-      var val = state.toggle_recording_button;
-      toggleRecBtnValue.textContent = TOGGLE_REC_BTN_LABELS[val] || val;
-      if (document.activeElement !== toggleRecBtnSelect) {
-        toggleRecBtnSelect.value = val;
       }
     }
   }
@@ -2345,7 +2162,7 @@
   uiIntervalSlider.addEventListener('change', function() {
     var val = parseInt(uiIntervalSlider.value);
     sfx.nav();
-    sendCmd('SET_UI_UPDATE_INTERVAL', val);
+    sendCmd('SET_UI_UPDATE_INTERVAL_MS', val);
   });
 
   function syncUiInterval() {

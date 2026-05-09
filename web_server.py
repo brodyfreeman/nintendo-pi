@@ -21,7 +21,6 @@ from macro import list_macros
 
 class WebCommand(Enum):
     """Commands the web UI can send to the MITM main loop."""
-    TOGGLE_MACRO_MODE = auto()
     TOGGLE_RECORDING = auto()
     PREV_SLOT = auto()
     NEXT_SLOT = auto()
@@ -38,7 +37,6 @@ class MitmState:
     def __init__(self):
         self._lock = threading.Lock()
         self._state = {
-            "macro_mode": False,
             "recording": False,
             "playing": False,
             "current_slot": 0,

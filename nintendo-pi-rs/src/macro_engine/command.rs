@@ -9,7 +9,6 @@ use crate::config::ConfigUpdate;
 /// Unified command enum — covers both combo actions and web commands.
 #[derive(Debug, Clone, PartialEq)]
 pub enum MacroCommand {
-    ToggleMacroMode,
     ToggleRecording,
     PrevSlot,
     NextSlot,

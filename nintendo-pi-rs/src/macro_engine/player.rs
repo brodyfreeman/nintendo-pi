@@ -87,7 +87,29 @@ impl MacroPlayer {
             return false;
         }
 
+        let report_size = u16::from_le_bytes([mmap[6], mmap[7]]);
+        if report_size != storage::REPORT_SIZE {
+            warn!("[MACRO] Unsupported report size in macro file: {report_size}");
+            return false;
+        }
+
         let frame_count = u32::from_le_bytes([mmap[8], mmap[9], mmap[10], mmap[11]]) as usize;
+        let Some(expected_len) = frame_count
+            .checked_mul(FRAME_SIZE)
+            .and_then(|frame_bytes| HEADER_SIZE.checked_add(frame_bytes))
+        else {
+            warn!("[MACRO] Macro frame count is too large: {frame_count}");
+            return false;
+        };
+        if mmap.len() < expected_len {
+            warn!(
+                "[MACRO] Truncated macro file {}: expected at least {} bytes, got {}",
+                entry.filename,
+                expected_len,
+                mmap.len()
+            );
+            return false;
+        }
 
         self.mmap = Some(mmap);
         self._file = Some(file);
@@ -220,6 +242,8 @@ impl Drop for MacroPlayer {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::fs::OpenOptions;
+    use tempfile::TempDir;
 
     #[test]
     fn test_new_defaults_to_1x_speed() {
@@ -271,5 +295,21 @@ mod tests {
         // Should default to index 2 (1.0x), then advance to index 3 (2.0x)
         player.cycle_speed();
         assert!((player.speed - 2.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn test_load_rejects_truncated_macro_file() {
+        let dir = TempDir::new().unwrap();
+        let frame: [u8; 64] = [0; 64];
+        let id = storage::save_macro(dir.path(), &[(0, frame), (1000, frame)], None).unwrap();
+        let entry = storage::get_macro_info(dir.path(), id).unwrap();
+        let path = dir.path().join(entry.filename);
+
+        let file = OpenOptions::new().write(true).open(&path).unwrap();
+        file.set_len((HEADER_SIZE + FRAME_SIZE) as u64).unwrap();
+
+        let mut player = MacroPlayer::new();
+        assert!(!player.load(dir.path(), id));
+        assert_eq!(player.frame_count(), 0);
     }
 }

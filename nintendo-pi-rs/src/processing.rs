@@ -114,14 +114,21 @@ impl Processor {
 
             // Check for abort combo on live input
             let live_parsed = parse_hid_report(raw_report);
-            let (command, _) = self.combo.update(
-                &live_parsed.buttons,
-                &self.macro_ctrl.config,
-                self.macro_ctrl.macro_mode,
-            );
+            let (command, _) = self
+                .combo
+                .update(&live_parsed.buttons, &self.macro_ctrl.config);
+            let mut stopped_by_combo = false;
             if command == Some(MacroCommand::StopPlayback) {
                 let effect = self.macro_ctrl.execute(MacroCommand::StopPlayback);
                 self.apply_effect(effect);
+                stopped_by_combo = true;
+            }
+
+            if !stopped_by_combo && !self.macro_ctrl.is_playing() {
+                self.apply_effect(MacroEffect {
+                    led: Some(&led::LED_NORMAL),
+                    broadcast_macros: false,
+                });
             }
 
             self.update_state(Some(&parsed), Some(&live_parsed));
@@ -142,11 +149,7 @@ impl Processor {
     /// Process live controller input: combo detection, recording, BT forwarding.
     fn process_live_input(&mut self, raw_report: &[u8; 64]) {
         let mut parsed = parse_hid_report(raw_report);
-        let (command, suppressed) = self.combo.update(
-            &parsed.buttons,
-            &self.macro_ctrl.config,
-            self.macro_ctrl.macro_mode,
-        );
+        let (command, suppressed) = self.combo.update(&parsed.buttons, &self.macro_ctrl.config);
 
         if let Some(cmd) = command {
             let effect = self.macro_ctrl.execute(cmd);
@@ -202,7 +205,6 @@ impl Processor {
     /// Push current state to the web UI.
     fn update_state(&self, playback_input: Option<&InputState>, live_input: Option<&InputState>) {
         self.io.mitm_state.update(StateSnapshot {
-            macro_mode: self.macro_ctrl.macro_mode,
             recording: self.macro_ctrl.is_recording(),
             recording_countdown: self.macro_ctrl.recording_in_countdown(),
             playing: self.macro_ctrl.is_playing(),

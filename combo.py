@@ -1,16 +1,13 @@
 """Combo detection state machine for MITM macro device.
 
-Detects secret button combinations (L3+R3+button) in the HID input stream
+Detects button combinations (L3+R3+button) in the HID input stream
 and suppresses those inputs from being forwarded to the Switch.
 """
-import time
 from enum import Enum, auto
 
 
 class ComboAction(Enum):
     NONE = auto()
-    TOGGLE_MACRO_MODE = auto()  # L3+R3+D-pad Down (hold 0.5s)
-    TOGGLE_RECORDING = auto()   # L3+R3 (in macro mode)
     PREV_SLOT = auto()          # L3+R3+D-pad Left
     NEXT_SLOT = auto()          # L3+R3+D-pad Right
     PLAY_MACRO = auto()         # L3+R3+A
@@ -25,21 +22,13 @@ _INSTANT_COMBOS = {
     "B": ComboAction.STOP_PLAYBACK,
 }
 
-# Hold duration for macro mode toggle (seconds)
-_HOLD_DURATION = 0.5
-
-
 class ComboDetector:
     """Detects L3+R3+button combos and reports which inputs to suppress."""
 
     def __init__(self):
-        self.macro_mode = False
-        self._dpad_down_start = None  # timestamp when L3+R3+DDown first held
         self._last_action = ComboAction.NONE
         # Track previous button states for edge detection
         self._prev_buttons = {}
-        # Whether L3+R3 were both held on the previous frame
-        self._prev_base_held = False
         # Buttons currently being suppressed
         self._suppressed = set()
 
@@ -65,18 +54,6 @@ class ComboDetector:
             suppressed.add("L3")
             suppressed.add("R3")
 
-            # Check D-pad Down hold for macro mode toggle
-            dpad_down = buttons.get("DPAD_DOWN", False)
-            if dpad_down:
-                suppressed.add("DPAD_DOWN")
-                if self._dpad_down_start is None:
-                    self._dpad_down_start = time.monotonic()
-                elif time.monotonic() - self._dpad_down_start >= _HOLD_DURATION:
-                    action = ComboAction.TOGGLE_MACRO_MODE
-                    self._dpad_down_start = None  # reset so it doesn't re-trigger
-            else:
-                self._dpad_down_start = None
-
             # Check instant combos (edge-triggered: only on button press, not hold)
             for btn_name, combo_action in _INSTANT_COMBOS.items():
                 pressed = buttons.get(btn_name, False)
@@ -87,20 +64,7 @@ class ComboDetector:
                     # Rising edge -- button just pressed
                     action = combo_action
 
-            # In macro mode, L3+R3 alone (no other combo button) toggles recording
-            # Triggered on rising edge of both sticks being held
-            if self.macro_mode and not self._prev_base_held:
-                # Only if no d-pad or face button combo is active
-                any_combo_btn = dpad_down or any(
-                    buttons.get(b, False) for b in _INSTANT_COMBOS
-                )
-                if not any_combo_btn:
-                    action = ComboAction.TOGGLE_RECORDING
-        else:
-            self._dpad_down_start = None
-
         self._prev_buttons = dict(buttons)
-        self._prev_base_held = base_held
         self._suppressed = suppressed
         return action, suppressed
 

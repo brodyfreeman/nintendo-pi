@@ -17,7 +17,6 @@ use crate::led;
 
 /// Owns all macro state and provides a single `execute()` entry point.
 pub struct MacroController {
-    pub macro_mode: bool,
     pub current_slot: usize,
     pub cached_slot_count: usize,
     pub cached_macro_name: Option<String>,
@@ -35,7 +34,6 @@ impl MacroController {
             .map(|e| e.name);
 
         Self {
-            macro_mode: false,
             recorder: MacroRecorder::new(),
             player: MacroPlayer::new(),
             current_slot: 0,
@@ -49,7 +47,6 @@ impl MacroController {
     /// Execute a macro command. Returns the side effects to apply.
     pub fn execute(&mut self, cmd: MacroCommand) -> MacroEffect {
         match cmd {
-            MacroCommand::ToggleMacroMode => self.toggle_macro_mode(),
             MacroCommand::ToggleRecording => self.toggle_recording(),
             MacroCommand::PrevSlot => self.prev_slot(),
             MacroCommand::NextSlot => self.next_slot(),
@@ -72,15 +69,6 @@ impl MacroController {
     /// The macros directory path.
     pub fn macros_dir(&self) -> &Path {
         &self.macros_dir
-    }
-
-    /// LED pattern for the current mode (macro mode vs normal).
-    pub fn mode_led(&self) -> &'static [u8; 16] {
-        if self.macro_mode {
-            &led::LED_MACRO_MODE
-        } else {
-            &led::LED_NORMAL
-        }
     }
 
     // --- Delegating accessors (keep player/recorder private) ---
@@ -130,38 +118,6 @@ impl MacroController {
             .map(|e| e.name);
     }
 
-    fn toggle_macro_mode(&mut self) -> MacroEffect {
-        self.macro_mode = !self.macro_mode;
-        if self.macro_mode {
-            self.refresh_cache();
-            info!(
-                "[MACRO] Macro mode ON. {} macro(s). Slot: {}",
-                self.cached_slot_count, self.current_slot
-            );
-            MacroEffect {
-                led: Some(&led::LED_MACRO_MODE),
-                broadcast_macros: false,
-            }
-        } else {
-            let mut broadcast = false;
-            if self.recorder.recording {
-                let (frame_count, duration_us) = self.recorder.stop(self.config.recording_trim_end);
-                if let Some(id) = self.recorder.save(&self.macros_dir, None) {
-                    info!(
-                        "[MACRO] Auto-saved recording as macro {id} ({frame_count} frames, {}ms)",
-                        duration_us / 1000
-                    );
-                }
-                broadcast = true;
-            }
-            info!("[MACRO] Macro mode OFF.");
-            MacroEffect {
-                led: Some(&led::LED_NORMAL),
-                broadcast_macros: broadcast,
-            }
-        }
-    }
-
     fn toggle_recording(&mut self) -> MacroEffect {
         if self.recorder.recording {
             let (frame_count, duration_us) = self.recorder.stop(self.config.recording_trim_end);
@@ -177,7 +133,7 @@ impl MacroController {
             }
             self.refresh_cache();
             MacroEffect {
-                led: Some(&led::LED_MACRO_MODE),
+                led: Some(&led::LED_NORMAL),
                 broadcast_macros: true,
             }
         } else {
@@ -254,7 +210,7 @@ impl MacroController {
             self.player.stop();
             info!("[MACRO] Playback stopped at frame {progress}/{total}.");
             MacroEffect {
-                led: Some(self.mode_led()),
+                led: Some(&led::LED_NORMAL),
                 broadcast_macros: false,
             }
         } else {
@@ -331,39 +287,6 @@ mod tests {
     }
 
     #[test]
-    fn test_toggle_macro_mode_on_off() {
-        let (mut ctrl, _dir) = make_controller();
-        assert!(!ctrl.macro_mode);
-
-        let effect = ctrl.execute(MacroCommand::ToggleMacroMode);
-        assert!(ctrl.macro_mode);
-        assert_eq!(
-            effect.led.unwrap() as *const _,
-            &led::LED_MACRO_MODE as *const _
-        );
-        assert!(!effect.broadcast_macros);
-
-        let effect = ctrl.execute(MacroCommand::ToggleMacroMode);
-        assert!(!ctrl.macro_mode);
-        assert_eq!(
-            effect.led.unwrap() as *const _,
-            &led::LED_NORMAL as *const _
-        );
-    }
-
-    #[test]
-    fn test_toggle_macro_mode_off_stops_recording() {
-        let (mut ctrl, _dir) = make_controller();
-        ctrl.execute(MacroCommand::ToggleMacroMode); // ON
-        ctrl.execute(MacroCommand::ToggleRecording); // start recording
-        assert!(ctrl.is_recording());
-
-        let effect = ctrl.execute(MacroCommand::ToggleMacroMode); // OFF
-        assert!(!ctrl.is_recording());
-        assert!(effect.broadcast_macros); // saved macro triggers broadcast
-    }
-
-    #[test]
     fn test_slot_navigation_empty() {
         let (mut ctrl, _dir) = make_controller();
         assert_eq!(ctrl.cached_slot_count, 0);
@@ -418,7 +341,7 @@ mod tests {
         assert!(!ctrl.is_recording());
         assert_eq!(
             effect.led.unwrap() as *const _,
-            &led::LED_MACRO_MODE as *const _
+            &led::LED_NORMAL as *const _
         );
         assert!(effect.broadcast_macros);
     }

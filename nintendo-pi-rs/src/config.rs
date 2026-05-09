@@ -6,7 +6,7 @@
 use serde::Serialize;
 use tracing::{info, warn};
 
-use crate::combo::{self, TriggerMode};
+use crate::combo;
 use crate::input::Button;
 
 /// Available playback speed presets.
@@ -17,7 +17,6 @@ pub const SPEED_PRESETS: &[f64] = &[0.25, 0.5, 1.0, 2.0, 4.0];
 pub struct Config {
     // Timing / thresholds
     pub stick_deadzone: f64,
-    pub combo_hold_time: f64,
     pub auto_loop_default: bool,
     pub playback_speed_default: f64,
     pub playback_start_delay: f64,
@@ -33,8 +32,6 @@ pub struct Config {
     #[serde(serialize_with = "ser_button")]
     pub stop_playback_button: Button,
     #[serde(serialize_with = "ser_button")]
-    pub toggle_macro_mode_button: Button,
-    #[serde(serialize_with = "ser_button")]
     pub toggle_loop_button: Button,
     #[serde(serialize_with = "ser_button")]
     pub cycle_speed_button: Button,
@@ -43,28 +40,19 @@ pub struct Config {
     #[serde(serialize_with = "ser_button")]
     pub next_slot_button: Button,
     #[serde(serialize_with = "ser_button")]
-    pub toggle_recording_button: Button,
-    #[serde(serialize_with = "ser_button")]
     pub base_combo_button_1: Button,
     #[serde(serialize_with = "ser_button")]
     pub base_combo_button_2: Button,
-    #[serde(serialize_with = "ser_trigger")]
-    pub toggle_macro_mode_trigger: TriggerMode,
 }
 
 fn ser_button<S: serde::Serializer>(btn: &Button, s: S) -> Result<S::Ok, S::Error> {
     s.serialize_str(btn.display_name())
 }
 
-fn ser_trigger<S: serde::Serializer>(mode: &TriggerMode, s: S) -> Result<S::Ok, S::Error> {
-    s.serialize_str(mode.as_str())
-}
-
 impl Default for Config {
     fn default() -> Self {
         Self {
             stick_deadzone: crate::calibration::DEFAULT_DEADZONE,
-            combo_hold_time: combo::DEFAULT_HOLD_DURATION,
             auto_loop_default: false,
             playback_speed_default: 1.0,
             playback_start_delay: 0.0,
@@ -75,15 +63,12 @@ impl Default for Config {
             calibration_samples: 20,
             play_macro_button: combo::DEFAULT_PLAY_MACRO_BUTTON,
             stop_playback_button: combo::DEFAULT_STOP_PLAYBACK_BUTTON,
-            toggle_macro_mode_button: combo::DEFAULT_TOGGLE_MACRO_MODE_BUTTON,
             toggle_loop_button: combo::DEFAULT_TOGGLE_LOOP_BUTTON,
             cycle_speed_button: combo::DEFAULT_CYCLE_SPEED_BUTTON,
             prev_slot_button: combo::DEFAULT_PREV_SLOT_BUTTON,
             next_slot_button: combo::DEFAULT_NEXT_SLOT_BUTTON,
-            toggle_recording_button: combo::DEFAULT_TOGGLE_RECORDING_BUTTON,
             base_combo_button_1: combo::DEFAULT_BASE_COMBO_BUTTON_1,
             base_combo_button_2: combo::DEFAULT_BASE_COMBO_BUTTON_2,
-            toggle_macro_mode_trigger: combo::DEFAULT_TOGGLE_MACRO_MODE_TRIGGER,
         }
     }
 }
@@ -108,7 +93,6 @@ impl Config {
         // f64 fields with (min, max) clamping
         let f64_result = match field {
             "stick_deadzone" => Some((&mut self.stick_deadzone, 0.0_f64, 50.0)),
-            "combo_hold_time" => Some((&mut self.combo_hold_time, 0.1, 2.0)),
             "playback_speed_default" => Some((
                 &mut self.playback_speed_default,
                 SPEED_PRESETS[0],
@@ -134,12 +118,10 @@ impl Config {
         let button_result = match field {
             "play_macro_button" => Some(&mut self.play_macro_button),
             "stop_playback_button" => Some(&mut self.stop_playback_button),
-            "toggle_macro_mode_button" => Some(&mut self.toggle_macro_mode_button),
             "toggle_loop_button" => Some(&mut self.toggle_loop_button),
             "cycle_speed_button" => Some(&mut self.cycle_speed_button),
             "prev_slot_button" => Some(&mut self.prev_slot_button),
             "next_slot_button" => Some(&mut self.next_slot_button),
-            "toggle_recording_button" => Some(&mut self.toggle_recording_button),
             "base_combo_button_1" => Some(&mut self.base_combo_button_1),
             "base_combo_button_2" => Some(&mut self.base_combo_button_2),
             _ => None,
@@ -186,19 +168,6 @@ impl Config {
                         self.calibration_samples
                     );
                     return true;
-                }
-            }
-            "toggle_macro_mode_trigger" => {
-                if let Some(s) = val.as_str() {
-                    if let Some(mode) = TriggerMode::from_str_name(s) {
-                        self.toggle_macro_mode_trigger = mode;
-                        info!(
-                            "[SETTINGS] toggle_macro_mode_trigger set to {}",
-                            mode.as_str()
-                        );
-                        return true;
-                    }
-                    warn!("[SETTINGS] Unknown trigger mode: {s}");
                 }
             }
             _ => {

@@ -132,7 +132,6 @@ fn parse_web_command(val: &serde_json::Value) -> Option<MacroCommand> {
 
     let cmd = val.get("cmd")?.as_str()?;
     match cmd {
-        "TOGGLE_MACRO_MODE" => Some(MacroCommand::ToggleMacroMode),
         "TOGGLE_RECORDING" => Some(MacroCommand::ToggleRecording),
         "PREV_SLOT" => Some(MacroCommand::PrevSlot),
         "NEXT_SLOT" => Some(MacroCommand::NextSlot),
@@ -164,6 +163,10 @@ fn parse_web_command(val: &serde_json::Value) -> Option<MacroCommand> {
             let speed = val.get("data")?.as_f64()?;
             Some(MacroCommand::SetPlaybackSpeed(speed))
         }
+        "SET_UI_UPDATE_INTERVAL" => Some(MacroCommand::UpdateConfig(ConfigUpdate {
+            field_name: "ui_update_interval_ms".into(),
+            value: val.get("data")?.clone(),
+        })),
         // All config updates: strip "SET_" prefix, lowercase to field name
         _ if cmd.starts_with("SET_") => {
             let field_name = cmd[4..].to_ascii_lowercase();
@@ -177,5 +180,40 @@ fn parse_web_command(val: &serde_json::Value) -> Option<MacroCommand> {
             warn!("[WEB] Unknown command: {cmd}");
             None
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_parse_web_command_preserves_zero_config_value() {
+        let val = serde_json::json!({
+            "cmd": "SET_RECORDING_TRIM_END",
+            "data": 0.0,
+        });
+
+        let Some(MacroCommand::UpdateConfig(update)) = parse_web_command(&val) else {
+            panic!("expected config update");
+        };
+
+        assert_eq!(update.field_name, "recording_trim_end");
+        assert_eq!(update.value, serde_json::json!(0.0));
+    }
+
+    #[test]
+    fn test_parse_web_command_accepts_ui_interval_alias() {
+        let val = serde_json::json!({
+            "cmd": "SET_UI_UPDATE_INTERVAL",
+            "data": 50,
+        });
+
+        let Some(MacroCommand::UpdateConfig(update)) = parse_web_command(&val) else {
+            panic!("expected config update");
+        };
+
+        assert_eq!(update.field_name, "ui_update_interval_ms");
+        assert_eq!(update.value, serde_json::json!(50));
     }
 }

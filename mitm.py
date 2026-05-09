@@ -77,13 +77,6 @@ LED_PLAYBACK = bytes(
     [0x09, 0x91, 0x00, 0x07, 0x00, 0x08, 0x00, 0x00,
      0x05, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
 )
-# Macro mode pattern: LEDs 2+3 on
-LED_MACRO_MODE = bytes(
-    [0x09, 0x91, 0x00, 0x07, 0x00, 0x08, 0x00, 0x00,
-     0x06, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
-)
-
-
 def _send_led(initializer, pattern):
     """Send an LED command to the physical controller."""
     if initializer.usb_device and initializer.usb_endpoint_out:
@@ -227,7 +220,7 @@ def main():
     frame_count = 0
 
     print("[MITM] Passthrough active. Press Ctrl+C to exit.")
-    print("[MITM] Secret combo: hold L3+R3+D-pad Down for 0.5s to toggle macro mode.\n")
+    print("[MITM] Controller combos: L3+R3 plus action button for playback controls.\n")
 
     try:
         # Reconnect USB for LED commands (best effort)
@@ -251,26 +244,11 @@ def main():
                 except queue.Empty:
                     break
 
-                if web_cmd == WebCommand.TOGGLE_MACRO_MODE:
-                    combo.macro_mode = not combo.macro_mode
-                    if combo.macro_mode:
-                        _send_led(initializer, LED_MACRO_MODE)
-                        _refresh_macro_cache()
-                        print(f"[WEB] Macro mode ON. {cached_slot_count} macro(s) available. Slot: {current_slot}")
-                    else:
-                        if recorder.recording:
-                            recorder.stop()
-                            mid = recorder.save()
-                            print(f"[WEB] Recording auto-saved as macro {mid}.")
-                            _refresh_web_macros()
-                        _send_led(initializer, LED_NORMAL)
-                        print("[WEB] Macro mode OFF.")
-
-                elif web_cmd == WebCommand.TOGGLE_RECORDING:
+                if web_cmd == WebCommand.TOGGLE_RECORDING:
                     if recorder.recording:
                         frame_count, duration_us = recorder.stop()
                         mid = recorder.save()
-                        _send_led(initializer, LED_MACRO_MODE)
+                        _send_led(initializer, LED_NORMAL)
                         print(f"[WEB] Recording stopped. {frame_count} frames, "
                               f"{duration_us // 1000}ms. Saved as macro {mid}.")
                         _refresh_web_macros()
@@ -312,7 +290,7 @@ def main():
                 elif web_cmd == WebCommand.STOP_PLAYBACK:
                     if player.playing:
                         player.stop()
-                        _send_led(initializer, LED_MACRO_MODE if combo.macro_mode else LED_NORMAL)
+                        _send_led(initializer, LED_NORMAL)
                         print("[WEB] Playback stopped.")
 
                 elif web_cmd == WebCommand.RENAME_MACRO:
@@ -358,10 +336,10 @@ def main():
                     action, _ = combo.update(live_parsed["buttons"])
                     if action == ComboAction.STOP_PLAYBACK:
                         player.stop()
-                        _send_led(initializer, LED_MACRO_MODE if combo.macro_mode else LED_NORMAL)
+                        _send_led(initializer, LED_NORMAL)
                         print("[MACRO] Playback stopped.")
                     mitm_state.update(
-                        macro_mode=combo.macro_mode, recording=recorder.recording,
+                        recording=recorder.recording,
                         playing=player.playing, current_slot=current_slot,
                         slot_count=cached_slot_count, current_macro_name=cached_macro_name,
                         connected=True,
@@ -370,7 +348,7 @@ def main():
                 else:
                     # Playback finished
                     player.stop()
-                    _send_led(initializer, LED_MACRO_MODE if combo.macro_mode else LED_NORMAL)
+                    _send_led(initializer, LED_NORMAL)
                     print("[MACRO] Playback finished.")
 
             # --- Parse live input ---
@@ -380,35 +358,7 @@ def main():
             action, suppressed = combo.update(parsed["buttons"])
 
             # --- Handle combo actions ---
-            if action == ComboAction.TOGGLE_MACRO_MODE:
-                combo.macro_mode = not combo.macro_mode
-                if combo.macro_mode:
-                    _send_led(initializer, LED_MACRO_MODE)
-                    _refresh_macro_cache()
-                    print(f"[MACRO] Macro mode ON. {cached_slot_count} macro(s) available. Slot: {current_slot}")
-                else:
-                    if recorder.recording:
-                        recorder.stop()
-                        mid = recorder.save()
-                        print(f"[MACRO] Recording auto-saved as macro {mid}.")
-                        _refresh_macro_cache()
-                    _send_led(initializer, LED_NORMAL)
-                    print("[MACRO] Macro mode OFF.")
-
-            elif action == ComboAction.TOGGLE_RECORDING:
-                if recorder.recording:
-                    frame_count, duration_us = recorder.stop()
-                    mid = recorder.save()
-                    _send_led(initializer, LED_MACRO_MODE)
-                    print(f"[MACRO] Recording stopped. {frame_count} frames, "
-                          f"{duration_us // 1000}ms. Saved as macro {mid}.")
-                    _refresh_macro_cache()
-                else:
-                    recorder.start()
-                    _send_led(initializer, LED_RECORDING)
-                    print("[MACRO] Recording started...")
-
-            elif action == ComboAction.PREV_SLOT:
+            if action == ComboAction.PREV_SLOT:
                 if cached_slot_count > 0:
                     current_slot = (current_slot - 1) % cached_slot_count
                     _refresh_macro_cache()
@@ -435,7 +385,7 @@ def main():
             elif action == ComboAction.STOP_PLAYBACK:
                 if player.playing:
                     player.stop()
-                    _send_led(initializer, LED_MACRO_MODE if combo.macro_mode else LED_NORMAL)
+                    _send_led(initializer, LED_NORMAL)
                     print("[MACRO] Playback stopped.")
 
             # --- Filter suppressed buttons and forward ---
@@ -465,7 +415,6 @@ def main():
 
             # --- Update web UI state ---
             mitm_state.update(
-                macro_mode=combo.macro_mode,
                 recording=recorder.recording,
                 playing=player.playing,
                 current_slot=current_slot,

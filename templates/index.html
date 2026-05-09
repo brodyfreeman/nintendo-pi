@@ -146,17 +146,6 @@
   </div>
 </div>
 
-<!-- Macro Mode -->
-<div class="section">
-  <div class="section-title">Macro Mode</div>
-  <div class="toggle-row">
-    <span class="label">Macro Mode</span>
-    <button class="btn btn-dark" id="btnMacroMode" onclick="sendCmd('TOGGLE_MACRO_MODE')">
-      <span class="toggle-status off" id="macroModeStatus">OFF</span>
-    </button>
-  </div>
-</div>
-
 <!-- Slot & Playback -->
 <div class="section">
   <div class="section-title">Slot &amp; Playback</div>
@@ -235,16 +224,6 @@
   });
 
   function updateUI() {
-    // Macro mode toggle
-    var modeEl = document.getElementById('macroModeStatus');
-    if (state.macro_mode) {
-      modeEl.textContent = 'ON';
-      modeEl.className = 'toggle-status on';
-    } else {
-      modeEl.textContent = 'OFF';
-      modeEl.className = 'toggle-status off';
-    }
-
     // Slot
     document.getElementById('slotNum').textContent = state.slot_count > 0
       ? (state.current_slot + 1) + ' / ' + state.slot_count

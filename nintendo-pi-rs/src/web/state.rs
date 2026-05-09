@@ -62,7 +62,6 @@ impl PlaybackInput {
 /// Thread/task-safe MITM state snapshot for the web UI.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct StateSnapshot {
-    pub macro_mode: bool,
     pub recording: bool,
     pub recording_countdown: bool,
     pub playing: bool,
@@ -85,7 +84,6 @@ pub struct StateSnapshot {
 impl Default for StateSnapshot {
     fn default() -> Self {
         Self {
-            macro_mode: false,
             recording: false,
             recording_countdown: false,
             playing: false,
