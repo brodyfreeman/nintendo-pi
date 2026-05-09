@@ -764,7 +764,7 @@
   <!-- Recording control -->
   <div class="mode-rec-bar">
     <div class="control-group">
-      <button class="btn btn-accent btn-face rec-btn-compact" id="btnRecord" onclick="sendCmd('TOGGLE_RECORDING')">
+      <button class="btn btn-accent btn-face rec-btn-compact" id="btnRecord" onclick="toggleRecording()">
         REC
       </button>
       <span class="rec-status" id="recStatus" style="display:none">REC</span>
@@ -1678,6 +1678,14 @@
     return s.replace(/'/g, "\\'").replace(/"/g, '&quot;');
   }
 
+  function postCmd(cmd, data) {
+    return fetch('/api/cmd', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ cmd: cmd, data: data === undefined ? null : data })
+    });
+  }
+
   window.sendCmd = function(cmd, data) {
     // Play appropriate sound effect per command
     switch (cmd) {
@@ -1697,10 +1705,22 @@
       default:
         sfx.press(); break;
     }
-    fetch('/api/cmd', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ cmd: cmd, data: data === undefined ? null : data })
+    return postCmd(cmd, data);
+  };
+
+  window.toggleRecording = function() {
+    if (!state.recording) {
+      sfx.recStart();
+      return postCmd('TOGGLE_RECORDING');
+    }
+
+    sfx.recStop();
+    var trimValue = parseFloat(trimEndSlider.value);
+    if (!isFinite(trimValue)) {
+      trimValue = state.recording_trim_end || 0;
+    }
+    return postCmd('SET_RECORDING_TRIM_END', trimValue).then(function() {
+      return postCmd('TOGGLE_RECORDING');
     });
   };
 

@@ -82,19 +82,12 @@ impl MacroRecorder {
     pub fn stop(&mut self, trim_end_secs: f64) -> (usize, u64) {
         self.recording = false;
         let trim_us = (trim_end_secs.max(0.0) * 1_000_000.0) as u64;
-        if trim_us > 0 {
-            if let Some(&(last_ts, _)) = self.frames.last() {
-                let cutoff = last_ts.saturating_sub(trim_us);
-                let count_before_trim = self.frames.len();
-                self.frames.retain(|&(ts, _)| ts <= cutoff);
-                let trimmed = count_before_trim - self.frames.len();
-                if trimmed > 0 {
-                    info!(
-                        "[MACRO] Trimmed {trimmed} frames ({:.1}s) from end",
-                        trim_end_secs
-                    );
-                }
-            }
+        let trimmed = self.trim_end(trim_us);
+        if trimmed > 0 {
+            info!(
+                "[MACRO] Trimmed {trimmed} frames ({:.1}s) from end",
+                trim_end_secs
+            );
         }
         let frame_count = self.frames.len();
         let duration_us = self.frames.last().map(|(ts, _)| *ts).unwrap_or(0);
@@ -103,6 +96,25 @@ impl MacroRecorder {
             duration_us / 1000
         );
         (frame_count, duration_us)
+    }
+
+    fn trim_end(&mut self, trim_us: u64) -> usize {
+        if trim_us == 0 {
+            return 0;
+        }
+
+        if let Some(&(last_ts, _)) = self.frames.last() {
+            let count_before_trim = self.frames.len();
+            if trim_us >= last_ts {
+                self.frames.clear();
+            } else {
+                let cutoff = last_ts - trim_us;
+                self.frames.retain(|&(ts, _)| ts <= cutoff);
+            }
+            return count_before_trim - self.frames.len();
+        }
+
+        0
     }
 
     /// Save recorded frames to disk. Returns macro ID or None.
@@ -114,5 +126,73 @@ impl MacroRecorder {
             warn!("[MACRO] Save failed for {frame_count} recorded frames");
         }
         result
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn report(byte: u8) -> [u8; 64] {
+        [byte; 64]
+    }
+
+    #[test]
+    fn stop_without_trim_keeps_recorded_frames() {
+        let mut recorder = MacroRecorder::new();
+        recorder.recording = true;
+        recorder.frames = vec![(0, report(0)), (250_000, report(1)), (500_000, report(2))];
+
+        let (frame_count, duration_us) = recorder.stop(0.0);
+
+        assert_eq!(frame_count, 3);
+        assert_eq!(duration_us, 500_000);
+        assert_eq!(
+            recorder
+                .frames
+                .iter()
+                .map(|(ts, _)| *ts)
+                .collect::<Vec<_>>(),
+            vec![0, 250_000, 500_000]
+        );
+    }
+
+    #[test]
+    fn stop_trims_frames_after_cutoff() {
+        let mut recorder = MacroRecorder::new();
+        recorder.recording = true;
+        recorder.frames = vec![
+            (0, report(0)),
+            (250_000, report(1)),
+            (500_000, report(2)),
+            (750_000, report(3)),
+            (1_000_000, report(4)),
+        ];
+
+        let (frame_count, duration_us) = recorder.stop(0.3);
+
+        assert_eq!(frame_count, 3);
+        assert_eq!(duration_us, 500_000);
+        assert_eq!(
+            recorder
+                .frames
+                .iter()
+                .map(|(ts, _)| *ts)
+                .collect::<Vec<_>>(),
+            vec![0, 250_000, 500_000]
+        );
+    }
+
+    #[test]
+    fn stop_with_trim_longer_than_recording_discards_recording() {
+        let mut recorder = MacroRecorder::new();
+        recorder.recording = true;
+        recorder.frames = vec![(0, report(0)), (400_000, report(1))];
+
+        let (frame_count, duration_us) = recorder.stop(1.0);
+
+        assert_eq!(frame_count, 0);
+        assert_eq!(duration_us, 0);
+        assert!(recorder.frames.is_empty());
     }
 }
