@@ -194,6 +194,7 @@ impl BtSession {
     /// or `false` if the report sender dropped.
     pub async fn forward_reports(&mut self, report_rx: &mut watch::Receiver<[u8; 50]>) -> bool {
         let _ = report_rx.borrow_and_update();
+        let mut stats = BtForwardStats::new();
 
         loop {
             if report_rx.changed().await.is_err() {
@@ -204,14 +205,18 @@ impl BtSession {
             report[2] = self.report_timer;
             self.report_timer = self.report_timer.wrapping_add(1);
 
+            let write_start = Instant::now();
             if let Err(e) = self.interrupt.write_all(&report).await {
                 warn!("[BT] Send error: {e}");
                 return true;
             }
+            stats.record_write(write_start.elapsed());
 
             if self.poll_and_handle_subcommands().await {
                 return true;
             }
+
+            stats.log_if_due();
         }
     }
 
@@ -264,6 +269,46 @@ impl BtSession {
                 );
             }
         }
+    }
+}
+
+struct BtForwardStats {
+    window_start: Instant,
+    writes: u32,
+    slow_writes: u32,
+    max_write: Duration,
+}
+
+impl BtForwardStats {
+    fn new() -> Self {
+        Self {
+            window_start: Instant::now(),
+            writes: 0,
+            slow_writes: 0,
+            max_write: Duration::ZERO,
+        }
+    }
+
+    fn record_write(&mut self, elapsed: Duration) {
+        self.writes += 1;
+        self.max_write = self.max_write.max(elapsed);
+        if elapsed >= Duration::from_millis(20) {
+            self.slow_writes += 1;
+        }
+    }
+
+    fn log_if_due(&mut self) {
+        if self.window_start.elapsed() < Duration::from_secs(1) {
+            return;
+        }
+
+        info!(
+            "[PERF] bt: writes={} slow_writes={} max_write_ms={:.1}",
+            self.writes,
+            self.slow_writes,
+            self.max_write.as_secs_f64() * 1000.0,
+        );
+        *self = Self::new();
     }
 }
 

@@ -8,7 +8,7 @@
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use tokio::sync::{broadcast, mpsc, watch};
 use tracing::{info, warn};
@@ -60,6 +60,7 @@ pub struct InputPipeline {
     current_sticks: Option<StickPair>,
     latest_live_input: Option<LogicalInput>,
     usb_connected: bool,
+    stats: InputStats,
 }
 
 impl InputPipeline {
@@ -69,14 +70,13 @@ impl InputPipeline {
             current_sticks: None,
             latest_live_input: None,
             usb_connected: false,
+            stats: InputStats::new(),
         }
     }
 
     pub async fn run(mut self) {
         info!("[MITM] Input pipeline active.");
         self.publish_status();
-
-        let mut output_tick = runtime_interval(Duration::from_millis(8));
 
         loop {
             tokio::select! {
@@ -97,11 +97,6 @@ impl InputPipeline {
                     }
                     self.apply_config();
                 }
-                _ = output_tick.tick() => {
-                    if self.output_mode() == OutputMode::Live {
-                        self.emit_live_output();
-                    }
-                }
                 else => break,
             }
         }
@@ -115,9 +110,13 @@ impl InputPipeline {
     }
 
     fn handle_usb_report_batch(&mut self, mut report: usb::hid::HidReport) {
+        let mut coalesced_reports = 0;
         while let Ok(event) = self.io.usb_rx.try_recv() {
             match event {
-                UsbEvent::Report(newer_report) => report = newer_report,
+                UsbEvent::Report(newer_report) => {
+                    report = newer_report;
+                    coalesced_reports += 1;
+                }
                 other => {
                     self.handle_usb_event(other);
                     return;
@@ -125,6 +124,7 @@ impl InputPipeline {
             }
         }
 
+        self.stats.coalesced_reports += coalesced_reports;
         self.handle_usb_report(&report);
     }
 
@@ -162,12 +162,15 @@ impl InputPipeline {
             sticks.calibrate(parsed.left_stick_raw, parsed.right_stick_raw);
         let logical = LogicalInput::from_parts(parsed.buttons, left_stick, right_stick);
 
+        self.stats.usb_reports += 1;
         self.latest_live_input = Some(logical.clone());
         let _ = self.io.live_input_tx.send(Some(logical.clone()));
 
         if self.output_mode() == OutputMode::Live {
             self.emit_output(&logical);
+            self.stats.live_outputs += 1;
         }
+        self.log_stats_if_due();
     }
 
     fn emit_live_output(&self) {
@@ -198,6 +201,38 @@ impl InputPipeline {
         let _ = self.io.status_tx.send(PipelineStatus {
             usb_connected: self.usb_connected,
         });
+    }
+
+    fn log_stats_if_due(&mut self) {
+        if self.stats.window_start.elapsed() < Duration::from_secs(1) {
+            return;
+        }
+        info!(
+            "[PERF] input: usb_reports={} live_outputs={} coalesced_reports={} mode={:?}",
+            self.stats.usb_reports,
+            self.stats.live_outputs,
+            self.stats.coalesced_reports,
+            self.output_mode(),
+        );
+        self.stats = InputStats::new();
+    }
+}
+
+struct InputStats {
+    window_start: Instant,
+    usb_reports: u32,
+    live_outputs: u32,
+    coalesced_reports: u32,
+}
+
+impl InputStats {
+    fn new() -> Self {
+        Self {
+            window_start: Instant::now(),
+            usb_reports: 0,
+            live_outputs: 0,
+            coalesced_reports: 0,
+        }
     }
 }
 
