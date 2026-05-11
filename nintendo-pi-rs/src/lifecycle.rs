@@ -13,11 +13,14 @@ use tracing::{error, info, warn};
 
 use crate::bt;
 use crate::calibration::{
-    auto_calibrate_centers, StickCalibrator, StickPair, C_STICK_CAL, MAIN_STICK_CAL,
+    validate_auto_calibrate_centers, CalibrationRequirements, StickCalibrator, StickPair,
+    C_STICK_CAL, DEFAULT_MAX_CENTER_SPREAD, MAIN_STICK_CAL, MIN_TRUSTED_CALIBRATION_SAMPLES,
 };
 use crate::led;
 use crate::processing::UsbEvent;
 use crate::usb;
+
+const CALIBRATION_RETRY_DELAY: Duration = Duration::from_millis(250);
 
 /// Everything the USB lifecycle loop needs from the caller.
 pub struct UsbLifecycleIO {
@@ -35,10 +38,18 @@ pub async fn run_usb(io: UsbLifecycleIO) -> anyhow::Result<()> {
         tokio::time::sleep(Duration::from_secs(2)).await;
 
         let hid_rx = usb::hid::spawn_reader(2);
-        let sticks = calibrate_sticks(&hid_rx, &io.calibration_samples);
+        let sticks = match calibrate_sticks(&hid_rx, &io.calibration_samples) {
+            Ok(sticks) => sticks,
+            Err(e) => {
+                warn!("[USB] Calibration failed before input became ready: {e}");
+                let _ = io.usb_tx.send(UsbEvent::Disconnected).await;
+                continue;
+            }
+        };
+
         if io
             .usb_tx
-            .send(UsbEvent::Connected(Box::new(sticks)))
+            .send(UsbEvent::InputReady(Box::new(sticks)))
             .await
             .is_err()
         {
@@ -98,30 +109,65 @@ fn forward_hid_reports(
 fn calibrate_sticks(
     hid_rx: &std::sync::mpsc::Receiver<usb::hid::HidReport>,
     calibration_samples: &AtomicU32,
-) -> StickPair {
-    let cal_count = calibration_samples.load(Ordering::Relaxed) as usize;
-    info!("[USB] Calibrating stick centers ({cal_count} samples, don't touch the sticks)...");
+) -> anyhow::Result<StickPair> {
+    let cal_count =
+        (calibration_samples.load(Ordering::Relaxed) as usize).max(MIN_TRUSTED_CALIBRATION_SAMPLES);
+    let min_samples = (cal_count * 3 / 4).max(MIN_TRUSTED_CALIBRATION_SAMPLES);
+    let requirements = CalibrationRequirements::new(min_samples, DEFAULT_MAX_CENTER_SPREAD);
 
+    info!(
+        "[USB] Calibrating stick centers ({cal_count} samples, need {min_samples} stable; don't touch the sticks)..."
+    );
+
+    let mut attempt = 1u32;
+    loop {
+        let cal_reports = collect_calibration_reports(hid_rx, cal_count)?;
+
+        match validate_auto_calibrate_centers(&cal_reports, requirements) {
+            Ok(calibration) => {
+                info!(
+                    "[USB] Left stick center: ({}, {}), Right: ({}, {})",
+                    calibration.left.0,
+                    calibration.left.1,
+                    calibration.right.0,
+                    calibration.right.1
+                );
+
+                return Ok(StickPair::new(
+                    StickCalibrator::new(MAIN_STICK_CAL, 10.0),
+                    StickCalibrator::new(C_STICK_CAL, 10.0),
+                    calibration.left,
+                    calibration.right,
+                ));
+            }
+            Err(e) => {
+                warn!(
+                    "[CAL] Calibration attempt {attempt} rejected: {e}; keeping live output neutral and retrying"
+                );
+                attempt += 1;
+                std::thread::sleep(CALIBRATION_RETRY_DELAY);
+            }
+        }
+    }
+}
+
+fn collect_calibration_reports(
+    hid_rx: &std::sync::mpsc::Receiver<usb::hid::HidReport>,
+    cal_count: usize,
+) -> anyhow::Result<Vec<usb::hid::HidReport>> {
     let mut cal_reports = Vec::with_capacity(cal_count);
+
     for _ in 0..cal_count {
         match hid_rx.recv_timeout(Duration::from_millis(200)) {
             Ok(report) => cal_reports.push(report),
-            Err(_) => break,
+            Err(std::sync::mpsc::RecvTimeoutError::Timeout) => break,
+            Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
+                anyhow::bail!("HID reader stopped during calibration");
+            }
         }
     }
 
-    let (left_center, right_center) = auto_calibrate_centers(&cal_reports);
-    info!(
-        "[USB] Left stick center: ({}, {}), Right: ({}, {})",
-        left_center.0, left_center.1, right_center.0, right_center.1
-    );
-
-    StickPair::new(
-        StickCalibrator::new(MAIN_STICK_CAL, 10.0),
-        StickCalibrator::new(C_STICK_CAL, 10.0),
-        left_center,
-        right_center,
-    )
+    Ok(cal_reports)
 }
 
 /// Run the BT connection loop forever, consuming reports from the macro runtime.

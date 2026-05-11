@@ -26,7 +26,8 @@ use crate::web::state::{MitmState, PlaybackInput, StateSnapshot};
 
 /// USB adapter events consumed by the input pipeline.
 pub enum UsbEvent {
-    Connected(Box<StickPair>),
+    /// USB reports have passed calibration and are safe for live passthrough.
+    InputReady(Box<StickPair>),
     Report(usb::hid::HidReport),
     Disconnected,
 }
@@ -41,6 +42,7 @@ pub enum OutputMode {
 /// Low-rate status produced by the input pipeline.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct PipelineStatus {
+    /// True only when USB input has passed calibration and is safe to use.
     pub usb_connected: bool,
 }
 
@@ -130,7 +132,7 @@ impl InputPipeline {
 
     fn handle_usb_event(&mut self, event: UsbEvent) {
         match event {
-            UsbEvent::Connected(mut sticks) => {
+            UsbEvent::InputReady(mut sticks) => {
                 sticks.set_deadzone(self.io.config_rx.borrow().stick_deadzone);
                 self.current_sticks = Some(*sticks);
                 self.latest_live_input = None;
@@ -138,7 +140,7 @@ impl InputPipeline {
                 let _ = self.io.live_input_tx.send(None);
                 self.publish_status();
                 led::set_led(&led::LED_NORMAL);
-                info!("[USB] Controller input available.");
+                info!("[USB] Controller input validated and available.");
             }
             UsbEvent::Report(report) => self.handle_usb_report(&report),
             UsbEvent::Disconnected => {
@@ -147,6 +149,9 @@ impl InputPipeline {
                 self.current_sticks = None;
                 self.latest_live_input = None;
                 let _ = self.io.live_input_tx.send(None);
+                if self.output_mode() == OutputMode::Live {
+                    self.emit_output(&LogicalInput::neutral());
+                }
                 self.publish_status();
             }
         }
@@ -448,4 +453,96 @@ fn runtime_interval(duration: Duration) -> tokio::time::Interval {
     let mut interval = tokio::time::interval(duration);
     interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
     interval
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::calibration::{StickCalibrator, C_STICK_CAL, MAIN_STICK_CAL};
+
+    fn input_pipeline_for_test() -> (
+        InputPipeline,
+        watch::Receiver<[u8; 50]>,
+        watch::Receiver<Option<LogicalInput>>,
+    ) {
+        let (_usb_tx, usb_rx) = mpsc::channel(1);
+        let (report_tx, report_rx) = watch::channel([0; 50]);
+        let (live_input_tx, live_input_rx) = watch::channel(None);
+        let (status_tx, _status_rx) = watch::channel(PipelineStatus::default());
+        let (_output_mode_tx, output_mode_rx) = watch::channel(OutputMode::Live);
+        let (_config_tx, config_rx) = watch::channel(Config::default());
+
+        (
+            InputPipeline::new(InputPipelineIO {
+                usb_rx,
+                report_tx,
+                live_input_tx,
+                status_tx,
+                output_mode_rx,
+                config_rx,
+            }),
+            report_rx,
+            live_input_rx,
+        )
+    }
+
+    fn default_sticks() -> StickPair {
+        StickPair::new(
+            StickCalibrator::new(MAIN_STICK_CAL, 10.0),
+            StickCalibrator::new(C_STICK_CAL, 10.0),
+            (2048, 2048),
+            (2048, 2048),
+        )
+    }
+
+    fn pack_12bit_pair(x: u16, y: u16) -> [u8; 3] {
+        [
+            (x & 0xFF) as u8,
+            (((x >> 8) & 0x0F) | ((y & 0x0F) << 4)) as u8,
+            ((y >> 4) & 0xFF) as u8,
+        ]
+    }
+
+    fn report_with_sticks(left: (u16, u16), right: (u16, u16)) -> usb::hid::HidReport {
+        let mut report = [0u8; 64];
+        let left_bytes = pack_12bit_pair(left.0, left.1);
+        let right_bytes = pack_12bit_pair(right.0, right.1);
+        report[6..9].copy_from_slice(&left_bytes);
+        report[9..12].copy_from_slice(&right_bytes);
+        report
+    }
+
+    #[test]
+    fn report_is_ignored_until_usb_input_is_ready() {
+        let (mut pipeline, report_rx, live_input_rx) = input_pipeline_for_test();
+        let initial_report = *report_rx.borrow();
+
+        pipeline.handle_usb_event(UsbEvent::Report(report_with_sticks(
+            (4095, 2048),
+            (2048, 2048),
+        )));
+
+        assert_eq!(*report_rx.borrow(), initial_report);
+        assert!(live_input_rx.borrow().is_none());
+    }
+
+    #[test]
+    fn disconnect_emits_neutral_report_in_live_mode() {
+        let (mut pipeline, report_rx, _live_input_rx) = input_pipeline_for_test();
+        let non_neutral = LogicalInput::from_parts(Default::default(), (60.0, 0.0), (-25.0, 10.0));
+        let neutral_report = build_bt_report_from_logical(&LogicalInput::neutral(), 0);
+
+        pipeline.current_sticks = Some(default_sticks());
+        pipeline.usb_connected = true;
+        pipeline.latest_live_input = Some(non_neutral.clone());
+        pipeline.emit_output(&non_neutral);
+        assert_ne!(*report_rx.borrow(), neutral_report);
+
+        pipeline.handle_usb_event(UsbEvent::Disconnected);
+
+        assert_eq!(*report_rx.borrow(), neutral_report);
+        assert!(!pipeline.usb_connected);
+        assert!(pipeline.current_sticks.is_none());
+        assert!(pipeline.latest_live_input.is_none());
+    }
 }

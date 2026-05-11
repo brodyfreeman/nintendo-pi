@@ -3,7 +3,18 @@
 //! `StickPair` is the main entry point — it owns calibrators and centers for
 //! both sticks and produces values ready for the BT report builder.
 
+use std::fmt;
+
 use tracing::{debug, trace, warn};
+
+/// Default raw stick center used when legacy/offline conversion has no samples.
+pub const DEFAULT_CENTER: (u16, u16) = (2048, 2048);
+
+/// Minimum number of samples required before live calibration can be trusted.
+pub const MIN_TRUSTED_CALIBRATION_SAMPLES: usize = 5;
+
+/// Maximum raw spread accepted in a trusted idle calibration window.
+pub const DEFAULT_MAX_CENTER_SPREAD: u16 = 100;
 
 /// Stick calibrator with 32 radial calibration points and deadzone.
 #[derive(Clone)]
@@ -132,6 +143,92 @@ impl StickPair {
     }
 }
 
+/// Quality gates for accepting an idle calibration window.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CalibrationRequirements {
+    pub min_samples: usize,
+    pub max_spread: u16,
+}
+
+impl CalibrationRequirements {
+    pub fn new(min_samples: usize, max_spread: u16) -> Self {
+        Self {
+            min_samples: min_samples.max(MIN_TRUSTED_CALIBRATION_SAMPLES),
+            max_spread,
+        }
+    }
+}
+
+impl Default for CalibrationRequirements {
+    fn default() -> Self {
+        Self::new(MIN_TRUSTED_CALIBRATION_SAMPLES, DEFAULT_MAX_CENTER_SPREAD)
+    }
+}
+
+/// Computed stick centers plus the observed variance that produced them.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CenterCalibration {
+    pub left: (u16, u16),
+    pub right: (u16, u16),
+    pub stats: CalibrationStats,
+}
+
+/// Raw spread statistics for a calibration sample window.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CalibrationStats {
+    pub samples: usize,
+    pub left_spread: (u16, u16),
+    pub right_spread: (u16, u16),
+}
+
+impl CalibrationStats {
+    fn is_stable(self, max_spread: u16) -> bool {
+        self.left_spread.0 <= max_spread
+            && self.left_spread.1 <= max_spread
+            && self.right_spread.0 <= max_spread
+            && self.right_spread.1 <= max_spread
+    }
+}
+
+/// Why a live calibration window was rejected.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CalibrationError {
+    TooFewSamples {
+        actual: usize,
+        required: usize,
+    },
+    Unstable {
+        calibration: CenterCalibration,
+        max_spread: u16,
+    },
+}
+
+impl fmt::Display for CalibrationError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::TooFewSamples { actual, required } => {
+                write!(
+                    f,
+                    "only {actual} calibration sample(s), need at least {required}"
+                )
+            }
+            Self::Unstable {
+                calibration,
+                max_spread,
+            } => write!(
+                f,
+                "unstable stick centers: samples={} spreads L=({},{}) R=({},{}) exceed max {}",
+                calibration.stats.samples,
+                calibration.stats.left_spread.0,
+                calibration.stats.left_spread.1,
+                calibration.stats.right_spread.0,
+                calibration.stats.right_spread.1,
+                max_spread
+            ),
+        }
+    }
+}
+
 /// Center, calibrate, and normalize a single stick.
 fn calibrate_one(calibrator: &StickCalibrator, raw: (u16, u16), center: (u16, u16)) -> (f64, f64) {
     let x_c = raw.0 as f64 - center.0 as f64;
@@ -143,13 +240,38 @@ fn calibrate_one(calibrator: &StickCalibrator, raw: (u16, u16), center: (u16, u1
     )
 }
 
-/// Auto-calibrate stick centers from a set of idle reports.
+/// Validate and auto-calibrate stick centers from a trusted idle report window.
 ///
-/// Returns (left_center, right_center) as (x, y) averages.
-pub fn auto_calibrate_centers(reports: &[[u8; 64]]) -> ((u16, u16), (u16, u16)) {
+/// Live passthrough should use this function, not [`auto_calibrate_centers`],
+/// because this rejects too-small and high-variance windows instead of turning
+/// them into trusted input.
+pub fn validate_auto_calibrate_centers(
+    reports: &[[u8; 64]],
+    requirements: CalibrationRequirements,
+) -> Result<CenterCalibration, CalibrationError> {
+    let actual = reports.len();
+    if actual < requirements.min_samples {
+        return Err(CalibrationError::TooFewSamples {
+            actual,
+            required: requirements.min_samples,
+        });
+    }
+
+    let calibration = compute_center_calibration(reports).expect("non-empty reports");
+
+    if !calibration.stats.is_stable(requirements.max_spread) {
+        return Err(CalibrationError::Unstable {
+            calibration,
+            max_spread: requirements.max_spread,
+        });
+    }
+
+    Ok(calibration)
+}
+
+fn compute_center_calibration(reports: &[[u8; 64]]) -> Option<CenterCalibration> {
     if reports.is_empty() {
-        warn!("[CAL] No reports for auto-calibration, using default centers (2048, 2048)");
-        return ((2048, 2048), (2048, 2048));
+        return None;
     }
 
     let mut lx_sum: u64 = 0;
@@ -202,19 +324,62 @@ pub fn auto_calibrate_centers(reports: &[[u8; 64]]) -> ((u16, u16), (u16, u16)) 
         left.0, left.1, right.0, right.1,
     );
 
-    if lx_spread > 100 || ly_spread > 100 || rx_spread > 100 || ry_spread > 100 {
+    Some(CenterCalibration {
+        left,
+        right,
+        stats: CalibrationStats {
+            samples: reports.len(),
+            left_spread: (lx_spread, ly_spread),
+            right_spread: (rx_spread, ry_spread),
+        },
+    })
+}
+
+/// Auto-calibrate stick centers from a set of idle reports.
+///
+/// Returns (left_center, right_center) as (x, y) averages. This legacy helper
+/// is intentionally permissive for offline macro conversion. Live USB input
+/// must use [`validate_auto_calibrate_centers`] so bad startup samples cannot
+/// become trusted passthrough state.
+pub fn auto_calibrate_centers(reports: &[[u8; 64]]) -> ((u16, u16), (u16, u16)) {
+    let Some(calibration) = compute_center_calibration(reports) else {
+        warn!("[CAL] No reports for auto-calibration, using default centers (2048, 2048)");
+        return (DEFAULT_CENTER, DEFAULT_CENTER);
+    };
+
+    if !calibration.stats.is_stable(DEFAULT_MAX_CENTER_SPREAD) {
         warn!(
-            "[CAL] High stick variance during calibration (spreads: L=({lx_spread},{ly_spread}) \
-             R=({rx_spread},{ry_spread})) — sticks may have been touched"
+            "[CAL] High stick variance during calibration (spreads: L=({},{}) R=({},{}))",
+            calibration.stats.left_spread.0,
+            calibration.stats.left_spread.1,
+            calibration.stats.right_spread.0,
+            calibration.stats.right_spread.1,
         );
     }
 
-    (left, right)
+    (calibration.left, calibration.right)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn pack_12bit_pair(x: u16, y: u16) -> [u8; 3] {
+        [
+            (x & 0xFF) as u8,
+            (((x >> 8) & 0x0F) | ((y & 0x0F) << 4)) as u8,
+            ((y >> 4) & 0xFF) as u8,
+        ]
+    }
+
+    fn report_with_sticks(left: (u16, u16), right: (u16, u16)) -> [u8; 64] {
+        let mut report = [0u8; 64];
+        let left_bytes = pack_12bit_pair(left.0, left.1);
+        let right_bytes = pack_12bit_pair(right.0, right.1);
+        report[6..9].copy_from_slice(&left_bytes);
+        report[9..12].copy_from_slice(&right_bytes);
+        report
+    }
 
     #[test]
     fn test_deadzone() {
@@ -278,8 +443,78 @@ mod tests {
     #[test]
     fn test_auto_calibrate_centers_empty() {
         let (left, right) = auto_calibrate_centers(&[]);
-        assert_eq!(left, (2048, 2048));
-        assert_eq!(right, (2048, 2048));
+        assert_eq!(left, DEFAULT_CENTER);
+        assert_eq!(right, DEFAULT_CENTER);
+    }
+
+    #[test]
+    fn test_validate_auto_calibrate_rejects_empty() {
+        let err =
+            validate_auto_calibrate_centers(&[], CalibrationRequirements::default()).unwrap_err();
+        assert_eq!(
+            err,
+            CalibrationError::TooFewSamples {
+                actual: 0,
+                required: MIN_TRUSTED_CALIBRATION_SAMPLES
+            }
+        );
+    }
+
+    #[test]
+    fn test_validate_auto_calibrate_rejects_too_few_samples() {
+        let reports = [report_with_sticks(DEFAULT_CENTER, DEFAULT_CENTER); 4];
+        let err = validate_auto_calibrate_centers(&reports, CalibrationRequirements::default())
+            .unwrap_err();
+        assert_eq!(
+            err,
+            CalibrationError::TooFewSamples {
+                actual: 4,
+                required: MIN_TRUSTED_CALIBRATION_SAMPLES
+            }
+        );
+    }
+
+    #[test]
+    fn test_validate_auto_calibrate_accepts_stable_window() {
+        let reports = [
+            report_with_sticks((2048, 2047), (2049, 2048)),
+            report_with_sticks((2049, 2048), (2048, 2049)),
+            report_with_sticks((2050, 2049), (2049, 2047)),
+            report_with_sticks((2047, 2048), (2048, 2048)),
+            report_with_sticks((2048, 2049), (2047, 2049)),
+        ];
+
+        let calibration =
+            validate_auto_calibrate_centers(&reports, CalibrationRequirements::default()).unwrap();
+
+        assert_eq!(calibration.stats.samples, 5);
+        assert_eq!(calibration.stats.left_spread, (3, 2));
+        assert_eq!(calibration.stats.right_spread, (2, 2));
+    }
+
+    #[test]
+    fn test_validate_auto_calibrate_rejects_high_variance() {
+        let reports = [
+            report_with_sticks((1430, 2888), (2420, 3670)),
+            report_with_sticks((2292, 1701), (2110, 3622)),
+            report_with_sticks((1500, 2700), (2320, 3650)),
+            report_with_sticks((2200, 1800), (2140, 3630)),
+            report_with_sticks((1600, 2600), (2250, 3640)),
+        ];
+
+        let err = validate_auto_calibrate_centers(&reports, CalibrationRequirements::default())
+            .unwrap_err();
+
+        match err {
+            CalibrationError::Unstable {
+                calibration,
+                max_spread,
+            } => {
+                assert_eq!(max_spread, DEFAULT_MAX_CENTER_SPREAD);
+                assert_eq!(calibration.stats.left_spread, (862, 1187));
+            }
+            other => panic!("expected unstable calibration, got {other:?}"),
+        }
     }
 
     #[test]
