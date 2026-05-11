@@ -1,13 +1,9 @@
-//! Centralized configuration for button bindings and timing values.
+//! Centralized configuration for timing values.
 //!
-//! Shared by `MacroController`, `ComboDetector`, and the web UI state.
-//! One struct, one source of truth — no more field-by-field syncing.
+//! Shared by the macro controller, input pipeline, and web UI state.
 
 use serde::Serialize;
 use tracing::{info, warn};
-
-use crate::combo;
-use crate::input::Button;
 
 /// Available playback speed presets.
 pub const SPEED_PRESETS: &[f64] = &[0.25, 0.5, 1.0, 2.0, 4.0];
@@ -25,28 +21,6 @@ pub struct Config {
     pub recording_start_delay: f64,
     pub ui_update_interval_ms: u64,
     pub calibration_samples: u32,
-
-    // Button bindings (serialized as display names for the web UI)
-    #[serde(serialize_with = "ser_button")]
-    pub play_macro_button: Button,
-    #[serde(serialize_with = "ser_button")]
-    pub stop_playback_button: Button,
-    #[serde(serialize_with = "ser_button")]
-    pub toggle_loop_button: Button,
-    #[serde(serialize_with = "ser_button")]
-    pub cycle_speed_button: Button,
-    #[serde(serialize_with = "ser_button")]
-    pub prev_slot_button: Button,
-    #[serde(serialize_with = "ser_button")]
-    pub next_slot_button: Button,
-    #[serde(serialize_with = "ser_button")]
-    pub base_combo_button_1: Button,
-    #[serde(serialize_with = "ser_button")]
-    pub base_combo_button_2: Button,
-}
-
-fn ser_button<S: serde::Serializer>(btn: &Button, s: S) -> Result<S::Ok, S::Error> {
-    s.serialize_str(btn.display_name())
 }
 
 impl Default for Config {
@@ -61,14 +35,6 @@ impl Default for Config {
             recording_start_delay: 0.0,
             ui_update_interval_ms: 200,
             calibration_samples: 20,
-            play_macro_button: combo::DEFAULT_PLAY_MACRO_BUTTON,
-            stop_playback_button: combo::DEFAULT_STOP_PLAYBACK_BUTTON,
-            toggle_loop_button: combo::DEFAULT_TOGGLE_LOOP_BUTTON,
-            cycle_speed_button: combo::DEFAULT_CYCLE_SPEED_BUTTON,
-            prev_slot_button: combo::DEFAULT_PREV_SLOT_BUTTON,
-            next_slot_button: combo::DEFAULT_NEXT_SLOT_BUTTON,
-            base_combo_button_1: combo::DEFAULT_BASE_COMBO_BUTTON_1,
-            base_combo_button_2: combo::DEFAULT_BASE_COMBO_BUTTON_2,
         }
     }
 }
@@ -111,30 +77,6 @@ impl Config {
                 return true;
             }
             warn!("[SETTINGS] {field}: expected number, got {val}");
-            return false;
-        }
-
-        // Button binding fields
-        let button_result = match field {
-            "play_macro_button" => Some(&mut self.play_macro_button),
-            "stop_playback_button" => Some(&mut self.stop_playback_button),
-            "toggle_loop_button" => Some(&mut self.toggle_loop_button),
-            "cycle_speed_button" => Some(&mut self.cycle_speed_button),
-            "prev_slot_button" => Some(&mut self.prev_slot_button),
-            "next_slot_button" => Some(&mut self.next_slot_button),
-            "base_combo_button_1" => Some(&mut self.base_combo_button_1),
-            "base_combo_button_2" => Some(&mut self.base_combo_button_2),
-            _ => None,
-        };
-        if let Some(target) = button_result {
-            if let Some(name) = val.as_str() {
-                if let Some(btn) = Button::from_str_name(name) {
-                    *target = btn;
-                    info!("[SETTINGS] {field} set to {}", btn.display_name());
-                    return true;
-                }
-                warn!("[SETTINGS] Unknown button name: {name}");
-            }
             return false;
         }
 

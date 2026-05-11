@@ -85,7 +85,7 @@ pub fn parse_hid_report(report: &[u8; 64]) -> InputState {
     }
 }
 
-/// Button name enum for combo detection (matches Python button names).
+/// Button name enum for parsed controller input.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Button {
     B,
@@ -129,55 +129,6 @@ impl Button {
         Button::Home,
         Button::Capture,
     ];
-
-    /// Parse a button from its string name (case-insensitive).
-    pub fn from_str_name(s: &str) -> Option<Self> {
-        match s.to_uppercase().as_str() {
-            "A" => Some(Button::A),
-            "B" => Some(Button::B),
-            "X" => Some(Button::X),
-            "Y" => Some(Button::Y),
-            "DPADUP" | "UP" => Some(Button::DpadUp),
-            "DPADDOWN" | "DOWN" => Some(Button::DpadDown),
-            "DPADLEFT" | "LEFT" => Some(Button::DpadLeft),
-            "DPADRIGHT" | "RIGHT" => Some(Button::DpadRight),
-            "L" => Some(Button::L),
-            "R" => Some(Button::R),
-            "ZL" => Some(Button::ZL),
-            "ZR" => Some(Button::ZR),
-            "PLUS" => Some(Button::Plus),
-            "MINUS" => Some(Button::Minus),
-            "L3" => Some(Button::L3),
-            "R3" => Some(Button::R3),
-            "HOME" => Some(Button::Home),
-            "CAPTURE" => Some(Button::Capture),
-            _ => None,
-        }
-    }
-
-    /// Short display name for the button.
-    pub fn display_name(self) -> &'static str {
-        match self {
-            Button::A => "A",
-            Button::B => "B",
-            Button::X => "X",
-            Button::Y => "Y",
-            Button::DpadUp => "DpadUp",
-            Button::DpadDown => "DpadDown",
-            Button::DpadLeft => "DpadLeft",
-            Button::DpadRight => "DpadRight",
-            Button::L => "L",
-            Button::R => "R",
-            Button::ZL => "ZL",
-            Button::ZR => "ZR",
-            Button::Plus => "Plus",
-            Button::Minus => "Minus",
-            Button::L3 => "L3",
-            Button::R3 => "R3",
-            Button::Home => "Home",
-            Button::Capture => "Capture",
-        }
-    }
 }
 
 impl Button {

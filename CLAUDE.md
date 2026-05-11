@@ -63,19 +63,9 @@ nintendo-pi [OPTIONS]
   -v, --verbose         Verbose logging
 ```
 
-## Macro Combos
+## Macro Control
 
-All combos require holding the base combo buttons (default: L3+R3) plus an action button. All bindings are configurable via the web UI.
-
-| Default Combo | Action |
-|---------------|--------|
-| L3+R3+D-pad Left/Right | Switch macro slot |
-| L3+R3+A | Play selected macro |
-| L3+R3+B | Stop playback |
-| L3+R3+Y | Toggle loop mode |
-| L3+R3+D-pad Up | Cycle playback speed |
-
-Recording is controlled from the web UI only.
+Macro recording and playback are controlled from the web UI. Controller input is passed through normally; no controller button combos are reserved for macro actions.
 
 Controller LEDs change to indicate state (recording, playback).
 
@@ -85,7 +75,7 @@ A phone-friendly web interface is available at `http://Nintendo-Pi:8080` when th
 - Real-time state display (USB/BT connection, recording, playback, current slot)
 - Buttons to start/stop recording, play/stop macros, switch slots
 - Macro library with rename and delete
-- Configuration panel for all button bindings, timing values, and calibration settings
+- Configuration panel for timing values and calibration settings
 
 The web server (Axum with SSE) starts before hardware init, so it's available even when the controller isn't plugged in. USB init retries every 5s until the controller appears.
 

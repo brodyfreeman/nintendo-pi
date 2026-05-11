@@ -8,7 +8,7 @@ use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, watch};
 use tracing::{error, info, warn};
 
 use crate::bt;
@@ -126,7 +126,7 @@ fn calibrate_sticks(
 
 /// Run the BT connection loop forever, consuming reports from the macro runtime.
 pub async fn run_bt_loop(
-    report_rx: &mut mpsc::Receiver<[u8; 50]>,
+    report_rx: &mut watch::Receiver<[u8; 50]>,
     bt_connected: Arc<AtomicBool>,
 ) -> anyhow::Result<()> {
     loop {

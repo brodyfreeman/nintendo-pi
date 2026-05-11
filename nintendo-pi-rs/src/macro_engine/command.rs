@@ -1,12 +1,12 @@
 //! Command and effect types for the macro engine.
 //!
-//! These are the "vocabulary" shared between combo detection, web UI,
-//! and the controller that executes them. Kept separate so that producers
+//! These are the "vocabulary" shared between the web UI
+//! and the controller that executes it. Kept separate so that producers
 //! of commands don't need to depend on the controller implementation.
 
 use crate::config::ConfigUpdate;
 
-/// Unified command enum — covers both combo actions and web commands.
+/// Unified command enum for web-driven macro actions.
 #[derive(Debug, Clone, PartialEq)]
 pub enum MacroCommand {
     ToggleRecording,

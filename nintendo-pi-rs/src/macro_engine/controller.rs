@@ -1,8 +1,6 @@
 //! Unified macro command handler.
 //!
-//! Owns recorder, player, and slot state. Handles commands from both
-//! combo detection and web UI, eliminating the duplication that existed
-//! when both paths had their own match arms.
+//! Owns recorder, player, config, and slot state for web-driven macro control.
 
 use std::path::{Path, PathBuf};
 
@@ -458,13 +456,6 @@ mod tests {
             value: serde_json::json!(100.0),
         }));
         assert!((ctrl.config.stick_deadzone - 50.0).abs() < f64::EPSILON);
-
-        // Button binding
-        ctrl.execute(MacroCommand::UpdateConfig(ConfigUpdate {
-            field_name: "play_macro_button".into(),
-            value: serde_json::json!("X"),
-        }));
-        assert_eq!(ctrl.config.play_macro_button, crate::input::Button::X);
 
         // Loop restart delay syncs to config
         ctrl.execute(MacroCommand::UpdateConfig(ConfigUpdate {

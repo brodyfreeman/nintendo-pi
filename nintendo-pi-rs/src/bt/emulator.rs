@@ -5,7 +5,7 @@
 
 use std::time::{Duration, Instant};
 
-use tokio::sync::mpsc;
+use tokio::sync::watch;
 use tracing::{debug, info, warn};
 
 use super::l2cap::L2capSocket;
@@ -190,25 +190,27 @@ impl BtSession {
     /// monotonic timer byte, sends them to the Switch, and handles any
     /// incoming subcommands.
     ///
-    /// Returns `true` if the USB sender is still alive (BT disconnected),
-    /// or `false` if the USB sender dropped.
-    pub async fn forward_reports(&mut self, report_rx: &mut mpsc::Receiver<[u8; 50]>) -> bool {
+    /// Returns `true` if the report sender is still alive (BT disconnected),
+    /// or `false` if the report sender dropped.
+    pub async fn forward_reports(&mut self, report_rx: &mut watch::Receiver<[u8; 50]>) -> bool {
+        let _ = report_rx.borrow_and_update();
+
         loop {
-            match report_rx.recv().await {
-                Some(mut report) => {
-                    report[2] = self.report_timer;
-                    self.report_timer = self.report_timer.wrapping_add(1);
+            if report_rx.changed().await.is_err() {
+                return false;
+            }
 
-                    if let Err(e) = self.interrupt.write_all(&report).await {
-                        warn!("[BT] Send error: {e}");
-                        return true;
-                    }
+            let mut report = *report_rx.borrow_and_update();
+            report[2] = self.report_timer;
+            self.report_timer = self.report_timer.wrapping_add(1);
 
-                    if self.poll_and_handle_subcommands().await {
-                        return true;
-                    }
-                }
-                None => return false,
+            if let Err(e) = self.interrupt.write_all(&report).await {
+                warn!("[BT] Send error: {e}");
+                return true;
+            }
+
+            if self.poll_and_handle_subcommands().await {
+                return true;
             }
         }
     }

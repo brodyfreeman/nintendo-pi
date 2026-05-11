@@ -8,13 +8,13 @@ Single Rust binary with an embedded web UI. Cross-compiled for aarch64.
 
 1. **USB initialization** — Detaches the kernel HID driver, sends a 17-command init sequence over raw USB bulk transfer to put the controller into its full input reporting mode, then reattaches the kernel driver so hidapi can read reports.
 
-2. **HID reading** — Opens the controller via hidapi on a dedicated OS thread. Parses the raw 64-byte reports (buttons, sticks, triggers) and applies stick calibration (auto-centered on startup with radial correction and deadzone).
+2. **HID reading and pass-through** — Opens the controller via hidapi on a dedicated OS thread. A small input pipeline parses the raw 64-byte reports (buttons, sticks, triggers), applies stick calibration (auto-centered on startup with radial correction and deadzone), and forwards live input without waiting on web UI or macro file I/O.
 
 3. **Bluetooth emulation** — Registers as a Pro Controller over L2CAP (HID interrupt + control channels), handles the Switch's pairing handshake and subcommand protocol, and forwards calibrated input reports in the NXBT-compatible 0x30 format.
 
-4. **Macro engine** — Records timestamped HID frames to a binary format (MAC2), plays them back with memory-mapped I/O and timestamp chasing. Supports looping, speed control (0.25x–4x), configurable start delays, and end trimming.
+4. **Macro engine** — Records timestamped logical input frames to a binary format (MAC3), plays them back with memory-mapped I/O and timestamp chasing. Supports looping, speed control (0.25x–4x), configurable start delays, and end trimming.
 
-5. **Web UI** — Axum HTTP server with SSE for real-time state updates. Provides recording, playback controls, slot management, macro library (rename/delete), and full configuration of button bindings and timing values.
+5. **Web UI** — Axum HTTP server with SSE for real-time state updates. Provides recording, playback controls, slot management, macro library (rename/delete), and timing/calibration settings.
 
 ### HID report format
 
@@ -44,19 +44,9 @@ The partial init (3 commands) results in mode byte `0x20` where buttons and trig
 - Left and right analog sticks (auto-calibrated with radial correction)
 - Left and right analog triggers
 
-## Macro combos
+## Macro control
 
-All combos require holding the base combo buttons (default: L3+R3) plus an action button. Button bindings are configurable via the web UI.
-
-| Default combo | Action |
-|---------------|--------|
-| L3+R3+D-pad Left/Right | Switch macro slot |
-| L3+R3+A | Play selected macro |
-| L3+R3+B | Stop playback |
-| L3+R3+Y | Toggle loop mode |
-| L3+R3+D-pad Up | Cycle playback speed |
-
-Recording is controlled from the web UI only.
+Macro recording and playback are controlled from the web UI. Controller input is passed through normally; there are no controller button combos reserved for macro actions.
 
 Controller LEDs change to indicate state (recording, playback).
 
@@ -66,7 +56,7 @@ Available at `http://Nintendo-Pi:8080` when the service is running. Provides:
 - Real-time state display (USB/BT connection, recording, playback, current slot)
 - Buttons to start/stop recording, play/stop macros, switch slots
 - Macro library with rename and delete
-- Configuration panel for all button bindings, timing values, and calibration settings
+- Configuration panel for timing values and calibration settings
 
 The web server starts before hardware init, so it's available even when the controller isn't plugged in.
 

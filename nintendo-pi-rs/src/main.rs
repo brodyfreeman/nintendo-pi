@@ -5,7 +5,6 @@
 
 mod bt;
 mod calibration;
-mod combo;
 mod config;
 mod input;
 mod led;
@@ -21,11 +20,14 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use clap::Parser;
-use tokio::sync::{broadcast, mpsc};
+use tokio::sync::{broadcast, mpsc, watch};
 use tracing::{error, info, warn};
 
+use config::Config;
 use macro_engine::command::MacroCommand;
-use processing::{MacroRuntime, RuntimeIO};
+use processing::{
+    InputPipeline, InputPipelineIO, MacroRuntime, MacroRuntimeIO, OutputMode, PipelineStatus,
+};
 use web::state::MitmState;
 
 #[derive(Parser)]
@@ -77,17 +79,24 @@ async fn main() -> anyhow::Result<()> {
     // --- Shared runtime setup ---
     let mitm_state = Arc::new(MitmState::new());
     let (cmd_tx, cmd_rx) = mpsc::channel::<MacroCommand>(32);
-    let (usb_tx, usb_rx) = mpsc::channel::<processing::UsbEvent>(32);
-    let (report_tx, mut report_rx) = mpsc::channel::<[u8; 50]>(4);
+    let (usb_tx, usb_rx) = mpsc::channel::<processing::UsbEvent>(8);
+    let (report_tx, mut report_rx) = watch::channel::<[u8; 50]>([0; 50]);
+    let (live_input_tx, live_input_rx) = watch::channel(None);
+    let (pipeline_status_tx, pipeline_status_rx) = watch::channel(PipelineStatus::default());
+    let (output_mode_tx, output_mode_rx) = watch::channel(OutputMode::Live);
+    let (config_tx, config_rx) = watch::channel(Config::default());
     let (state_broadcast, _) = broadcast::channel::<String>(16);
     let bt_connected = Arc::new(AtomicBool::new(false));
     let calibration_samples = Arc::new(AtomicU32::new(20));
 
     let runtime = MacroRuntime::new(
-        RuntimeIO {
+        MacroRuntimeIO {
             cmd_rx,
-            usb_rx,
-            report_tx,
+            live_input_rx,
+            pipeline_status_rx,
+            output_mode_tx,
+            config_tx,
+            report_tx: report_tx.clone(),
             mitm_state: mitm_state.clone(),
             state_broadcast: state_broadcast.clone(),
             bt_connected: bt_connected.clone(),
@@ -96,6 +105,16 @@ async fn main() -> anyhow::Result<()> {
         args.macros_dir.clone(),
     );
     tokio::spawn(runtime.run());
+
+    let input_pipeline = InputPipeline::new(InputPipelineIO {
+        usb_rx,
+        report_tx,
+        live_input_tx,
+        status_tx: pipeline_status_tx,
+        output_mode_rx,
+        config_rx,
+    });
+    tokio::spawn(input_pipeline.run());
 
     // --- Web UI setup (start early so it's available during hardware init) ---
     let web_state = mitm_state.clone();
